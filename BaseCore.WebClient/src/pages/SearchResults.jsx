@@ -6,6 +6,7 @@ import { tripApi } from '../services/tripApi';
 
 const PAGE_SIZE = 10;
 const LAST_SEARCH_KEY = 'lastTripSearchQuery';
+const ROUND_TRIP_KEY = 'roundTripBooking';
 
 const timeRanges = [
   { value: '', label: 'Tất cả' },
@@ -216,6 +217,7 @@ export default function SearchResults() {
     departureDate: searchParams.get('departureDate') || searchParams.get('date') || '',
     returnDate: searchParams.get('returnDate') || '',
   }), [searchParams]);
+  const roundTripStage = searchParams.get('roundTripStage') || '';
 
   const [searchForm, setSearchForm] = useState({
     from: '',
@@ -253,6 +255,8 @@ export default function SearchResults() {
   }, [baseQuery, today]);
 
   useEffect(() => {
+    if (roundTripStage === 'return') return;
+
     if (baseQuery.from || baseQuery.to || baseQuery.departureDate || baseQuery.returnDate) {
       const storedQuery = new URLSearchParams();
       if (baseQuery.from) storedQuery.set('from', baseQuery.from);
@@ -261,7 +265,7 @@ export default function SearchResults() {
       if (baseQuery.returnDate) storedQuery.set('returnDate', baseQuery.returnDate);
       localStorage.setItem(LAST_SEARCH_KEY, storedQuery.toString());
     }
-  }, [baseQuery]);
+  }, [baseQuery, roundTripStage]);
 
   useEffect(() => {
     const load = async () => {
@@ -313,7 +317,31 @@ export default function SearchResults() {
 
   const chooseTrip = (trip) => {
     const id = pick(trip, ['tripID', 'tripId', 'TripID', 'id', 'Id']);
-    if (id) navigate(`/trips/${id}/seats`);
+    if (!id) return;
+
+    if (baseQuery.returnDate && roundTripStage !== 'return') {
+      localStorage.setItem(ROUND_TRIP_KEY, JSON.stringify({
+        from: baseQuery.from,
+        to: baseQuery.to,
+        departureDate: baseQuery.departureDate,
+        returnDate: baseQuery.returnDate,
+        stage: 'outbound',
+      }));
+    } else if (roundTripStage === 'return') {
+      try {
+        const current = JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null') || {};
+        localStorage.setItem(ROUND_TRIP_KEY, JSON.stringify({
+          ...current,
+          stage: 'return',
+        }));
+      } catch {
+        localStorage.removeItem(ROUND_TRIP_KEY);
+      }
+    } else {
+      localStorage.removeItem(ROUND_TRIP_KEY);
+    }
+
+    navigate(`/trips/${id}/seats`);
   };
 
   const updateSearchForm = (key, value) => {
@@ -372,7 +400,9 @@ export default function SearchResults() {
     storedQuery.set('to', to);
     storedQuery.set('departureDate', searchForm.departureDate);
     if (searchForm.isRoundTrip && searchForm.returnDate) storedQuery.set('returnDate', searchForm.returnDate);
-    localStorage.setItem(LAST_SEARCH_KEY, storedQuery.toString());
+    if (roundTripStage !== 'return') {
+      localStorage.setItem(LAST_SEARCH_KEY, storedQuery.toString());
+    }
 
     setSearchParams(next);
   };

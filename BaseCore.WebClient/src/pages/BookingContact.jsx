@@ -5,10 +5,19 @@ import { formatVND, pick } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 
 const PENDING_BOOKING_KEY = 'pendingBooking';
+const ROUND_TRIP_KEY = 'roundTripBooking';
 
 function readPendingBooking() {
   try {
     return JSON.parse(localStorage.getItem(PENDING_BOOKING_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function readRoundTripBooking() {
+  try {
+    return JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null');
   } catch {
     return null;
   }
@@ -103,6 +112,22 @@ export default function BookingContact() {
         customerEmail: form.customerEmail.trim(),
       },
     };
+
+    const roundTrip = readRoundTripBooking();
+    if (roundTrip?.stage === 'complete' && roundTrip.outbound && roundTrip.returnTrip) {
+      const contact = nextBooking.contact;
+      localStorage.setItem(ROUND_TRIP_KEY, JSON.stringify({
+        ...roundTrip,
+        outbound: {
+          ...roundTrip.outbound,
+          contact,
+        },
+        returnTrip: {
+          ...roundTrip.returnTrip,
+          contact,
+        },
+      }));
+    }
 
     localStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify(nextBooking));
     setPendingBooking(nextBooking);

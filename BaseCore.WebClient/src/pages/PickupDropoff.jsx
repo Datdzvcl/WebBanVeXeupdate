@@ -5,10 +5,19 @@ import { formatVND, pick } from '../api';
 import { tripApi } from '../services/tripApi';
 
 const PENDING_BOOKING_KEY = 'pendingBooking';
+const ROUND_TRIP_KEY = 'roundTripBooking';
 
 function readPendingBooking() {
   try {
     return JSON.parse(localStorage.getItem(PENDING_BOOKING_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function readRoundTripBooking() {
+  try {
+    return JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null');
   } catch {
     return null;
   }
@@ -126,6 +135,34 @@ export default function PickupDropoff() {
       pickupStop: selectedPickup,
       dropoffStop: selectedDropoff,
     };
+
+    const roundTrip = readRoundTripBooking();
+    if (roundTrip?.returnDate && roundTrip.stage !== 'return') {
+      const nextRoundTrip = {
+        ...roundTrip,
+        outbound: nextBooking,
+        stage: 'return',
+      };
+      localStorage.setItem(ROUND_TRIP_KEY, JSON.stringify(nextRoundTrip));
+      localStorage.removeItem(PENDING_BOOKING_KEY);
+
+      const returnQuery = new URLSearchParams();
+      returnQuery.set('from', roundTrip.to || pick(trip, ['arrivalLocation', 'ArrivalLocation'], ''));
+      returnQuery.set('to', roundTrip.from || pick(trip, ['departureLocation', 'DepartureLocation'], ''));
+      returnQuery.set('departureDate', roundTrip.returnDate);
+      returnQuery.set('roundTripStage', 'return');
+      navigate(`/search-results?${returnQuery.toString()}`);
+      return;
+    }
+
+    if (roundTrip?.returnDate && roundTrip.stage === 'return') {
+      const nextRoundTrip = {
+        ...roundTrip,
+        returnTrip: nextBooking,
+        stage: 'complete',
+      };
+      localStorage.setItem(ROUND_TRIP_KEY, JSON.stringify(nextRoundTrip));
+    }
 
     localStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify(nextBooking));
     setPendingBooking(nextBooking);

@@ -7,6 +7,8 @@ import { bookingApi } from '../services/bookingApi';
 const PENDING_BOOKING_KEY = 'pendingBooking';
 const HOLD_STORAGE_KEY = 'currentSeatHold';
 const PAYMENT_EXPIRES_KEY = 'paymentExpiresAt';
+const ROUND_TRIP_KEY = 'roundTripBooking';
+const SUCCESS_BOOKINGS_KEY = 'lastSuccessfulBookingIds';
 
 const paymentMethods = [
   { value: 'Cash', label: 'Tiền mặt', icon: 'fa-money-bill-wave' },
@@ -20,6 +22,28 @@ function readPendingBooking() {
   } catch {
     return null;
   }
+}
+
+function readRoundTripBooking() {
+  try {
+    return JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function buildBookingRequest(booking, paymentMethod) {
+  return {
+    tripId: booking.tripId,
+    sessionId: booking.sessionId,
+    customerName: booking.contact.customerName,
+    customerPhone: booking.contact.customerPhone,
+    customerEmail: booking.contact.customerEmail,
+    seatLabels: booking.seatLabels,
+    pickupStopId: booking.pickupStopId,
+    dropoffStopId: booking.dropoffStopId,
+    paymentMethod,
+  };
 }
 
 function formatCountdown(ms) {
@@ -43,6 +67,7 @@ function formatDateTime(value) {
 export default function BookingPayment() {
   const navigate = useNavigate();
   const [pendingBooking] = useState(() => readPendingBooking());
+  const [roundTripBooking] = useState(() => readRoundTripBooking());
   const [paymentMethod, setPaymentMethod] = useState('BankTransfer');
   const [expiresAt] = useState(() => {
     const stored = localStorage.getItem(PAYMENT_EXPIRES_KEY);
@@ -68,6 +93,16 @@ export default function BookingPayment() {
   }, [expiresAt, navigate, now, pendingBooking?.tripId]);
 
   const trip = pendingBooking?.trip || {};
+  const bookingsToPay = useMemo(() => {
+    if (roundTripBooking?.stage === 'complete' && roundTripBooking.outbound && roundTripBooking.returnTrip) {
+      return [roundTripBooking.outbound, roundTripBooking.returnTrip];
+    }
+    return pendingBooking ? [pendingBooking] : [];
+  }, [pendingBooking, roundTripBooking]);
+  const totalPrice = useMemo(
+    () => bookingsToPay.reduce((sum, booking) => sum + Number(booking?.totalPrice || 0), 0),
+    [bookingsToPay]
+  );
   const remainingMs = expiresAt - now;
 
   const summary = useMemo(() => ({
@@ -78,7 +113,7 @@ export default function BookingPayment() {
   }), [trip]);
 
   const submit = async () => {
-    if (!pendingBooking?.tripId || !pendingBooking?.contact) {
+    if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
       alert('Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.');
       navigate('/search-results');
       return;
@@ -92,20 +127,19 @@ export default function BookingPayment() {
 
     setSubmitting(true);
     try {
-      const response = await bookingApi.create({
-        tripId: pendingBooking.tripId,
-        sessionId: pendingBooking.sessionId,
-        customerName: pendingBooking.contact.customerName,
-        customerPhone: pendingBooking.contact.customerPhone,
-        customerEmail: pendingBooking.contact.customerEmail,
-        seatLabels: pendingBooking.seatLabels,
-        pickupStopId: pendingBooking.pickupStopId,
-        dropoffStopId: pendingBooking.dropoffStopId,
-        paymentMethod,
-      });
+      const responses = [];
+      for (const booking of bookingsToPay) {
+        const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod));
+        responses.push(response);
+      }
 
-      const bookingId = pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']);
+      const bookingIds = responses
+        .map((response) => pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']))
+        .filter(Boolean);
+      const bookingId = bookingIds[0];
+      localStorage.setItem(SUCCESS_BOOKINGS_KEY, JSON.stringify(bookingIds));
       localStorage.removeItem(PENDING_BOOKING_KEY);
+      localStorage.removeItem(ROUND_TRIP_KEY);
       localStorage.removeItem(HOLD_STORAGE_KEY);
       localStorage.removeItem(PAYMENT_EXPIRES_KEY);
       window.dispatchEvent(new Event('holdSeatUpdated'));
@@ -184,15 +218,28 @@ export default function BookingPayment() {
 
         <aside className="payment-summary-card">
           <h2>Tóm tắt đơn</h2>
-          <div className="payment-trip-box">
-            <strong>{summary.operatorName}</strong>
-            <span>{summary.busType}</span>
-            <p>{summary.route}</p>
-            <small>{formatDateTime(summary.departureTime)}</small>
-          </div>
+          {bookingsToPay.map((booking, index) => {
+            const itemTrip = booking.trip || {};
+            const itemSummary = {
+              route: `${pick(itemTrip, ['departureLocation', 'DepartureLocation'], '--')} → ${pick(itemTrip, ['arrivalLocation', 'ArrivalLocation'], '--')}`,
+              departureTime: pick(itemTrip, ['departureTime', 'DepartureTime']),
+              operatorName: pick(itemTrip, ['operatorName', 'OperatorName'], index === 0 ? summary.operatorName : 'Nhà xe'),
+              busType: pick(itemTrip, ['busType', 'BusType'], index === 0 ? summary.busType : 'Xe khách'),
+            };
+
+            return (
+              <div className="payment-trip-box" key={`${booking.tripId}-${index}`}>
+                <strong>{bookingsToPay.length > 1 ? (index === 0 ? 'Lượt đi' : 'Lượt về') : itemSummary.operatorName}</strong>
+                {bookingsToPay.length > 1 && <span>{itemSummary.operatorName}</span>}
+                <span>{itemSummary.busType}</span>
+                <p>{itemSummary.route}</p>
+                <small>{formatDateTime(itemSummary.departureTime)} - Ghế {booking.seatLabels?.join(', ') || '--'}</small>
+              </div>
+            );
+          })}
           <div className="contact-summary-line">
             <span>Ghế</span>
-            <strong>{pendingBooking.seatLabels?.join(', ') || '--'}</strong>
+            <strong>{bookingsToPay.map((booking) => booking.seatLabels?.join(', ') || '--').join(' / ')}</strong>
           </div>
           <div className="contact-summary-line">
             <span>Người đi</span>
@@ -204,7 +251,7 @@ export default function BookingPayment() {
           </div>
           <div className="contact-summary-total">
             <span>Tổng tiền</span>
-            <strong>{formatVND(pendingBooking.totalPrice || 0)}</strong>
+            <strong>{formatVND(totalPrice)}</strong>
           </div>
         </aside>
       </section>

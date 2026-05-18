@@ -3580,8 +3580,55 @@ a:hover,
   color: #1f3b63;
 }
 
+.success-ticket-block {
+  display: grid;
+  gap: 12px;
+}
+
+.success-ticket-block + .success-ticket-block {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid #e6eefb;
+}
+
+.success-ticket-block h3 {
+  margin: 0;
+  color: #0f4fb8;
+  font-size: 1.05rem;
+}
+
+.success-roundtrip-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #eef6ff;
+  color: #1f3b63;
+  font-weight: 900;
+}
+
+.success-roundtrip-total strong {
+  color: #f59e0b;
+  font-size: 1.25rem;
+}
+
 .success-qr-card {
   text-align: center;
+}
+
+.success-qr-item + .success-qr-item {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid #e6eefb;
+}
+
+.success-qr-item > strong {
+  display: block;
+  color: #0f4fb8;
+  margin-bottom: 8px;
 }
 
 .pseudo-qr {

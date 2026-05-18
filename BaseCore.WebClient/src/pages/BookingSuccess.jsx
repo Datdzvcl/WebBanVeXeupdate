@@ -6,6 +6,7 @@ import { bookingApi } from '../services/bookingApi';
 import { useAuth } from '../contexts/AuthContext';
 
 const LAST_SEARCH_KEY = 'lastTripSearchQuery';
+const SUCCESS_BOOKINGS_KEY = 'lastSuccessfulBookingIds';
 
 function formatDateTime(value) {
   if (!value) return '--';
@@ -22,6 +23,22 @@ function getQrText(booking) {
   const qrCodes = booking?.qrCodes || booking?.QrCodes || [];
   const ticketSeats = booking?.ticketSeats || booking?.TicketSeats || [];
   return qrCodes[0] || ticketSeats[0]?.qrCode || ticketSeats[0]?.QRCode || `BOOKING:${booking?.bookingID || booking?.BookingID}`;
+}
+
+function readSuccessBookingIds(currentId) {
+  try {
+    const ids = JSON.parse(localStorage.getItem(SUCCESS_BOOKINGS_KEY) || '[]')
+      .map((item) => String(item))
+      .filter(Boolean);
+
+    if (ids.includes(String(currentId))) {
+      return Array.from(new Set(ids));
+    }
+  } catch {
+    return [String(currentId)];
+  }
+
+  return [String(currentId)];
 }
 
 function PseudoQrCode({ value }) {
@@ -53,10 +70,38 @@ function PseudoQrCode({ value }) {
   );
 }
 
+function SuccessTicketBlock({ booking, title }) {
+  const trip = booking.trip || booking.Trip || {};
+  const operator = booking.operatorInfo || booking.OperatorInfo || {};
+  const pickupStop = booking.pickupStop || booking.PickupStop;
+  const dropoffStop = booking.dropoffStop || booking.DropoffStop;
+  const seatLabels = booking.seatLabels || booking.SeatLabels || [];
+
+  return (
+    <section className="success-ticket-block">
+      {title && <h3>{title}</h3>}
+      <div className="success-info-grid">
+        <div><span>Nhà xe</span><strong>{pick(booking, ['operatorName', 'OperatorName'], pick(operator, ['name', 'Name'], '--'))}</strong></div>
+        <div><span>Tuyến</span><strong>{pick(trip, ['departureLocation', 'DepartureLocation'], pick(booking, ['departureLocation', 'DepartureLocation'], '--'))} → {pick(trip, ['arrivalLocation', 'ArrivalLocation'], pick(booking, ['arrivalLocation', 'ArrivalLocation'], '--'))}</strong></div>
+        <div><span>Giờ đi</span><strong>{formatDateTime(pick(trip, ['departureTime', 'DepartureTime'], pick(booking, ['departureTime', 'DepartureTime'])))}</strong></div>
+        <div><span>Giờ đến dự kiến</span><strong>{formatDateTime(pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime'])))}</strong></div>
+        <div><span>Ghế</span><strong>{seatLabels.join(', ') || '--'}</strong></div>
+        <div><span>Điểm đón</span><strong>{pick(pickupStop, ['stopName', 'StopName'], '--')}</strong></div>
+        <div><span>Điểm trả</span><strong>{pick(dropoffStop, ['stopName', 'StopName'], '--')}</strong></div>
+        <div><span>Người đặt</span><strong>{pick(booking, ['customerName', 'CustomerName'], '--')}</strong></div>
+        <div><span>Số điện thoại</span><strong>{pick(booking, ['customerPhone', 'CustomerPhone'], '--')}</strong></div>
+        <div><span>Email</span><strong>{pick(booking, ['customerEmail', 'CustomerEmail'], '--')}</strong></div>
+        <div><span>Phương thức</span><strong>{labelPaymentMethod(pick(booking, ['paymentMethod', 'PaymentMethod'], '--'))}</strong></div>
+        <div><span>Tổng tiền</span><strong>{formatVND(pick(booking, ['totalPrice', 'TotalPrice'], 0))}</strong></div>
+      </div>
+    </section>
+  );
+}
+
 export default function BookingSuccess() {
   const { id } = useParams();
   const { isAuthenticated } = useAuth();
-  const [booking, setBooking] = useState(null);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -65,7 +110,9 @@ export default function BookingSuccess() {
       setLoading(true);
       setError('');
       try {
-        setBooking(await bookingApi.getById(id));
+        const bookingIds = readSuccessBookingIds(id);
+        const loadedBookings = await Promise.all(bookingIds.map((bookingId) => bookingApi.getById(bookingId)));
+        setBookings(loadedBookings);
       } catch (err) {
         setError(err.message || 'Không thể tải chi tiết đơn.');
       } finally {
@@ -84,7 +131,7 @@ export default function BookingSuccess() {
     );
   }
 
-  if (error || !booking) {
+  if (error || bookings.length === 0) {
     return (
       <UserLayout>
         <div className="container pickup-placeholder">
@@ -95,15 +142,11 @@ export default function BookingSuccess() {
     );
   }
 
-  const bookingId = pick(booking, ['bookingID', 'bookingId', 'BookingID', 'id']);
-  const trip = booking.trip || booking.Trip || {};
-  const operator = booking.operatorInfo || booking.OperatorInfo || {};
-  const pickupStop = booking.pickupStop || booking.PickupStop;
-  const dropoffStop = booking.dropoffStop || booking.DropoffStop;
-  const seatLabels = booking.seatLabels || booking.SeatLabels || [];
-  const qrText = getQrText(booking);
+  const bookingIds = bookings.map((booking) => pick(booking, ['bookingID', 'bookingId', 'BookingID', 'id'])).filter(Boolean);
+  const totalPrice = bookings.reduce((sum, booking) => sum + Number(pick(booking, ['totalPrice', 'TotalPrice'], 0)), 0);
   const continueSearchQuery = localStorage.getItem(LAST_SEARCH_KEY) || '';
   const continueSearchUrl = continueSearchQuery ? `/search-results?${continueSearchQuery}` : '/search-results';
+  const isRoundTrip = bookings.length > 1;
 
   return (
     <UserLayout>
@@ -112,37 +155,54 @@ export default function BookingSuccess() {
           <i className="fa-solid fa-circle-check" />
           <span>Thanh toán thành công</span>
           <h1>Đặt vé hoàn tất</h1>
-          <p>Mã đơn #{bookingId} đã được tạo thành công.</p>
+          <p>
+            {isRoundTrip
+              ? `Các mã đơn #${bookingIds.join(', #')} đã được tạo thành công.`
+              : `Mã đơn #${bookingIds[0]} đã được tạo thành công.`}
+          </p>
         </div>
       </section>
 
       <section className="container success-layout">
         <main className="success-detail-card">
           <div className="success-detail-head">
-            <h2>Chi tiết đơn</h2>
-            <span>{labelBookingStatus(pick(booking, ['bookingStatus', 'BookingStatus'], '--'))}</span>
+            <h2>{isRoundTrip ? 'Chi tiết đơn khứ hồi' : 'Chi tiết đơn'}</h2>
+            <span>{isRoundTrip ? `${bookings.length} vé` : labelBookingStatus(pick(bookings[0], ['bookingStatus', 'BookingStatus'], '--'))}</span>
           </div>
 
-          <div className="success-info-grid">
-            <div><span>Nhà xe</span><strong>{pick(booking, ['operatorName', 'OperatorName'], pick(operator, ['name', 'Name'], '--'))}</strong></div>
-            <div><span>Tuyến</span><strong>{pick(trip, ['departureLocation', 'DepartureLocation'], pick(booking, ['departureLocation', 'DepartureLocation'], '--'))} → {pick(trip, ['arrivalLocation', 'ArrivalLocation'], pick(booking, ['arrivalLocation', 'ArrivalLocation'], '--'))}</strong></div>
-            <div><span>Giờ đi</span><strong>{formatDateTime(pick(trip, ['departureTime', 'DepartureTime'], pick(booking, ['departureTime', 'DepartureTime'])))}</strong></div>
-            <div><span>Giờ đến dự kiến</span><strong>{formatDateTime(pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime'])))}</strong></div>
-            <div><span>Ghế</span><strong>{seatLabels.join(', ') || '--'}</strong></div>
-            <div><span>Điểm đón</span><strong>{pick(pickupStop, ['stopName', 'StopName'], '--')}</strong></div>
-            <div><span>Điểm trả</span><strong>{pick(dropoffStop, ['stopName', 'StopName'], '--')}</strong></div>
-            <div><span>Người đặt</span><strong>{pick(booking, ['customerName', 'CustomerName'], '--')}</strong></div>
-            <div><span>Số điện thoại</span><strong>{pick(booking, ['customerPhone', 'CustomerPhone'], '--')}</strong></div>
-            <div><span>Email</span><strong>{pick(booking, ['customerEmail', 'CustomerEmail'], '--')}</strong></div>
-            <div><span>Phương thức</span><strong>{labelPaymentMethod(pick(booking, ['paymentMethod', 'PaymentMethod'], '--'))}</strong></div>
-            <div><span>Tổng tiền</span><strong>{formatVND(pick(booking, ['totalPrice', 'TotalPrice'], 0))}</strong></div>
-          </div>
+          {bookings.map((booking, index) => {
+            const bookingId = pick(booking, ['bookingID', 'bookingId', 'BookingID', 'id']);
+            return (
+              <SuccessTicketBlock
+                key={bookingId || index}
+                booking={booking}
+                title={isRoundTrip ? `${index === 0 ? 'Vé lượt đi' : 'Vé lượt về'} - Mã đơn #${bookingId}` : ''}
+              />
+            );
+          })}
+
+          {isRoundTrip && (
+            <div className="success-roundtrip-total">
+              <span>Tổng thanh toán</span>
+              <strong>{formatVND(totalPrice)}</strong>
+            </div>
+          )}
         </main>
 
         <aside className="success-qr-card">
           <h2>Mã QR vé</h2>
-          <PseudoQrCode value={qrText} />
-          <p>{qrText}</p>
+          {bookings.map((booking, index) => {
+            const qrText = getQrText(booking);
+            const bookingId = pick(booking, ['bookingID', 'bookingId', 'BookingID', 'id']);
+            return (
+              <div className="success-qr-item" key={bookingId || index}>
+                {isRoundTrip && <strong>{index === 0 ? 'Lượt đi' : 'Lượt về'}</strong>}
+                <PseudoQrCode value={qrText} />
+                <p>{qrText}</p>
+              </div>
+            );
+          })}
+
           <div className="success-actions">
             <Link className="btn btn-primary" to="/">Quay lại trang chủ</Link>
             <Link className="btn btn-outline" to={continueSearchUrl}>Tiếp tục đặt vé</Link>

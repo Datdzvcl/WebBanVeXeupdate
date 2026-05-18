@@ -194,9 +194,16 @@ namespace BaseCore.APIService.Controllers
         [HttpGet("{id}/stops")]
         public async Task<IActionResult> GetStops(int id)
         {
-            var tripExists = await _context.Trips.AsNoTracking().AnyAsync(x => x.TripID == id);
-            if (!tripExists)
+            var trip = await _context.Trips.AsNoTracking().FirstOrDefaultAsync(x => x.TripID == id);
+            if (trip == null)
                 return NotFound(new { message = "Không tìm thấy chuyến xe" });
+
+            var hasActiveStops = await _context.StopPoints.AnyAsync(x => x.TripID == id && x.IsActive);
+            if (!hasActiveStops)
+            {
+                AddDefaultStopPoints(trip);
+                await _context.SaveChangesAsync();
+            }
 
             var stops = await _context.StopPoints
                 .AsNoTracking()
@@ -394,6 +401,10 @@ namespace BaseCore.APIService.Controllers
             trip.Status = NormalizeStatus(trip.Status);
             _context.Trips.Add(trip);
             await _context.SaveChangesAsync();
+
+            AddDefaultStopPoints(trip);
+            await _context.SaveChangesAsync();
+
             return Ok(trip);
         }
 
@@ -411,6 +422,15 @@ namespace BaseCore.APIService.Controllers
             trip.Status = NormalizeStatus(trip.Status);
             _context.Entry(trip).State = EntityState.Modified;
             await _context.SaveChangesAsync();
+
+            var hasActiveStops = await _context.StopPoints
+                .AnyAsync(x => x.TripID == id && x.IsActive);
+            if (!hasActiveStops)
+            {
+                AddDefaultStopPoints(trip);
+                await _context.SaveChangesAsync();
+            }
+
             return Ok(trip);
         }
 
@@ -480,6 +500,45 @@ namespace BaseCore.APIService.Controllers
                 return BadRequest(new { message = "AvailableSeats không được lớn hơn Capacity của xe" });
 
             return null;
+        }
+
+        private void AddDefaultStopPoints(Trip trip)
+        {
+            var totalMinutes = Math.Max(0, (int)Math.Round((trip.ArrivalTime - trip.DepartureTime).TotalMinutes));
+            var middleOffset = totalMinutes > 0 ? Math.Max(1, totalMinutes / 2) : 0;
+
+            _context.StopPoints.AddRange(
+                new StopPoint
+                {
+                    TripID = trip.TripID,
+                    StopName = $"Bến xe {trip.DepartureLocation}",
+                    StopAddress = $"Trung tâm {trip.DepartureLocation}",
+                    StopOrder = 1,
+                    StopType = 1,
+                    ArrivalOffset = 0,
+                    IsActive = true
+                },
+                new StopPoint
+                {
+                    TripID = trip.TripID,
+                    StopName = $"Trạm dừng giữa tuyến {trip.DepartureLocation} - {trip.ArrivalLocation}",
+                    StopAddress = $"Quốc lộ chính tuyến {trip.DepartureLocation} - {trip.ArrivalLocation}",
+                    StopOrder = 2,
+                    StopType = 3,
+                    ArrivalOffset = middleOffset,
+                    IsActive = true
+                },
+                new StopPoint
+                {
+                    TripID = trip.TripID,
+                    StopName = $"Bến xe {trip.ArrivalLocation}",
+                    StopAddress = $"Trung tâm {trip.ArrivalLocation}",
+                    StopOrder = 3,
+                    StopType = 2,
+                    ArrivalOffset = totalMinutes,
+                    IsActive = true
+                }
+            );
         }
 
         private static IQueryable<Trip> ApplySearchSort(IQueryable<Trip> query, string? sortBy)

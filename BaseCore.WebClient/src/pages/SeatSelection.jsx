@@ -7,6 +7,7 @@ import { seatApi } from '../services/seatApi';
 
 const SESSION_STORAGE_KEY = 'seatSessionId';
 const HOLD_STORAGE_KEY = 'currentSeatHold';
+const ROUND_TRIP_KEY = 'roundTripBooking';
 
 function ensureSessionId() {
   const existing = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -233,6 +234,16 @@ export default function SeatSelection() {
       return;
     }
 
+    let bookingLeg = 'single';
+    try {
+      const roundTrip = JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null');
+      if (roundTrip?.returnDate) {
+        bookingLeg = roundTrip.stage === 'return' ? 'return' : 'outbound';
+      }
+    } catch {
+      bookingLeg = 'single';
+    }
+
     localStorage.setItem('pendingBooking', JSON.stringify({
       tripId,
       sessionId,
@@ -241,6 +252,7 @@ export default function SeatSelection() {
       trip,
       pricePerSeat: trip?.price || 0,
       totalPrice: total,
+      bookingLeg,
     }));
 
     navigate('/booking/pickup-dropoff');
