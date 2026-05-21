@@ -29,6 +29,7 @@ namespace BaseCore.APIService.Controllers
                 {
                     x.PromotionID,
                     x.Code,
+                    x.Description,
                     x.DiscountType,
                     x.DiscountValue,
                     x.MinOrderValue,
@@ -40,6 +41,39 @@ namespace BaseCore.APIService.Controllers
                     x.IsActive,
                     x.IsPublic,
                     x.UserID
+                })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
+        [HttpGet("public")]
+        public async Task<IActionResult> GetPublic()
+        {
+            var now = DateTime.Now;
+            var items = await _context.Promotions
+                .AsNoTracking()
+                .Where(x => x.IsActive
+                    && x.IsPublic
+                    && x.StartDate <= now
+                    && x.EndDate >= now
+                    && (!x.UsageLimit.HasValue || x.UsedCount < x.UsageLimit.Value))
+                .OrderBy(x => x.EndDate)
+                .ThenByDescending(x => x.PromotionID)
+                .Select(x => new
+                {
+                    x.PromotionID,
+                    x.Code,
+                    x.Description,
+                    x.DiscountType,
+                    x.DiscountValue,
+                    x.MinOrderValue,
+                    x.MaxDiscount,
+                    x.UsageLimit,
+                    x.UsedCount,
+                    RemainingUses = x.UsageLimit.HasValue ? x.UsageLimit.Value - x.UsedCount : (int?)null,
+                    x.StartDate,
+                    x.EndDate
                 })
                 .ToListAsync();
 
@@ -204,6 +238,7 @@ namespace BaseCore.APIService.Controllers
         private static void ApplyRequest(Promotion promotion, PromotionRequest request, string code)
         {
             promotion.Code = code;
+            promotion.Description = NormalizeOptionalText(request.Description);
             promotion.DiscountType = request.DiscountType;
             promotion.DiscountValue = request.DiscountValue;
             promotion.MinOrderValue = request.MinOrderValue;
@@ -226,11 +261,17 @@ namespace BaseCore.APIService.Controllers
         {
             return string.IsNullOrWhiteSpace(code) ? string.Empty : code.Trim().ToUpperInvariant();
         }
+
+        private static string? NormalizeOptionalText(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
     }
 
     public class PromotionRequest
     {
         public string? Code { get; set; }
+        public string? Description { get; set; }
         public byte DiscountType { get; set; } = 1;
         public decimal DiscountValue { get; set; }
         public decimal? MinOrderValue { get; set; }

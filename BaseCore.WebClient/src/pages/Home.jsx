@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import UserLayout from "../layouts/UserLayout";
 import { API_BASE } from "../api";
+import { promotionApi } from "../services/promotionApi";
 
 const offerItems = [
   {
@@ -38,6 +39,21 @@ const popularRoutes = [
     price: "Từ 350.000đ",
     image:
       "https://booking.muongthanh.com/upload_images/images/H%60/sa-pa-thi-tran-trong-suong.jpg",
+  },
+  {
+    route: "Sài Gòn - Đà Lạt",
+    price: "Từ 220.000đ",
+    image: "https://statics.vinpearl.com/du-lich-da-lat_1688466093.jpg",
+  },
+  {
+    route: "Hà Nội - Hạ Long",
+    price: "Từ 180.000đ",
+    image: "https://statics.vinpearl.com/ha-long-bay-vietnam-1_1689846823.jpg",
+  },
+  {
+    route: "Đà Nẵng - Huế",
+    price: "Từ 150.000đ",
+    image: "https://statics.vinpearl.com/hue-vietnam_1688712155.jpg",
   },
 ];
 
@@ -82,6 +98,63 @@ function formatDateLabel(value) {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function getPromotionValue(item, keys, fallback = "") {
+  for (const key of keys) {
+    if (item?.[key] !== undefined && item?.[key] !== null) return item[key];
+  }
+  return fallback;
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function formatPromotionDate(value) {
+  if (!value) return "--";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function getPromotionTitle(item) {
+  const type = Number(getPromotionValue(item, ["discountType", "DiscountType"], 1));
+  const value = Number(getPromotionValue(item, ["discountValue", "DiscountValue"], 0));
+  const maxDiscount = Number(getPromotionValue(item, ["maxDiscount", "MaxDiscount"], 0));
+
+  if (type === 1) {
+    return `Giảm ${value}%${maxDiscount > 0 ? ` tối đa ${formatMoney(maxDiscount)}` : ""}`;
+  }
+
+  return `Giảm ${formatMoney(value)}`;
+}
+
+function getPromotionRules(item) {
+  const minOrder = Number(getPromotionValue(item, ["minOrderValue", "MinOrderValue"], 0));
+  const remainingUses = getPromotionValue(item, ["remainingUses", "RemainingUses"], null);
+  const endDate = getPromotionValue(item, ["endDate", "EndDate"]);
+  const rules = [];
+
+  if (minOrder > 0) rules.push(`Đơn tối thiểu ${formatMoney(minOrder)}`);
+  rules.push(remainingUses === null ? "Không giới hạn lượt dùng" : `Còn ${remainingUses} lượt`);
+  rules.push(`Hạn dùng đến ${formatPromotionDate(endDate)}`);
+  return rules;
+}
+
+function getPromotionDescription(item) {
+  return getPromotionValue(item, ["description", "Description"], "") || "Áp dụng theo điều kiện của chương trình ưu đãi.";
+}
+
+function getVisibleItems(items, start, size = 3) {
+  if (!items.length) return [];
+  return Array.from({ length: Math.min(size, items.length) }, (_, index) => items[(start + index) % items.length]);
 }
 
 function LocationPicker({ label, value, onChange, options, icon, accentClass, placeholder }) {
@@ -183,6 +256,10 @@ export default function Home() {
   const navigate = useNavigate();
   const today = useMemo(() => getToday(), []);
   const [locations, setLocations] = useState([]);
+  const [publicPromotions, setPublicPromotions] = useState([]);
+  const [routeIndex, setRouteIndex] = useState(0);
+  const [promotionIndex, setPromotionIndex] = useState(0);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     from: "",
@@ -199,12 +276,24 @@ export default function Home() {
         .filter(Boolean)
     )).sort((a, b) => a.localeCompare(b, "vi"));
   }, [locations]);
+  const visibleRoutes = useMemo(() => getVisibleItems(popularRoutes, routeIndex), [routeIndex]);
+  const visiblePromotions = useMemo(() => getVisibleItems(publicPromotions, promotionIndex), [publicPromotions, promotionIndex]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/trips/locations`)
       .then((response) => (response.ok ? response.json() : []))
       .then((data) => setLocations(Array.isArray(data) ? data : []))
       .catch(() => setLocations([]));
+  }, []);
+
+  useEffect(() => {
+    promotionApi.publicList()
+      .then((data) => {
+        const items = Array.isArray(data) ? data : [];
+        setPublicPromotions(items);
+        setSelectedPromotion(items[0] || null);
+      })
+      .catch(() => setPublicPromotions([]));
   }, []);
 
   const updateForm = (key, value) => {
@@ -265,6 +354,25 @@ export default function Home() {
 
     localStorage.setItem("lastTripSearchQuery", query.toString());
     navigate(`/search-results?${query.toString()}`);
+  };
+
+  const copyPromotionCode = async (code) => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const input = document.createElement("input");
+      input.value = code;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+  };
+
+  const moveCarousel = (setter, total, step) => {
+    if (total <= 3) return;
+    setter((current) => (current + step + total) % total);
   };
 
   return (
@@ -352,29 +460,23 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="offers" className="container home-section">
-        <div className="home-section-head">
-          <span>Ưu đãi</span>
-          <h2>Tiết kiệm hơn cho mỗi chuyến đi</h2>
-        </div>
-        <div className="offer-grid">
-          {offerItems.map((item) => (
-            <article className="offer-card" key={item.title}>
-              <i className={`fa-solid ${item.icon}`} />
-              <h3>{item.title}</h3>
-              <p>{item.desc}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section className="container home-section">
-        <div className="home-section-head">
-          <span>Tuyến phổ biến</span>
-          <h2>Những hành trình được chọn nhiều</h2>
+        <div className="home-section-row">
+          <div className="home-section-head">
+            <span>Tuyến phổ biến</span>
+            <h2>Những hành trình được chọn nhiều</h2>
+          </div>
+          <div className="home-carousel-actions">
+            <button type="button" onClick={() => moveCarousel(setRouteIndex, popularRoutes.length, -1)} aria-label="Xem hành trình trước">
+              <i className="fa-solid fa-chevron-left" />
+            </button>
+            <button type="button" onClick={() => moveCarousel(setRouteIndex, popularRoutes.length, 1)} aria-label="Xem hành trình tiếp theo">
+              <i className="fa-solid fa-chevron-right" />
+            </button>
+          </div>
         </div>
         <div className="home-route-grid">
-          {popularRoutes.map((item) => (
+          {visibleRoutes.map((item) => (
             <article className="home-route-card" key={item.route}>
               <img src={item.image} alt={item.route} />
               <div>
@@ -384,6 +486,80 @@ export default function Home() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section id="offers" className="container home-section">
+        <div className="home-section-row">
+          <div className="home-section-head">
+            <span>Ưu đãi</span>
+            <h2>Tiết kiệm hơn cho mỗi chuyến đi</h2>
+          </div>
+          {publicPromotions.length > 3 && (
+            <div className="home-carousel-actions">
+              <button type="button" onClick={() => moveCarousel(setPromotionIndex, publicPromotions.length, -1)} aria-label="Xem mã trước">
+                <i className="fa-solid fa-chevron-left" />
+              </button>
+              <button type="button" onClick={() => moveCarousel(setPromotionIndex, publicPromotions.length, 1)} aria-label="Xem mã tiếp theo">
+                <i className="fa-solid fa-chevron-right" />
+              </button>
+            </div>
+          )}
+        </div>
+        {publicPromotions.length > 0 ? (
+          <>
+            <div className="promotion-showcase-grid">
+              {visiblePromotions.map((item) => {
+                const code = getPromotionValue(item, ["code", "Code"]);
+                const selected = selectedPromotion && getPromotionValue(selectedPromotion, ["code", "Code"]) === code;
+                return (
+                  <article className={`promotion-showcase-card ${selected ? "selected" : ""}`} key={code}>
+                    <button type="button" className="promotion-showcase-select" onClick={() => setSelectedPromotion(item)}>
+                      <div className="promotion-showcase-top">
+                        <i className="fa-solid fa-ticket" />
+                        <span>Mã ưu đãi</span>
+                      </div>
+                      <h3>{getPromotionTitle(item)}</h3>
+                      <div className="promotion-code-line">
+                        <strong>{code}</strong>
+                        <span>Bấm để xem chi tiết</span>
+                      </div>
+                      <ul>
+                        {getPromotionRules(item).map((rule) => (
+                          <li key={rule}>{rule}</li>
+                        ))}
+                      </ul>
+                    </button>
+                    <button type="button" className="promotion-copy-button" onClick={() => copyPromotionCode(code)}>
+                      Sao chép
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+            {selectedPromotion && (
+              <div className="promotion-detail-panel">
+                <span>Chi tiết mã</span>
+                <h3>{getPromotionValue(selectedPromotion, ["code", "Code"])}</h3>
+                <p>{getPromotionDescription(selectedPromotion)}</p>
+                <ul>
+                  {getPromotionRules(selectedPromotion).map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="offer-grid">
+            {offerItems.map((item) => (
+              <article className="offer-card" key={item.title}>
+                <i className={`fa-solid ${item.icon}`} />
+                <h3>{item.title}</h3>
+                <p>{item.desc}</p>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section id="booking-guide" className="home-reasons">

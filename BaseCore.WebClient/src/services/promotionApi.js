@@ -6,6 +6,11 @@ export const promotionApi = {
     return response.data;
   },
 
+  async publicList() {
+    const response = await apiClient.get('/api/promotions/public');
+    return response.data;
+  },
+
   async getById(id) {
     const response = await apiClient.get(`/api/promotions/${id}`);
     return response.data;

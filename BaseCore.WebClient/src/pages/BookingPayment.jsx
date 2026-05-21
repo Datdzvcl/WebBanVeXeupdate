@@ -84,6 +84,58 @@ function formatDateTime(value) {
   }).format(new Date(value));
 }
 
+function getPromotionValue(item, keys, fallback = '') {
+  for (const key of keys) {
+    if (item?.[key] !== undefined && item?.[key] !== null) return item[key];
+  }
+  return fallback;
+}
+
+function formatPromotionDate(value) {
+  if (!value) return '--';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function getPromotionTitle(item) {
+  const type = Number(getPromotionValue(item, ['discountType', 'DiscountType'], 1));
+  const value = Number(getPromotionValue(item, ['discountValue', 'DiscountValue'], 0));
+  const maxDiscount = Number(getPromotionValue(item, ['maxDiscount', 'MaxDiscount'], 0));
+
+  if (type === 1) {
+    return `Giảm ${value}%${maxDiscount > 0 ? ` tối đa ${formatVND(maxDiscount)}` : ''}`;
+  }
+
+  return `Giảm ${formatVND(value)}`;
+}
+
+function getPromotionRules(item) {
+  const minOrder = Number(getPromotionValue(item, ['minOrderValue', 'MinOrderValue'], 0));
+  const remainingUses = getPromotionValue(item, ['remainingUses', 'RemainingUses'], null);
+  const endDate = getPromotionValue(item, ['endDate', 'EndDate']);
+  const rules = [];
+
+  if (minOrder > 0) rules.push(`Đơn tối thiểu ${formatVND(minOrder)}`);
+  rules.push(remainingUses === null ? 'Không giới hạn lượt dùng' : `Còn ${remainingUses} lượt`);
+  rules.push(`Hạn đến ${formatPromotionDate(endDate)}`);
+  return rules;
+}
+
+function getPromotionDescription(item) {
+  return getPromotionValue(item, ['description', 'Description'], '') || 'Áp dụng theo điều kiện của chương trình ưu đãi.';
+}
+
+function getRandomItems(items, size = 3) {
+  return [...items]
+    .map((item) => ({ item, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .slice(0, size)
+    .map(({ item }) => item);
+}
+
 export default function BookingPayment() {
   const navigate = useNavigate();
   const [pendingBooking] = useState(() => readPendingBooking());
@@ -115,10 +167,27 @@ export default function BookingPayment() {
   const [promotionResult, setPromotionResult] = useState(null);
   const [promotionMessage, setPromotionMessage] = useState('');
   const [promotionLoading, setPromotionLoading] = useState(false);
+  const [availablePromotions, setAvailablePromotions] = useState([]);
+  const [previewPromotions, setPreviewPromotions] = useState([]);
+  const [showAllPromotions, setShowAllPromotions] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    promotionApi.publicList()
+      .then((data) => {
+        const items = Array.isArray(data) ? data : [];
+        setAvailablePromotions(items);
+        setPreviewPromotions(getRandomItems(items, 3));
+      })
+      .catch(() => {
+        setAvailablePromotions([]);
+        setPreviewPromotions([]);
+      });
   }, []);
 
   useEffect(() => {
@@ -142,6 +211,7 @@ export default function BookingPayment() {
   const discountAmount = Number(promotionResult?.discountAmount || promotionResult?.DiscountAmount || 0);
   const finalPrice = Math.max(0, totalPrice - discountAmount);
   const remainingMs = expiresAt - now;
+  const promotionsToShow = previewPromotions;
 
   const summary = useMemo(() => ({
     route: `${pick(trip, ['departureLocation', 'DepartureLocation'], '--')} → ${pick(trip, ['arrivalLocation', 'ArrivalLocation'], '--')}`,
@@ -150,8 +220,9 @@ export default function BookingPayment() {
     busType: pick(trip, ['busType', 'BusType'], 'Xe khách'),
   }), [trip]);
 
-  const applyPromotion = async () => {
-    if (!promotionCode.trim()) {
+  const applyPromotion = async (selectedCode = promotionCode) => {
+    const code = selectedCode.trim();
+    if (!code) {
       setPromotionResult(null);
       setPromotionMessage('Vui lòng nhập mã giảm giá.');
       return;
@@ -159,9 +230,11 @@ export default function BookingPayment() {
 
     setPromotionLoading(true);
     setPromotionMessage('');
+    setPromotionCode(code);
+    setSelectedPromotion(availablePromotions.find((item) => String(getPromotionValue(item, ['code', 'Code'])).toUpperCase() === code.toUpperCase()) || null);
     try {
       const result = await promotionApi.validate({
-        code: promotionCode,
+        code,
         orderValue: totalPrice,
       });
       if (result?.valid || result?.Valid) {
@@ -280,23 +353,111 @@ export default function BookingPayment() {
           </div>
 
           <div className="payment-promo-box">
-            <h2>Mã giảm giá</h2>
-            <div className="admin-filter-grid">
+            <div className="payment-promo-head">
+              <div>
+                <span>Ưu đãi</span>
+                <h2>Chọn mã giảm giá</h2>
+              </div>
+              <button type="button" className="payment-promo-view-all" onClick={() => setShowAllPromotions(true)}>
+                Xem mã giảm giá
+              </button>
+            </div>
+
+            {promotionsToShow.length > 0 && (
+              <div className="payment-promo-list">
+                {promotionsToShow.map((item) => {
+                  const code = getPromotionValue(item, ['code', 'Code']);
+                  const selected = promotionCode.toUpperCase() === String(code).toUpperCase() && promotionResult;
+                  return (
+                    <button
+                      type="button"
+                      className={`payment-promo-option ${selected ? 'selected' : ''}`}
+                      key={code}
+                      disabled={promotionLoading}
+                      onClick={() => applyPromotion(String(code))}
+                    >
+                      <span className="payment-promo-code">{code}</span>
+                      <strong>{getPromotionTitle(item)}</strong>
+                      <small>{getPromotionRules(item).join(' - ')}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedPromotion && (
+              <div className="payment-promo-detail">
+                <span>Chi tiết mã</span>
+                <strong>{getPromotionValue(selectedPromotion, ['code', 'Code'])}</strong>
+                <p>{getPromotionDescription(selectedPromotion)}</p>
+                <ul>
+                  {getPromotionRules(selectedPromotion).map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="payment-promo-manual">
               <input
                 value={promotionCode}
                 onChange={(event) => {
                   setPromotionCode(event.target.value);
                   setPromotionResult(null);
                   setPromotionMessage('');
+                  setSelectedPromotion(null);
                 }}
-                placeholder="Nhập mã giảm giá"
+                placeholder="Nhập mã giảm giá khác"
               />
-              <button type="button" className="btn btn-outline" disabled={promotionLoading} onClick={applyPromotion}>
+              <button type="button" className="btn btn-outline" disabled={promotionLoading} onClick={() => applyPromotion()}>
                 {promotionLoading ? 'Đang kiểm tra...' : 'Áp dụng'}
               </button>
             </div>
-            {promotionMessage && <p className="profile-status">{promotionMessage}</p>}
+            {promotionMessage && <p className={`profile-status ${promotionResult ? 'success' : ''}`}>{promotionMessage}</p>}
           </div>
+
+          {showAllPromotions && (
+            <div className="payment-promo-modal-backdrop" role="dialog" aria-modal="true" aria-label="Danh sách mã giảm giá">
+              <div className="payment-promo-modal">
+                <div className="payment-promo-modal-head">
+                  <div>
+                    <span>Ưu đãi</span>
+                    <h2>Tất cả mã giảm giá</h2>
+                  </div>
+                  <button type="button" onClick={() => setShowAllPromotions(false)} aria-label="Đóng danh sách mã">
+                    <i className="fa-solid fa-xmark" />
+                  </button>
+                </div>
+                <div className="payment-promo-modal-list">
+                  {availablePromotions.length === 0 && (
+                    <p className="payment-promo-empty">
+                      Chưa có mã giảm giá khả dụng. Vui lòng kiểm tra mã đang bật, công khai, còn hạn và đã chạy script database.
+                    </p>
+                  )}
+                  {availablePromotions.map((item) => {
+                    const code = getPromotionValue(item, ['code', 'Code']);
+                    const selected = promotionCode.toUpperCase() === String(code).toUpperCase() && promotionResult;
+                    return (
+                      <button
+                        type="button"
+                        className={`payment-promo-option ${selected ? 'selected' : ''}`}
+                        key={code}
+                        disabled={promotionLoading}
+                        onClick={() => {
+                          applyPromotion(String(code));
+                          setShowAllPromotions(false);
+                        }}
+                      >
+                        <span className="payment-promo-code">{code}</span>
+                        <strong>{getPromotionTitle(item)}</strong>
+                        <small>{getPromotionRules(item).join(' - ')}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           <button type="button" className="btn btn-primary payment-submit-btn" disabled={submitting} onClick={submit}>
             {submitting ? 'Đang xử lý...' : 'Thanh toán'}

@@ -125,6 +125,7 @@ const EMPTY_BOOKING = {
 const EMPTY_PROMOTION = {
   promotionID: null,
   code: "",
+  description: "",
   discountType: 1,
   discountValue: "",
   minOrderValue: "",
@@ -2177,6 +2178,7 @@ function PromotionsManager() {
     setForm({
       promotionID: pick(item, ["promotionID", "PromotionID"]),
       code: pick(item, ["code", "Code"], ""),
+      description: pick(item, ["description", "Description"], ""),
       discountType: Number(pick(item, ["discountType", "DiscountType"], 1)),
       discountValue: pick(item, ["discountValue", "DiscountValue"], ""),
       minOrderValue: pick(item, ["minOrderValue", "MinOrderValue"], ""),
@@ -2197,6 +2199,7 @@ function PromotionsManager() {
     setNotice(null);
     const payload = {
       code: form.code,
+      description: form.description,
       discountType: Number(form.discountType),
       discountValue: Number(form.discountValue || 0),
       minOrderValue: form.minOrderValue === "" ? null : Number(form.minOrderValue),
@@ -2250,6 +2253,7 @@ function PromotionsManager() {
       {showForm && (
         <form className="admin-form-grid" onSubmit={submitForm}>
           <input value={form.code} onChange={(e) => updateForm("code", e.target.value)} placeholder="Mã giảm giá" required />
+          <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Mô tả/điều kiện hiển thị cho khách" rows="3" />
           <select value={form.discountType} onChange={(e) => updateForm("discountType", e.target.value)}>
             <option value="1">Phần trăm</option>
             <option value="2">Số tiền cố định</option>
@@ -2275,6 +2279,7 @@ function PromotionsManager() {
           <thead>
             <tr>
               <th>Mã</th>
+              <th>Mô tả</th>
               <th>Loại</th>
               <th>Giá trị</th>
               <th>Đơn tối thiểu</th>
@@ -2292,6 +2297,7 @@ function PromotionsManager() {
               return (
                 <tr key={id}>
                   <td><b>{pick(item, ["code", "Code"])}</b></td>
+                  <td>{pick(item, ["description", "Description"], "") || "Chưa có"}</td>
                   <td>{Number(pick(item, ["discountType", "DiscountType"], 1)) === 1 ? "Phần trăm" : "Cố định"}</td>
                   <td>{pick(item, ["discountValue", "DiscountValue"], 0)}</td>
                   <td>{formatVND(pick(item, ["minOrderValue", "MinOrderValue"], 0))}</td>
@@ -2307,7 +2313,7 @@ function PromotionsManager() {
               );
             })}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan="9" className="empty-cell">Chưa có mã giảm giá.</td></tr>
+              <tr><td colSpan="10" className="empty-cell">Chưa có mã giảm giá.</td></tr>
             )}
           </tbody>
         </table>

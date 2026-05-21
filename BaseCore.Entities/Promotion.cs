@@ -4,6 +4,7 @@ namespace BaseCore.Entities
     {
         public int PromotionID { get; set; }
         public string Code { get; set; } = string.Empty;
+        public string? Description { get; set; }
         public byte DiscountType { get; set; }
         public decimal DiscountValue { get; set; }
         public decimal? MinOrderValue { get; set; }

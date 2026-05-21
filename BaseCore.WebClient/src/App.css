@@ -2325,6 +2325,41 @@ a:hover,
   letter-spacing: 0;
 }
 
+.home-section-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.home-section-row .home-section-head {
+  margin-bottom: 0;
+}
+
+.home-carousel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.home-carousel-actions button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d4ed8;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.home-carousel-actions button:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
 .offer-grid,
 .home-route-grid,
 .reason-grid {
@@ -2382,6 +2417,145 @@ a:hover,
 .offer-card p,
 .reason-card p {
   color: #60718a;
+}
+
+.promotion-showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.promotion-showcase-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+  box-shadow: 0 12px 28px rgba(180, 83, 9, 0.12);
+  padding: 22px;
+}
+
+.promotion-showcase-card.selected {
+  border-color: #f59e0b;
+  box-shadow: 0 16px 34px rgba(245, 158, 11, 0.18);
+}
+
+.promotion-showcase-select {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.promotion-showcase-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #92400e;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.promotion-showcase-top i {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #ffedd5;
+  color: #ea580c;
+  font-size: 1.1rem;
+}
+
+.promotion-showcase-card h3 {
+  color: #1f3b63;
+  margin: 0;
+}
+
+.promotion-code-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 1px dashed #f59e0b;
+  border-radius: 10px;
+  background: #fff;
+  color: #92400e;
+  padding: 12px 14px;
+}
+
+.promotion-code-line strong {
+  letter-spacing: 0;
+  color: #b45309;
+}
+
+.promotion-code-line span {
+  color: #60718a;
+  font-weight: 800;
+  font-size: 0.86rem;
+}
+
+.promotion-showcase-card ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #60718a;
+  font-weight: 700;
+}
+
+.promotion-copy-button {
+  justify-self: start;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff;
+  color: #c2410c;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.promotion-detail-panel {
+  margin-top: 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 18px;
+}
+
+.promotion-detail-panel span {
+  color: #2563eb;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.promotion-detail-panel h3 {
+  margin: 6px 0;
+  color: #1f3b63;
+}
+
+.promotion-detail-panel p {
+  color: #425978;
+  font-weight: 700;
+}
+
+.promotion-detail-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #60718a;
+  font-weight: 700;
 }
 
 .home-route-grid {
@@ -3500,6 +3674,214 @@ a:hover,
   font-weight: 900;
 }
 
+.payment-promo-box {
+  display: grid;
+  gap: 14px;
+  margin: 22px 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 18px;
+}
+
+.payment-promo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.payment-promo-head span {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: #2563eb;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.payment-promo-head h2 {
+  margin: 0;
+}
+
+.payment-promo-view-all {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 6px 0;
+}
+
+.payment-promo-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-promo-option {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr;
+  gap: 6px 12px;
+  width: 100%;
+  border: 1px solid #d7e5fb;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f3b63;
+  padding: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition);
+  font: inherit;
+}
+
+.payment-promo-option:hover,
+.payment-promo-option.selected {
+  border-color: #f59e0b;
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.14);
+}
+
+.payment-promo-code {
+  grid-row: span 2;
+  align-self: center;
+  justify-self: start;
+  border: 1px dashed #f59e0b;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #b45309;
+  padding: 8px 10px;
+  font-weight: 900;
+}
+
+.payment-promo-option strong {
+  color: #1f3b63;
+}
+
+.payment-promo-option small {
+  color: #60718a;
+  font-weight: 700;
+}
+
+.payment-promo-detail {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed;
+  padding: 13px;
+}
+
+.payment-promo-detail span {
+  color: #c2410c;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+}
+
+.payment-promo-detail strong {
+  color: #1f3b63;
+}
+
+.payment-promo-detail p {
+  margin: 0;
+  color: #425978;
+  font-weight: 700;
+}
+
+.payment-promo-detail ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #60718a;
+  font-weight: 700;
+}
+
+.payment-promo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 24px;
+}
+
+.payment-promo-modal {
+  width: min(760px, 100%);
+  max-height: min(680px, 86vh);
+  display: grid;
+  gap: 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  padding: 20px;
+  overflow: hidden;
+}
+
+.payment-promo-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.payment-promo-modal-head span {
+  color: #2563eb;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.payment-promo-modal-head h2 {
+  margin: 4px 0 0;
+  color: #1f3b63;
+}
+
+.payment-promo-modal-head button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7e5fb;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f3b63;
+  cursor: pointer;
+}
+
+.payment-promo-modal-list {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.payment-promo-empty {
+  margin: 0;
+  border: 1px dashed #bfdbfe;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #60718a;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 16px;
+}
+
+.payment-promo-manual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.payment-promo-manual input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d7e5fb;
+  border-radius: 8px;
+  padding: 0 12px;
+  font: inherit;
+}
+
 .payment-submit-btn {
   margin-top: 20px;
   gap: 9px;
@@ -4013,8 +4395,18 @@ a:hover,
     text-align: left;
   }
 
+  .home-section-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .payment-submit-btn {
     width: 100%;
+  }
+
+  .payment-promo-option,
+  .payment-promo-manual {
+    grid-template-columns: 1fr;
   }
 
   .success-info-grid {
@@ -4070,6 +4462,7 @@ a:hover,
   }
 
   .offer-grid,
+  .promotion-showcase-grid,
   .home-route-grid,
   .reason-grid {
     grid-template-columns: 1fr;
@@ -4350,7 +4743,8 @@ a:hover,
   margin-bottom: 16px;
 }
 .admin-form-grid input,
-.admin-form-grid select {
+.admin-form-grid select,
+.admin-form-grid textarea {
   width: 100%;
   min-height: 40px;
   border: 1px solid #d7e0ec;
@@ -4358,6 +4752,10 @@ a:hover,
   padding: 8px 12px;
   font: inherit;
   background: #fff;
+}
+.admin-form-grid textarea {
+  grid-column: span 2;
+  resize: vertical;
 }
 .admin-form-actions {
   display: flex;
@@ -4410,6 +4808,9 @@ a:hover,
   }
   .admin-form-grid {
     grid-template-columns: 1fr;
+  }
+  .admin-form-grid textarea {
+    grid-column: auto;
   }
   .admin-section-head,
   .admin-pagination {

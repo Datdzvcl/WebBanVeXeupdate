@@ -116,6 +116,7 @@ namespace BaseCore.Repository
                 entity.HasKey(e => e.PromotionID);
 
                 entity.Property(e => e.Code).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(1000);
                 entity.Property(e => e.DiscountValue).HasPrecision(18, 2);
                 entity.Property(e => e.MinOrderValue).HasPrecision(18, 2);
                 entity.Property(e => e.MaxDiscount).HasPrecision(18, 2);
