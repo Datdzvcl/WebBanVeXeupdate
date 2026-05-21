@@ -12,6 +12,19 @@ namespace BaseCore.APIService.Controllers
     [ApiController]
     public class BookingsController : ControllerBase
     {
+        private const string HoldingStatus = "Holding";
+        private const string ExpiredStatus = "Expired";
+        private const string ConvertedToBookingStatus = "ConvertedToBooking";
+        private const string BookingPendingConfirmStatus = "PendingConfirm";
+        private const string BookingConfirmedStatus = "Confirmed";
+        private const string BookingCancelRequestedStatus = "CancelRequested";
+        private const string BookingCancelledStatus = "Cancelled";
+        private const string BookingCancelRejectedStatus = "CancelRejected";
+        private const string PaymentPaidStatus = "Paid";
+        private const string PaymentPendingStatus = "Pending";
+        private const string PaymentCancelledStatus = "Cancelled";
+        private const string PaymentRefundedStatus = "Refunded";
+
         private readonly MySqlDbContext _context;
 
         public BookingsController(MySqlDbContext context)
@@ -117,10 +130,13 @@ namespace BaseCore.APIService.Controllers
                     customerEmail = x.CustomerEmail,
                     totalSeats = x.TotalSeats,
                     totalPrice = x.TotalPrice,
+                    promotionID = x.PromotionID,
+                    discountAmount = x.DiscountAmount,
                     paymentMethod = x.PaymentMethod,
                     paymentStatus = x.PaymentStatus,
-                    bookingStatus = x.BookingStatus ?? "PendingConfirm",
+                    bookingStatus = x.BookingStatus ?? BookingPendingConfirmStatus,
                     bookingDate = x.BookingDate,
+                    cancelReason = x.CancelReason,
                     cancelledAt = x.CancelledAt,
                     refundAmount = x.RefundAmount,
                     seatLabels = x.TicketSeats == null
@@ -167,8 +183,13 @@ namespace BaseCore.APIService.Controllers
                         ? new List<string>()
                         : x.TicketSeats.Select(s => s.SeatLabel).ToList(),
                     totalPrice = x.TotalPrice,
+                    promotionID = x.PromotionID,
+                    discountAmount = x.DiscountAmount,
                     paymentStatus = x.PaymentStatus,
-                    bookingStatus = x.BookingStatus ?? "PendingConfirm",
+                    bookingStatus = x.BookingStatus ?? BookingPendingConfirmStatus,
+                    cancelReason = x.CancelReason,
+                    cancelledAt = x.CancelledAt,
+                    refundAmount = x.RefundAmount,
                     pickupStop = _context.StopPoints
                         .Where(s => s.StopPointID == x.PickupStopID)
                         .Select(s => new { s.StopPointID, s.StopName, s.StopAddress, s.StopType })
@@ -202,6 +223,8 @@ namespace BaseCore.APIService.Controllers
                     customerEmail = x.CustomerEmail,
                     totalSeats = x.TotalSeats,
                     totalPrice = x.TotalPrice,
+                    promotionID = x.PromotionID,
+                    discountAmount = x.DiscountAmount,
                     paymentMethod = x.PaymentMethod,
                     paymentStatus = x.PaymentStatus,
                     bookingStatus = x.BookingStatus ?? "PendingConfirm",
@@ -333,14 +356,14 @@ namespace BaseCore.APIService.Controllers
                 var expiredHolds = await _context.SeatHolds
                     .Where(x =>
                         x.TripID == request.TripId &&
-                        x.Status == "Holding" &&
+                        x.Status == HoldingStatus &&
                         x.HoldExpiresAt <= now &&
                         seatLabels.Contains(x.SeatLabel.ToUpper()))
                     .ToListAsync();
 
                 foreach (var expiredHold in expiredHolds)
                 {
-                    expiredHold.Status = "Expired";
+                    expiredHold.Status = ExpiredStatus;
                 }
 
                 if (expiredHolds.Count > 0)
@@ -349,7 +372,7 @@ namespace BaseCore.APIService.Controllers
                 var holds = await _context.SeatHolds
                     .Where(x =>
                         x.TripID == request.TripId &&
-                        x.Status == "Holding" &&
+                        x.Status == HoldingStatus &&
                         x.HoldExpiresAt > now &&
                         seatLabels.Contains(x.SeatLabel.ToUpper()))
                     .ToListAsync();
@@ -376,6 +399,7 @@ namespace BaseCore.APIService.Controllers
                         x.Booking != null &&
                         x.Booking.TripID == request.TripId &&
                         (x.Booking.PaymentStatus == null || x.Booking.PaymentStatus != "Cancelled") &&
+                        (x.Booking.BookingStatus == null || x.Booking.BookingStatus != "Cancelled") &&
                         seatLabels.Contains(x.SeatLabel.ToUpper()))
                     .Select(x => x.SeatLabel)
                     .ToListAsync();
@@ -389,7 +413,35 @@ namespace BaseCore.APIService.Controllers
                     return Conflict(new { message = $"Ghế đã được đặt: {string.Join(", ", bookedSeatSet)}" });
 
                 var totalSeats = seatLabels.Count;
-                var totalPrice = totalSeats * trip.Price;
+                var subtotal = totalSeats * trip.Price;
+                int? promotionId = null;
+                decimal discountAmount = 0;
+                var totalPrice = subtotal;
+                Promotion? promotion = null;
+
+                var promotionCode = NormalizeOptionalText(request.PromotionCode);
+                if (!string.IsNullOrWhiteSpace(promotionCode))
+                {
+                    promotion = await _context.Promotions
+                        .FirstOrDefaultAsync(x => x.Code == promotionCode.Trim().ToUpper());
+
+                    if (promotion == null)
+                        return BadRequest(new { message = "Ma giam gia khong ton tai" });
+
+                    var promotionResult = PromotionsController.ValidatePromotionEntity(
+                        promotion,
+                        subtotal,
+                        currentUserId,
+                        now);
+
+                    if (!promotionResult.Valid)
+                        return BadRequest(new { message = promotionResult.Message });
+
+                    promotionId = promotionResult.PromotionId;
+                    discountAmount = promotionResult.DiscountAmount;
+                    totalPrice = promotionResult.FinalAmount;
+                }
+
                 var booking = new Booking
                 {
                     TripID = request.TripId,
@@ -399,6 +451,8 @@ namespace BaseCore.APIService.Controllers
                     CustomerEmail = NormalizeOptionalText(request.CustomerEmail),
                     TotalSeats = totalSeats,
                     TotalPrice = totalPrice,
+                    PromotionID = promotionId,
+                    DiscountAmount = discountAmount,
                     PaymentMethod = NormalizeOptionalText(request.PaymentMethod) ?? "Chuyển khoản",
                     PaymentStatus = "Paid",
                     BookingStatus = "PendingConfirm",
@@ -422,11 +476,13 @@ namespace BaseCore.APIService.Controllers
 
                 foreach (var hold in holds.Where(x => ownedHoldSeats.Contains(NormalizeSeatLabel(x.SeatLabel))))
                 {
-                    hold.Status = "ConvertedToBooking";
+                    hold.Status = ConvertedToBookingStatus;
                     hold.BookingID = booking.BookingID;
                 }
 
                 trip.AvailableSeats -= totalSeats;
+                if (promotion != null)
+                    promotion.UsedCount += 1;
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -441,7 +497,10 @@ namespace BaseCore.APIService.Controllers
                     booking.CustomerPhone,
                     booking.CustomerEmail,
                     booking.TotalSeats,
+                    subtotal,
+                    booking.DiscountAmount,
                     booking.TotalPrice,
+                    booking.PromotionID,
                     booking.PaymentMethod,
                     booking.PaymentStatus,
                     booking.BookingDate,
@@ -481,11 +540,11 @@ namespace BaseCore.APIService.Controllers
             if (booking == null)
                 return NotFound(new { message = "Khong tim thay booking" });
 
-            var currentStatus = booking.BookingStatus ?? "PendingConfirm";
-            if (currentStatus != "PendingConfirm")
+            var currentStatus = booking.BookingStatus ?? BookingPendingConfirmStatus;
+            if (currentStatus != BookingPendingConfirmStatus)
                 return BadRequest(new { message = "Chi co the xac nhan don co BookingStatus = PendingConfirm" });
 
-            booking.BookingStatus = "Confirmed";
+            booking.BookingStatus = BookingConfirmedStatus;
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -510,18 +569,24 @@ namespace BaseCore.APIService.Controllers
             if (booking == null)
                 return NotFound(new { message = "Khong tim thay booking" });
 
-            var currentStatus = booking.BookingStatus ?? "PendingConfirm";
-            if (currentStatus != "CancelRequested")
+            var currentStatus = booking.BookingStatus ?? BookingPendingConfirmStatus;
+            if (currentStatus != BookingCancelRequestedStatus)
                 return BadRequest(new { message = "Chi co the duyet huy don co BookingStatus = CancelRequested" });
 
-            booking.BookingStatus = "Cancelled";
-            booking.PaymentStatus = "Cancelled";
-            booking.CancelledAt = DateTime.Now;
+            var now = DateTime.Now;
+            if (booking.Trip != null && IsTripDepartedOrCompleted(booking.Trip, now))
+                return BadRequest(new { message = "Chuyen xe da chay hoac da hoan thanh, khong the duyet huy." });
 
-            if (request?.RefundAmount != null)
-                booking.RefundAmount = request.RefundAmount.Value;
+            var refundRate = CalculateRefundRate(booking.Trip?.DepartureTime, now);
+            var isPaid = string.Equals(booking.PaymentStatus, PaymentPaidStatus, StringComparison.OrdinalIgnoreCase);
+            var refundAmount = isPaid ? Math.Round(booking.TotalPrice * refundRate, 0) : 0m;
 
-            if (booking.Trip != null && booking.TotalSeats > 0)
+            booking.BookingStatus = BookingCancelledStatus;
+            booking.PaymentStatus = isPaid ? PaymentRefundedStatus : PaymentCancelledStatus;
+            booking.CancelledAt = now;
+            booking.RefundAmount = refundAmount;
+
+            if (booking.Trip != null && booking.TotalSeats > 0 && booking.Trip.DepartureTime > now)
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
             await _context.SaveChangesAsync();
@@ -534,6 +599,7 @@ namespace BaseCore.APIService.Controllers
                 paymentStatus = booking.PaymentStatus,
                 booking.CancelledAt,
                 booking.RefundAmount,
+                refundRate,
                 seatsRestored = booking.TotalSeats,
                 message = "Da duyet huy don dat ve"
             });
@@ -548,15 +614,11 @@ namespace BaseCore.APIService.Controllers
             if (booking == null)
                 return NotFound(new { message = "Khong tim thay booking" });
 
-            var currentStatus = booking.BookingStatus ?? "PendingConfirm";
-            if (currentStatus != "CancelRequested")
+            var currentStatus = booking.BookingStatus ?? BookingPendingConfirmStatus;
+            if (currentStatus != BookingCancelRequestedStatus)
                 return BadRequest(new { message = "Chi co the tu choi huy don co BookingStatus = CancelRequested" });
 
-            var restoreStatus = NormalizeOptionalText(request?.BookingStatus) ?? "Confirmed";
-            if (restoreStatus != "Confirmed" && restoreStatus != "PendingConfirm")
-                return BadRequest(new { message = "BookingStatus khoi phuc chi duoc la Confirmed hoac PendingConfirm" });
-
-            booking.BookingStatus = restoreStatus;
+            booking.BookingStatus = BookingCancelRejectedStatus;
 
             await _context.SaveChangesAsync();
 
@@ -564,7 +626,7 @@ namespace BaseCore.APIService.Controllers
             {
                 bookingID = booking.BookingID,
                 bookingStatus = booking.BookingStatus,
-                rejectReason = request?.RejectReason,
+                rejectReason = NormalizeOptionalText(request?.RejectReason),
                 message = "Da tu choi yeu cau huy don"
             });
         }
@@ -580,16 +642,16 @@ namespace BaseCore.APIService.Controllers
             if (booking == null)
                 return NotFound();
 
-            if (booking.PaymentStatus == "Cancelled")
+            if (booking.PaymentStatus == PaymentCancelledStatus)
                 return BadRequest("Vé này đã bị hủy trước đó.");
 
-            if (booking.PaymentStatus == "Paid")
+            if (booking.PaymentStatus == PaymentPaidStatus)
                 return BadRequest("Vé đã thanh toán, không thể hủy tại đây. Vui lòng liên hệ nhà xe để được hỗ trợ.");
 
             if (booking.Trip != null)
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
-            booking.PaymentStatus = "Cancelled";
+            booking.PaymentStatus = PaymentCancelledStatus;
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -618,26 +680,35 @@ namespace BaseCore.APIService.Controllers
             if (booking.UserID != currentUserId.Value)
                 return Forbid();
 
-            if (booking.Trip != null && booking.Trip.DepartureTime <= DateTime.Now)
+            var now = DateTime.Now;
+            if (booking.Trip != null && IsTripDepartedOrCompleted(booking.Trip, now))
                 return BadRequest(new { message = "Chuyến xe đã chạy, không thể yêu cầu hủy vé" });
 
-            var currentStatus = booking.BookingStatus ?? "PendingConfirm";
-            if (currentStatus == "Cancelled" || booking.PaymentStatus == "Cancelled")
+            var currentStatus = booking.BookingStatus ?? BookingPendingConfirmStatus;
+            if (currentStatus == BookingCancelledStatus || booking.PaymentStatus == PaymentCancelledStatus || booking.PaymentStatus == PaymentRefundedStatus)
                 return BadRequest(new { message = "Booking đã bị hủy, không thể yêu cầu hủy lại" });
 
-            if (currentStatus == "CancelRequested")
+            if (currentStatus == BookingCancelRequestedStatus)
                 return BadRequest(new { message = "Booking đã gửi yêu cầu hủy trước đó" });
 
-            booking.BookingStatus = "CancelRequested";
+            if (currentStatus == BookingCancelRejectedStatus)
+                return BadRequest(new { message = "Yeu cau huy ve da bi tu choi truoc do" });
+
+            booking.BookingStatus = BookingCancelRequestedStatus;
             booking.CancelReason = NormalizeOptionalText(request?.CancelReason);
 
             await _context.SaveChangesAsync();
+
+            var estimatedRefundAmount = string.Equals(booking.PaymentStatus, PaymentPaidStatus, StringComparison.OrdinalIgnoreCase)
+                ? Math.Round(booking.TotalPrice * CalculateRefundRate(booking.Trip?.DepartureTime, now), 0)
+                : 0m;
 
             return Ok(new
             {
                 bookingID = booking.BookingID,
                 bookingStatus = booking.BookingStatus,
                 booking.CancelReason,
+                estimatedRefundAmount,
                 message = "Đã gửi yêu cầu hủy vé"
             });
         }
@@ -700,6 +771,30 @@ namespace BaseCore.APIService.Controllers
             return string.IsNullOrWhiteSpace(sessionId) ? null : sessionId.Trim();
         }
 
+        private static bool IsTripDepartedOrCompleted(Trip trip, DateTime now)
+        {
+            return trip.DepartureTime <= now ||
+                   string.Equals(trip.Status, "Completed", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static decimal CalculateRefundRate(DateTime? departureTime, DateTime now)
+        {
+            if (!departureTime.HasValue)
+                return 0.5m;
+
+            var hoursBeforeDeparture = (departureTime.Value - now).TotalHours;
+            if (hoursBeforeDeparture > 24)
+                return 0.9m;
+
+            if (hoursBeforeDeparture >= 6)
+                return 0.7m;
+
+            if (hoursBeforeDeparture > 0)
+                return 0.5m;
+
+            return 0m;
+        }
+
         private static string? NormalizeOptionalText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -717,6 +812,7 @@ namespace BaseCore.APIService.Controllers
         public int? PickupStopId { get; set; }
         public int? DropoffStopId { get; set; }
         public string? PaymentMethod { get; set; }
+        public string? PromotionCode { get; set; }
     }
 
     public class RequestCancelBookingRequest

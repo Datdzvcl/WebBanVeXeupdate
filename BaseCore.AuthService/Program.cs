@@ -37,9 +37,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "BaseCore Auth Service API",
+        Title = "VeXeAZ Auth Service API",
         Version = "v1",
-        Description = "Authentication Microservice - Login, Register, User Management (Bài 10, 11)"
+        Description = "VeXeAZ Bus Ticket Booking System - Login, Register, Users and Roles"
     });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -148,6 +148,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-Console.WriteLine("BaseCore Auth Service running on port 5002");
+Console.WriteLine("VeXeAZ Auth Service running on port 5002");
 Console.WriteLine("Endpoints: /api/auth, /api/users, /api/roles");
 app.Run();

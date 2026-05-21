@@ -16,7 +16,9 @@ import { bookingApi } from "../services/bookingApi";
 import { operatorApi } from "../services/operatorApi";
 import { tripApi } from "../services/tripApi";
 import { userApi } from "../services/userApi";
+import { promotionApi } from "../services/promotionApi";
 import { useAuth } from "../contexts/AuthContext";
+import AdminDashboard from "./admin/AdminDashboard";
 const includesText = (value, query) =>
   String(value || "")
     .toLowerCase()
@@ -80,6 +82,7 @@ const tabs = [
   ["dashboard", "Tổng quan", "fa-chart-line"],
   ["trips", "Chuyến xe", "fa-route"],
   ["orders", "Đơn hàng", "fa-file-invoice"], // ← gộp 3 tab
+  ["promotions", "Khuyến mãi", "fa-tags"],
   // ["tickets", "Quản lý vé", "fa-couch"],
   ["buses", "Xe", "fa-bus"],
   ["operators", "Nhà xe", "fa-building"],
@@ -118,6 +121,20 @@ const EMPTY_BOOKING = {
   totalSeats: 1,
   paymentMethod: "Online",
   paymentStatus: "Pending",
+};
+const EMPTY_PROMOTION = {
+  promotionID: null,
+  code: "",
+  discountType: 1,
+  discountValue: "",
+  minOrderValue: "",
+  maxDiscount: "",
+  usageLimit: "",
+  startDate: "",
+  endDate: "",
+  isActive: true,
+  isPublic: true,
+  userID: "",
 };
 
 export default function Admin({ active = "dashboard" }) {
@@ -239,18 +256,6 @@ export default function Admin({ active = "dashboard" }) {
   );
 }
 
-// function AdminContent({ active, stats, trips, bookings, ticketSeats, transactions, buses, operators, users, revenueStats, onRefresh }) {
-//   if (active === "dashboard") return <Dashboard stats={stats} trips={trips} bookings={bookings} transactions={transactions} revenueStats={revenueStats} />;
-//   if (active === "trips") return <TripsManager trips={trips} buses={buses} operators={operators} onRefresh={onRefresh} />;
-//   if (active === "bookings") return <BookingsManager bookings={bookings} trips={trips} onRefresh={onRefresh} />;
-//   if (active === "invoices") return <InvoicesManager bookings={bookings} trips={trips} onRefresh={onRefresh} />;
-//   if (active === "tickets") return <TicketsManager ticketSeats={ticketSeats} />;
-//   if (active === "transactions") return <TransactionsManager transactions={transactions} />;
-//   if (active === "buses") return <BusesManager buses={buses} operators={operators} onRefresh={onRefresh} />;
-//   if (active === "users") return <UsersManager users={users} onRefresh={onRefresh} />;
-//   return <OperatorsManager operators={operators} onRefresh={onRefresh} />;
-// }
-// function AdminContent({ active, stats, trips, bookings, ticketSeats, transactions, buses, operators, users, revenueStats, onRefresh }) {
 function AdminContent({
   active,
   stats,
@@ -267,7 +272,7 @@ function AdminContent({
 }) {
   if (active === "dashboard")
     return (
-      <Dashboard
+      <AdminDashboard
         stats={stats}
         trips={trips}
         upcomingTrips={upcomingTrips}
@@ -289,6 +294,7 @@ function AdminContent({
       />
     );
   if (active === "orders") return <BookingsManager />;
+  if (active === "promotions") return <PromotionsManager />;
   // if (active === "tickets") return <TicketsManager ticketSeats={ticketSeats} trips={trips} operators={operators} />;  // ← thêm props
   if (active === "buses")
     return (
@@ -367,188 +373,6 @@ function AdminSettings() {
     </section>
   );
 }
-// ==================== DASHBOARD ====================
-// function Dashboard({ stats, trips, bookings, transactions, revenueStats }) {
-function Dashboard({
-  stats,
-  trips,
-  upcomingTrips,
-  bookings,
-  transactions,
-  revenueStats,
-  buses = [],
-  operators = [],
-  users = [],
-}) {
-  const cards = [
-    [
-      "Tổng số vé",
-      pick(
-        stats,
-        ["totalTickets", "TotalTickets"],
-        bookings.reduce(
-          (sum, item) =>
-            sum + Number(pick(item, ["totalSeats", "TotalSeats"], 0)),
-          0,
-        ),
-      ),
-      "fa-ticket",
-      "#16a34a",
-    ],
-    [
-      "Tổng số xe",
-      pick(stats, ["totalBuses", "TotalBuses"], buses.length),
-      "fa-bus",
-      "#2563eb",
-    ],
-    [
-      "Tổng nhà xe",
-      pick(stats, ["totalOperators", "TotalOperators"], operators.length),
-      "fa-building",
-      "#0ea5e9",
-    ],
-    [
-      "Tổng doanh thu",
-      formatVND(
-        pick(stats, ["totalRevenue", "TotalRevenue", "revenue", "Revenue"], 0),
-      ),
-      "fa-money-bill-wave",
-      "#ea580c",
-    ],
-    [
-      "Tổng chuyến xe",
-      pick(stats, ["totalTrips", "TotalTrips"], trips.length),
-      "fa-route",
-      "#7c3aed",
-    ],
-    [
-      "Tổng người dùng",
-      pick(stats, ["totalUsers", "TotalUsers"], users.length),
-      "fa-users",
-      "#db2777",
-    ],
-  ];
-
-  const last6 = revenueStats.slice(-6);
-
-  return (
-    <>
-      <section className="admin-stats">
-        {cards.map(([label, value, icon, color]) => (
-          <div
-            className="stat-card"
-            key={label}
-            style={{ borderLeft: `4px solid ${color}` }}
-          >
-            <div>
-              <p>{label}</p>
-              <h2>{value}</h2>
-            </div>
-            <i className={`fa-solid ${icon}`} style={{ color }} />
-          </div>
-        ))}
-      </section>
-
-      {last6.length > 0 && (
-        <div className="admin-card" style={{ marginBottom: 24 }}>
-          <h3>Doanh thu theo tháng (đã thanh toán)</h3>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 12,
-              height: 200,
-              padding: "16px 0",
-            }}
-          >
-            {last6.map((item) => {
-              const maxRevenue = Math.max(
-                ...last6.map((x) => Number(x.revenue || x.Revenue)),
-              );
-              const revenue = Number(item.revenue || item.Revenue);
-              const height =
-                maxRevenue > 0
-                  ? Math.max(20, (revenue / maxRevenue) * 160)
-                  : 20;
-              return (
-                <div
-                  key={`${item.year || item.Year}-${item.month || item.Month}`}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  <small style={{ fontSize: 10, color: "#666" }}>
-                    {formatVND(revenue)}
-                  </small>
-                  <div
-                    style={{
-                      width: "100%",
-                      height,
-                      background: "#2563eb",
-                      borderRadius: "4px 4px 0 0",
-                    }}
-                  />
-                  <small style={{ fontSize: 11 }}>
-                    {item.month || item.Month}/{item.year || item.Year}
-                  </small>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <section className="admin-grid">
-        <div className="admin-card">
-          <h3>Chuyến sắp chạy</h3>
-          {/* <TripsTable trips={trips.slice(0, 5)} /> */}
-          <TripsTable trips={upcomingTrips.slice(0, 5)} />
-        </div>
-        <div className="admin-card">
-          <h3>Đơn đặt vé mới nhất</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Khách</th>
-                  <th>Tuyến</th>
-                  <th>Trạng thái</th>
-                  <th>Tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.slice(0, 6).map((b) => {
-                  const id = pick(b, ["bookingID", "BookingID"]);
-                  return (
-                    <tr key={id}>
-                      <td>{id}</td>
-                      <td>{pick(b, ["customerName", "CustomerName"])}</td>
-                      <td>{pick(b, ["route", "Route"]) || "..."}</td>
-                      <td>
-                        <span className="badge">
-                          {labelPaymentStatus(getPaymentStatus(b))}
-                        </span>
-                      </td>
-                      <td>
-                        {formatVND(pick(b, ["totalPrice", "TotalPrice"], 0))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
-
 // ==================== HOÁ ĐƠN ====================
 function InvoicesManager({ bookings, trips, onRefresh }) {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -1875,6 +1699,7 @@ function BookingsManager() {
           <option value="">Tất cả thanh toán</option>
           <option value="Paid">Đã thanh toán</option>
           <option value="Pending">Chưa thanh toán</option>
+          <option value="Refunded">Đã hoàn tiền</option>
           <option value="Cancelled">Đã hủy</option>
         </select>
         <select
@@ -1885,6 +1710,7 @@ function BookingsManager() {
           <option value="PendingConfirm">Đợi xác nhận</option>
           <option value="Confirmed">Đã xác nhận</option>
           <option value="CancelRequested">Yêu cầu hủy</option>
+          <option value="CancelRejected">Từ chối hủy</option>
           <option value="Cancelled">Đã hủy</option>
         </select>
         <input
@@ -2071,6 +1897,9 @@ export function AdminBookingDetail({ bookingId }) {
   const seatLabels = pick(booking, ["seatLabels", "SeatLabels"], []);
   const qrCodes = pick(booking, ["qrCodes", "QrCodes", "QRCodes"], []);
   const ticketSeats = pick(booking, ["ticketSeats", "TicketSeats"], []);
+  const cancelReason = pick(booking, ["cancelReason", "CancelReason"], "");
+  const cancelledAt = pick(booking, ["cancelledAt", "CancelledAt"], "");
+  const refundAmount = pick(booking, ["refundAmount", "RefundAmount"], null);
   const pickupStop = pick(booking, ["pickupStop", "PickupStop"], {});
   const dropoffStop = pick(booking, ["dropoffStop", "DropoffStop"], {});
   const pickupText = [
@@ -2236,6 +2065,22 @@ export function AdminBookingDetail({ bookingId }) {
               <span className="badge">{labelBookingStatus(status)}</span>
             </b>
           </div>
+          {(cancelReason || cancelledAt || refundAmount !== null) && (
+            <>
+              <div>
+                <span>Lý do hủy</span>
+                <b>{cancelReason || "Chưa có"}</b>
+              </div>
+              <div>
+                <span>Thời gian hủy</span>
+                <b>{formatDateTime(cancelledAt)}</b>
+              </div>
+              <div>
+                <span>Số tiền hoàn</span>
+                <b>{refundAmount !== null && refundAmount !== undefined ? formatVND(refundAmount) : "Chưa tính"}</b>
+              </div>
+            </>
+          )}
         </div>
 
         {firstQr && (
@@ -2278,17 +2123,194 @@ export function AdminBookingDetail({ bookingId }) {
             <button
               className="btn btn-outline"
               disabled={actionLoading}
-              onClick={() =>
+              onClick={() => {
+                const rejectReason = window.prompt(
+                  "Nhập lý do từ chối hủy vé:",
+                  "Không đủ điều kiện hủy theo chính sách.",
+                );
+                if (rejectReason === null) return;
                 runAction(
-                  () => bookingApi.rejectCancel(bookingId, {}),
+                  () => bookingApi.rejectCancel(bookingId, { rejectReason }),
                   "Từ chối hủy đơn thành công.",
-                )
-              }
+                );
+              }}
             >
               Từ chối hủy
             </button>
           </>
         )}
+      </div>
+    </section>
+  );
+}
+
+// ==================== PROMOTIONS ====================
+function PromotionsManager() {
+  const [rows, setRows] = useState([]);
+  const [form, setForm] = useState(EMPTY_PROMOTION);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const loadPromotions = async () => {
+    setLoading(true);
+    setNotice(null);
+    try {
+      const data = await promotionApi.list();
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không tải được mã giảm giá." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPromotions();
+  }, []);
+
+  const updateForm = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const editPromotion = (item) => {
+    setForm({
+      promotionID: pick(item, ["promotionID", "PromotionID"]),
+      code: pick(item, ["code", "Code"], ""),
+      discountType: Number(pick(item, ["discountType", "DiscountType"], 1)),
+      discountValue: pick(item, ["discountValue", "DiscountValue"], ""),
+      minOrderValue: pick(item, ["minOrderValue", "MinOrderValue"], ""),
+      maxDiscount: pick(item, ["maxDiscount", "MaxDiscount"], ""),
+      usageLimit: pick(item, ["usageLimit", "UsageLimit"], ""),
+      startDate: dateOnly(pick(item, ["startDate", "StartDate"])),
+      endDate: dateOnly(pick(item, ["endDate", "EndDate"])),
+      isActive: Boolean(pick(item, ["isActive", "IsActive"], true)),
+      isPublic: Boolean(pick(item, ["isPublic", "IsPublic"], true)),
+      userID: pick(item, ["userID", "UserID"], ""),
+    });
+    setShowForm(true);
+  };
+
+  const submitForm = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setNotice(null);
+    const payload = {
+      code: form.code,
+      discountType: Number(form.discountType),
+      discountValue: Number(form.discountValue || 0),
+      minOrderValue: form.minOrderValue === "" ? null : Number(form.minOrderValue),
+      maxDiscount: form.maxDiscount === "" ? null : Number(form.maxDiscount),
+      usageLimit: form.usageLimit === "" ? null : Number(form.usageLimit),
+      startDate: form.startDate,
+      endDate: form.endDate,
+      isActive: Boolean(form.isActive),
+      isPublic: Boolean(form.isPublic),
+      userID: form.isPublic || form.userID === "" ? null : Number(form.userID),
+    };
+
+    try {
+      if (form.promotionID) {
+        await promotionApi.update(form.promotionID, payload);
+      } else {
+        await promotionApi.create(payload);
+      }
+      setForm(EMPTY_PROMOTION);
+      setShowForm(false);
+      await loadPromotions();
+      setNotice({ type: "success", text: "Đã lưu mã giảm giá." });
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không lưu được mã giảm giá." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const disablePromotion = async (id) => {
+    if (!window.confirm("Tắt mã giảm giá này?")) return;
+    setLoading(true);
+    try {
+      await promotionApi.disable(id);
+      await loadPromotions();
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không tắt được mã giảm giá." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="admin-card table-card">
+      <SectionHeader
+        title="Quản lý khuyến mãi"
+        showForm={showForm}
+        onToggle={() => toggleCreateForm(showForm, setShowForm, setForm, EMPTY_PROMOTION)}
+      />
+      {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+      {showForm && (
+        <form className="admin-form-grid" onSubmit={submitForm}>
+          <input value={form.code} onChange={(e) => updateForm("code", e.target.value)} placeholder="Mã giảm giá" required />
+          <select value={form.discountType} onChange={(e) => updateForm("discountType", e.target.value)}>
+            <option value="1">Phần trăm</option>
+            <option value="2">Số tiền cố định</option>
+          </select>
+          <input type="number" value={form.discountValue} onChange={(e) => updateForm("discountValue", e.target.value)} placeholder="Giá trị giảm" required />
+          <input type="number" value={form.minOrderValue} onChange={(e) => updateForm("minOrderValue", e.target.value)} placeholder="Đơn tối thiểu" />
+          <input type="number" value={form.maxDiscount} onChange={(e) => updateForm("maxDiscount", e.target.value)} placeholder="Giảm tối đa" />
+          <input type="number" value={form.usageLimit} onChange={(e) => updateForm("usageLimit", e.target.value)} placeholder="Giới hạn lượt dùng" />
+          <input type="date" value={form.startDate} onChange={(e) => updateForm("startDate", e.target.value)} required />
+          <input type="date" value={form.endDate} onChange={(e) => updateForm("endDate", e.target.value)} required />
+          <label><input type="checkbox" checked={form.isActive} onChange={(e) => updateForm("isActive", e.target.checked)} /> Đang bật</label>
+          <label><input type="checkbox" checked={form.isPublic} onChange={(e) => updateForm("isPublic", e.target.checked)} /> Công khai</label>
+          {!form.isPublic && <input type="number" value={form.userID} onChange={(e) => updateForm("userID", e.target.value)} placeholder="UserID áp dụng" />}
+          <div className="admin-form-actions">
+            <button className="btn btn-primary" disabled={loading}>Lưu</button>
+            <button type="button" className="btn btn-outline" onClick={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}>Hủy</button>
+          </div>
+        </form>
+      )}
+      {loading && <div className="admin-loading">Đang tải mã giảm giá...</div>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Loại</th>
+              <th>Giá trị</th>
+              <th>Đơn tối thiểu</th>
+              <th>Giảm tối đa</th>
+              <th>Lượt dùng</th>
+              <th>Thời hạn</th>
+              <th>Trạng thái</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => {
+              const id = pick(item, ["promotionID", "PromotionID"]);
+              const active = Boolean(pick(item, ["isActive", "IsActive"], false));
+              return (
+                <tr key={id}>
+                  <td><b>{pick(item, ["code", "Code"])}</b></td>
+                  <td>{Number(pick(item, ["discountType", "DiscountType"], 1)) === 1 ? "Phần trăm" : "Cố định"}</td>
+                  <td>{pick(item, ["discountValue", "DiscountValue"], 0)}</td>
+                  <td>{formatVND(pick(item, ["minOrderValue", "MinOrderValue"], 0))}</td>
+                  <td>{formatVND(pick(item, ["maxDiscount", "MaxDiscount"], 0))}</td>
+                  <td>{pick(item, ["usedCount", "UsedCount"], 0)} / {pick(item, ["usageLimit", "UsageLimit"], "∞")}</td>
+                  <td>{dateOnly(pick(item, ["startDate", "StartDate"]))} - {dateOnly(pick(item, ["endDate", "EndDate"]))}</td>
+                  <td><span className="badge">{active ? "Đang bật" : "Đã tắt"}</span></td>
+                  <td className="admin-actions">
+                    <button className="btn btn-outline" type="button" onClick={() => editPromotion(item)}>Sửa</button>
+                    {active && <button className="btn btn-danger" type="button" onClick={() => disablePromotion(id)}>Tắt</button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan="9" className="empty-cell">Chưa có mã giảm giá.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );

@@ -26,6 +26,10 @@ function getSeatStatus(seat) {
   return pick(seat, ['status', 'Status'], 'Available');
 }
 
+function getSeatHoldExpiresAt(seat) {
+  return pick(seat, ['holdExpiresAt', 'HoldExpiresAt']);
+}
+
 function normalizeTrip(data) {
   const bus = data?.bus || data?.Bus || {};
   const operator = data?.operator || data?.Operator || {};
@@ -78,8 +82,26 @@ export default function SeatSelection() {
   const loadSeats = useCallback(async () => {
     const response = await seatApi.getByTrip(tripId, { sessionId });
     const nextSeats = response?.seats || response?.Seats || [];
+    const myHeldSeats = nextSeats.filter((seat) => getSeatStatus(seat) === 'HoldingByMe');
+    const myHoldExpiresAt = myHeldSeats
+      .map(getSeatHoldExpiresAt)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+
     setSeats(nextSeats);
-    setSelectedSeats(nextSeats.filter((seat) => getSeatStatus(seat) === 'HoldingByMe').map(getSeatLabel));
+    setSelectedSeats(myHeldSeats.map(getSeatLabel));
+    if (myHoldExpiresAt) {
+      setHoldExpiresAt(myHoldExpiresAt);
+      localStorage.setItem(HOLD_STORAGE_KEY, JSON.stringify({
+        tripId,
+        sessionId,
+        seatLabels: myHeldSeats.map(getSeatLabel),
+        holdExpiresAt: myHoldExpiresAt,
+      }));
+    } else {
+      setHoldExpiresAt(null);
+      localStorage.removeItem(HOLD_STORAGE_KEY);
+    }
   }, [sessionId, tripId]);
 
   const loadData = useCallback(async () => {
@@ -136,6 +158,7 @@ export default function SeatSelection() {
 
   const total = useMemo(() => Number(trip?.price || 0) * selectedSeats.length, [selectedSeats.length, trip?.price]);
   const remainingMs = holdExpiresAt ? new Date(holdExpiresAt).getTime() - now : 0;
+  const canContinue = selectedSeats.length > 0 && holdExpiresAt && remainingMs > 0;
 
   const floors = useMemo(() => {
     const allSeats = seats.map((seat) => ({
@@ -234,6 +257,12 @@ export default function SeatSelection() {
       return;
     }
 
+    if (!holdExpiresAt || remainingMs <= 0) {
+      alert('Đã hết thời gian giữ ghế. Vui lòng chọn lại.');
+      loadSeats().catch(() => {});
+      return;
+    }
+
     let bookingLeg = 'single';
     try {
       const roundTrip = JSON.parse(localStorage.getItem(ROUND_TRIP_KEY) || 'null');
@@ -292,7 +321,7 @@ export default function SeatSelection() {
           <div className="seat-toolbar">
             <div>
               <h2>Sơ đồ ghế</h2>
-              <p>Chọn ghế còn trống để giữ chỗ trong 20 phút.</p>
+              <p>Chọn ghế còn trống để giữ chỗ trong 10 phút.</p>
             </div>
             {holdExpiresAt && remainingMs > 0 && (
               <div className="hold-countdown-box">
@@ -368,7 +397,7 @@ export default function SeatSelection() {
             <strong>{formatVND(total)}</strong>
           </div>
 
-          <button type="button" className="btn btn-primary seat-continue-btn" onClick={continueBooking}>
+          <button type="button" className="btn btn-primary seat-continue-btn" onClick={continueBooking} disabled={!canContinue}>
             Tiếp tục
             <i className="fa-solid fa-chevron-right" />
           </button>

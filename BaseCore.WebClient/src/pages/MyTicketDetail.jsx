@@ -119,7 +119,10 @@ export default function MyTicketDetail() {
   const seatLabels = booking.seatLabels || booking.SeatLabels || [];
   const paymentStatus = pick(booking, ['paymentStatus', 'PaymentStatus'], '--');
   const bookingStatus = pick(booking, ['bookingStatus', 'BookingStatus'], '--');
-  const canRequestCancel = !['Cancelled', 'CancelRequested'].includes(String(bookingStatus));
+  const cancelReason = pick(booking, ['cancelReason', 'CancelReason'], '');
+  const cancelledAt = pick(booking, ['cancelledAt', 'CancelledAt'], '');
+  const refundAmount = pick(booking, ['refundAmount', 'RefundAmount'], null);
+  const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
   const code = qrValue(booking);
 
   return (
@@ -162,6 +165,18 @@ export default function MyTicketDetail() {
             <div><span>Email</span><strong>{pick(booking, ['customerEmail', 'CustomerEmail'], '--')}</strong></div>
             <div><span>Phương thức thanh toán</span><strong>{labelPaymentMethod(pick(booking, ['paymentMethod', 'PaymentMethod'], '--'))}</strong></div>
           </div>
+
+          {(cancelReason || cancelledAt || refundAmount !== null) && (
+            <>
+              <h2 className="ticket-section-title">Thông tin hủy vé</h2>
+              <div className="ticket-detail-grid">
+                <div><span>Trạng thái hủy</span><strong>{labelBookingStatus(bookingStatus)}</strong></div>
+                <div><span>Lý do hủy</span><strong>{cancelReason || '--'}</strong></div>
+                <div><span>Thời gian hủy</span><strong>{formatDateTime(cancelledAt)}</strong></div>
+                <div><span>Số tiền hoàn</span><strong>{refundAmount !== null && refundAmount !== undefined ? formatVND(refundAmount) : '--'}</strong></div>
+              </div>
+            </>
+          )}
         </main>
 
         <aside className="ticket-detail-side">

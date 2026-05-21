@@ -87,7 +87,9 @@ export default function MyTickets() {
               const paymentStatus = pick(item, ['paymentStatus', 'PaymentStatus'], '--');
               const bookingStatus = pick(item, ['bookingStatus', 'BookingStatus'], '--');
               const seatLabels = pick(item, ['seatLabels', 'SeatLabels'], []);
-              const canRequestCancel = !['Cancelled', 'CancelRequested'].includes(String(bookingStatus));
+              const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
+              const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
+              const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
 
               return (
                 <article className="my-ticket-card" key={bookingId}>
@@ -107,6 +109,8 @@ export default function MyTickets() {
                   <div className="my-ticket-side">
                     <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span>
                     <span className={statusClass(bookingStatus)}>{labelBookingStatus(bookingStatus)}</span>
+                    {cancelReason && <small>Lý do hủy: {cancelReason}</small>}
+                    {refundAmount !== null && refundAmount !== undefined && <small>Hoàn tiền: {formatVND(refundAmount)}</small>}
                     <Link className="btn btn-outline" to={`/my-tickets/${bookingId}`}>Xem chi tiết</Link>
                     <button
                       type="button"

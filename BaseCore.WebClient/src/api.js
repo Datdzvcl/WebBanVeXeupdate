@@ -98,6 +98,7 @@ export const labelBookingStatus = (status) => {
   if (value === 'pendingconfirm') return 'Đợi xác nhận';
   if (value === 'confirmed') return 'Đã xác nhận';
   if (value === 'cancelrequested') return 'Yêu cầu hủy';
+  if (value === 'cancelrejected') return 'Từ chối hủy';
   if (value === 'cancelled' || value === 'canceled') return 'Đã hủy';
   return status || 'Chưa rõ';
 };

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
+import { promotionApi } from '../services/promotionApi';
 
 const PENDING_BOOKING_KEY = 'pendingBooking';
 const HOLD_STORAGE_KEY = 'currentSeatHold';
@@ -32,7 +33,25 @@ function readRoundTripBooking() {
   }
 }
 
-function buildBookingRequest(booking, paymentMethod) {
+function buildPaymentSessionKey(pendingBooking, roundTripBooking) {
+  const bookings =
+    roundTripBooking?.stage === 'complete' && roundTripBooking.outbound && roundTripBooking.returnTrip
+      ? [roundTripBooking.outbound, roundTripBooking.returnTrip]
+      : pendingBooking
+        ? [pendingBooking]
+        : [];
+
+  return bookings
+    .map((booking) => [
+      booking?.tripId,
+      (booking?.seatLabels || []).join(','),
+      booking?.pickupStopId || '',
+      booking?.dropoffStopId || '',
+    ].join(':'))
+    .join('|');
+}
+
+function buildBookingRequest(booking, paymentMethod, promotionCode) {
   return {
     tripId: booking.tripId,
     sessionId: booking.sessionId,
@@ -43,6 +62,7 @@ function buildBookingRequest(booking, paymentMethod) {
     pickupStopId: booking.pickupStopId,
     dropoffStopId: booking.dropoffStopId,
     paymentMethod,
+    promotionCode,
   };
 }
 
@@ -69,16 +89,32 @@ export default function BookingPayment() {
   const [pendingBooking] = useState(() => readPendingBooking());
   const [roundTripBooking] = useState(() => readRoundTripBooking());
   const [paymentMethod, setPaymentMethod] = useState('BankTransfer');
+  const paymentSessionKey = buildPaymentSessionKey(pendingBooking, roundTripBooking);
   const [expiresAt] = useState(() => {
-    const stored = localStorage.getItem(PAYMENT_EXPIRES_KEY);
-    if (stored && Number(stored) > Date.now()) return Number(stored);
+    let stored = null;
+    try {
+      stored = JSON.parse(localStorage.getItem(PAYMENT_EXPIRES_KEY) || 'null');
+    } catch {
+      stored = null;
+    }
+
+    if (stored?.key === paymentSessionKey && Number(stored.expiresAt) > Date.now()) {
+      return Number(stored.expiresAt);
+    }
 
     const next = Date.now() + 10 * 60 * 1000;
-    localStorage.setItem(PAYMENT_EXPIRES_KEY, String(next));
+    localStorage.setItem(PAYMENT_EXPIRES_KEY, JSON.stringify({
+      key: paymentSessionKey,
+      expiresAt: next,
+    }));
     return next;
   });
   const [now, setNow] = useState(Date.now());
   const [submitting, setSubmitting] = useState(false);
+  const [promotionCode, setPromotionCode] = useState('');
+  const [promotionResult, setPromotionResult] = useState(null);
+  const [promotionMessage, setPromotionMessage] = useState('');
+  const [promotionLoading, setPromotionLoading] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -103,6 +139,8 @@ export default function BookingPayment() {
     () => bookingsToPay.reduce((sum, booking) => sum + Number(booking?.totalPrice || 0), 0),
     [bookingsToPay]
   );
+  const discountAmount = Number(promotionResult?.discountAmount || promotionResult?.DiscountAmount || 0);
+  const finalPrice = Math.max(0, totalPrice - discountAmount);
   const remainingMs = expiresAt - now;
 
   const summary = useMemo(() => ({
@@ -111,6 +149,35 @@ export default function BookingPayment() {
     operatorName: pick(trip, ['operatorName', 'OperatorName'], 'Nhà xe'),
     busType: pick(trip, ['busType', 'BusType'], 'Xe khách'),
   }), [trip]);
+
+  const applyPromotion = async () => {
+    if (!promotionCode.trim()) {
+      setPromotionResult(null);
+      setPromotionMessage('Vui lòng nhập mã giảm giá.');
+      return;
+    }
+
+    setPromotionLoading(true);
+    setPromotionMessage('');
+    try {
+      const result = await promotionApi.validate({
+        code: promotionCode,
+        orderValue: totalPrice,
+      });
+      if (result?.valid || result?.Valid) {
+        setPromotionResult(result);
+        setPromotionMessage(result.message || result.Message || 'Áp dụng mã thành công');
+      } else {
+        setPromotionResult(null);
+        setPromotionMessage(result?.message || result?.Message || 'Mã giảm giá không hợp lệ.');
+      }
+    } catch (err) {
+      setPromotionResult(null);
+      setPromotionMessage(err.message || 'Không thể kiểm tra mã giảm giá.');
+    } finally {
+      setPromotionLoading(false);
+    }
+  };
 
   const submit = async () => {
     if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
@@ -128,8 +195,10 @@ export default function BookingPayment() {
     setSubmitting(true);
     try {
       const responses = [];
-      for (const booking of bookingsToPay) {
-        const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod));
+      for (let index = 0; index < bookingsToPay.length; index += 1) {
+        const booking = bookingsToPay[index];
+        const code = index === 0 && promotionResult ? promotionCode : '';
+        const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod, code));
         responses.push(response);
       }
 
@@ -210,6 +279,25 @@ export default function BookingPayment() {
             ))}
           </div>
 
+          <div className="payment-promo-box">
+            <h2>Mã giảm giá</h2>
+            <div className="admin-filter-grid">
+              <input
+                value={promotionCode}
+                onChange={(event) => {
+                  setPromotionCode(event.target.value);
+                  setPromotionResult(null);
+                  setPromotionMessage('');
+                }}
+                placeholder="Nhập mã giảm giá"
+              />
+              <button type="button" className="btn btn-outline" disabled={promotionLoading} onClick={applyPromotion}>
+                {promotionLoading ? 'Đang kiểm tra...' : 'Áp dụng'}
+              </button>
+            </div>
+            {promotionMessage && <p className="profile-status">{promotionMessage}</p>}
+          </div>
+
           <button type="button" className="btn btn-primary payment-submit-btn" disabled={submitting} onClick={submit}>
             {submitting ? 'Đang xử lý...' : 'Thanh toán'}
             <i className="fa-solid fa-arrow-right" />
@@ -252,6 +340,14 @@ export default function BookingPayment() {
           <div className="contact-summary-total">
             <span>Tổng tiền</span>
             <strong>{formatVND(totalPrice)}</strong>
+          </div>
+          <div className="contact-summary-line">
+            <span>Giảm giá</span>
+            <strong>{formatVND(discountAmount)}</strong>
+          </div>
+          <div className="contact-summary-total">
+            <span>Tổng thanh toán</span>
+            <strong>{formatVND(finalPrice)}</strong>
           </div>
         </aside>
       </section>

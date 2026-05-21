@@ -12,6 +12,11 @@ namespace BaseCore.APIService.Controllers
     [ApiController]
     public class SeatsController : ControllerBase
     {
+        private const string HoldingStatus = "Holding";
+        private const string ReleasedStatus = "Released";
+        private const string ExpiredStatus = "Expired";
+        private static readonly TimeSpan SeatHoldDuration = TimeSpan.FromMinutes(10);
+
         private readonly MySqlDbContext _context;
 
         public SeatsController(MySqlDbContext context)
@@ -63,7 +68,7 @@ namespace BaseCore.APIService.Controllers
                 .AsNoTracking()
                 .Where(x =>
                     x.TripID == tripId &&
-                    x.Status == "Holding" &&
+                    x.Status == HoldingStatus &&
                     x.HoldExpiresAt > now)
                 .Select(x => new
                 {
@@ -100,7 +105,10 @@ namespace BaseCore.APIService.Controllers
                 return new
                 {
                     seatLabel = label,
-                    status
+                    status,
+                    holdExpiresAt = holdBySeat.TryGetValue(normalizedLabel, out var activeHold)
+                        ? activeHold.HoldExpiresAt
+                        : (DateTime?)null
                 };
             }).ToList();
 
@@ -141,7 +149,7 @@ namespace BaseCore.APIService.Controllers
                     return BadRequest(new { message = $"Ghế không tồn tại: {string.Join(", ", invalidSeats)}" });
 
                 var now = DateTime.Now;
-                var holdExpiresAt = now.AddMinutes(20);
+                var holdExpiresAt = now.Add(SeatHoldDuration);
 
                 await ExpireOldHolds(request.TripId, requestedSeats, now);
 
@@ -165,9 +173,9 @@ namespace BaseCore.APIService.Controllers
                 var activeHolds = await _context.SeatHolds
                     .Where(x =>
                         x.TripID == request.TripId &&
-                        x.Status == "Holding" &&
+                    x.Status == HoldingStatus &&
                         x.HoldExpiresAt > now &&
-                        requestedSeats.Contains(x.SeatLabel))
+                        requestedSeats.Contains(x.SeatLabel.ToUpper()))
                     .ToListAsync();
 
                 var conflictSeats = activeHolds
@@ -188,7 +196,7 @@ namespace BaseCore.APIService.Controllers
                     if (currentHold != null)
                     {
                         currentHold.HoldExpiresAt = holdExpiresAt;
-                        currentHold.Status = "Holding";
+                        currentHold.Status = HoldingStatus;
                         continue;
                     }
 
@@ -198,7 +206,7 @@ namespace BaseCore.APIService.Controllers
                         SeatLabel = seatLabel,
                         UserID = currentUserId,
                         SessionId = sessionId,
-                        Status = "Holding",
+                        Status = HoldingStatus,
                         HoldExpiresAt = holdExpiresAt,
                         CreatedAt = now
                     });
@@ -239,9 +247,9 @@ namespace BaseCore.APIService.Controllers
             var ownedHolds = await _context.SeatHolds
                 .Where(x =>
                     x.TripID == request.TripId &&
-                    x.Status == "Holding" &&
+                    x.Status == HoldingStatus &&
                     x.HoldExpiresAt > now &&
-                    requestedSeats.Contains(x.SeatLabel))
+                    requestedSeats.Contains(x.SeatLabel.ToUpper()))
                 .ToListAsync();
 
             var releasableHolds = ownedHolds
@@ -250,7 +258,7 @@ namespace BaseCore.APIService.Controllers
 
             foreach (var hold in releasableHolds)
             {
-                hold.Status = "Released";
+                hold.Status = ReleasedStatus;
             }
 
             await _context.SaveChangesAsync();
@@ -273,14 +281,14 @@ namespace BaseCore.APIService.Controllers
             var expiredHolds = await _context.SeatHolds
                 .Where(x =>
                     x.TripID == tripId &&
-                    x.Status == "Holding" &&
+                    x.Status == HoldingStatus &&
                     x.HoldExpiresAt <= now &&
-                    seatLabels.Contains(x.SeatLabel))
+                    seatLabels.Contains(x.SeatLabel.ToUpper()))
                 .ToListAsync();
 
             foreach (var hold in expiredHolds)
             {
-                hold.Status = "Expired";
+                hold.Status = ExpiredStatus;
             }
 
             if (expiredHolds.Count > 0)
@@ -330,11 +338,13 @@ namespace BaseCore.APIService.Controllers
 
         private static bool IsOwnedByCurrent(int? holdUserId, string? holdSessionId, int? currentUserId, string? sessionId)
         {
-            if (currentUserId.HasValue)
-                return holdUserId.HasValue && holdUserId.Value == currentUserId.Value;
+            var isMineByUser = currentUserId.HasValue &&
+                               holdUserId.HasValue &&
+                               holdUserId.Value == currentUserId.Value;
+            var isMineBySession = !string.IsNullOrWhiteSpace(sessionId) &&
+                                  string.Equals(holdSessionId, sessionId, StringComparison.OrdinalIgnoreCase);
 
-            return !string.IsNullOrWhiteSpace(sessionId) &&
-                   string.Equals(holdSessionId, sessionId, StringComparison.OrdinalIgnoreCase);
+            return isMineByUser || isMineBySession;
         }
 
         private static List<string> NormalizeSeatLabels(List<string>? seatLabels)
