@@ -16,5 +16,6 @@ namespace BaseCore.Entities
         public List<Booking> Bookings { get; set; } = new();
         public List<StopPoint> StopPoints { get; set; } = new();
         public List<SeatHold> SeatHolds { get; set; } = new();
+        public List<Review> Reviews { get; set; } = new();
     }
 }

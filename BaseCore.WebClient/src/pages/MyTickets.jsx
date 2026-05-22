@@ -90,6 +90,12 @@ export default function MyTickets() {
               const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
               const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
               const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
+              const hasReview = Boolean(pick(item, ['hasReview', 'HasReview'], false));
+              const arrivalTime = pick(item, ['arrivalTime', 'ArrivalTime']);
+              const canReview = !hasReview &&
+                !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
+                arrivalTime &&
+                new Date(arrivalTime) <= new Date();
 
               return (
                 <article className="my-ticket-card" key={bookingId}>
@@ -112,6 +118,11 @@ export default function MyTickets() {
                     {cancelReason && <small>Lý do hủy: {cancelReason}</small>}
                     {refundAmount !== null && refundAmount !== undefined && <small>Hoàn tiền: {formatVND(refundAmount)}</small>}
                     <Link className="btn btn-outline" to={`/my-tickets/${bookingId}`}>Xem chi tiết</Link>
+                    {hasReview ? (
+                      <span className="ticket-status status-confirmed">Đã đánh giá</span>
+                    ) : canReview ? (
+                      <Link className="btn btn-primary" to={`/my-tickets/${bookingId}`}>Đánh giá</Link>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-danger"

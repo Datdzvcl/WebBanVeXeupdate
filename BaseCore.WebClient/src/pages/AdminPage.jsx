@@ -11,6 +11,8 @@ const adminPaths = {
   users: '/admin/users',
   orders: '/admin/bookings',
   promotions: '/admin/promotions',
+  payments: '/admin/payments',
+  reviews: '/admin/reviews',
   settings: '/admin/settings',
 };
 

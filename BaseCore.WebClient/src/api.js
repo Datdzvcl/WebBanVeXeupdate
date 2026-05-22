@@ -85,6 +85,7 @@ export const labelPaymentMethod = (method) => {
     value.includes('chuyá»ƒn khoáº£n')
   ) return 'Chuyển khoản ngân hàng';
   if (
+    value === 'ewallet' ||
     value === 'vnpay' ||
     value.includes('ví điện tử') ||
     value.includes('vi dien tu') ||

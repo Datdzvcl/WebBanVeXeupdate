@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelBookingStatus, labelPaymentMethod, labelPaymentStatus, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
+import { reviewApi } from '../services/reviewApi';
 
 function formatDateTime(value) {
   if (!value) return '--';
@@ -59,12 +60,20 @@ export default function MyTicketDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [review, setReview] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const [reviewMessage, setReviewMessage] = useState('');
 
   const loadBooking = async () => {
     setLoading(true);
     setError('');
     try {
       setBooking(await bookingApi.getById(id));
+      try {
+        setReview(await reviewApi.byBooking(id));
+      } catch {
+        setReview(null);
+      }
     } catch (err) {
       setError(err.message || 'Không tải được chi tiết vé.');
     } finally {
@@ -87,6 +96,26 @@ export default function MyTicketDetail() {
       alert('Đã gửi yêu cầu hủy vé.');
     } catch (err) {
       alert(err.message || 'Không thể gửi yêu cầu hủy vé.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const submitReview = async (event) => {
+    event.preventDefault();
+    setActionLoading(true);
+    setReviewMessage('');
+    try {
+      const result = await reviewApi.create({
+        bookingID: Number(id),
+        rating: Number(reviewForm.rating),
+        comment: reviewForm.comment,
+      });
+      setReview(result);
+      setReviewMessage('Đã gửi đánh giá nhà xe.');
+      await loadBooking();
+    } catch (err) {
+      setReviewMessage(err.message || 'Không gửi được đánh giá.');
     } finally {
       setActionLoading(false);
     }
@@ -123,6 +152,11 @@ export default function MyTicketDetail() {
   const cancelledAt = pick(booking, ['cancelledAt', 'CancelledAt'], '');
   const refundAmount = pick(booking, ['refundAmount', 'RefundAmount'], null);
   const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
+  const arrivalTime = pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime']));
+  const tripStatus = pick(trip, ['status', 'Status'], pick(booking, ['tripStatus', 'TripStatus'], ''));
+  const canReview = !review &&
+    !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
+    (String(tripStatus).toLowerCase() === 'completed' || (arrivalTime && new Date(arrivalTime) <= new Date()));
   const code = qrValue(booking);
 
   return (
@@ -177,6 +211,40 @@ export default function MyTicketDetail() {
               </div>
             </>
           )}
+
+          <h2 className="ticket-section-title">Đánh giá nhà xe</h2>
+          {review ? (
+            <div className="ticket-review-box">
+              <strong>{'★'.repeat(Number(pick(review, ['rating', 'Rating'], 0)))}{'☆'.repeat(5 - Number(pick(review, ['rating', 'Rating'], 0)))}</strong>
+              <p>{pick(review, ['comment', 'Comment'], '') || 'Bạn chưa nhập bình luận.'}</p>
+              <small>Đã đánh giá lúc {formatDateTime(pick(review, ['createdAt', 'CreatedAt']))}</small>
+            </div>
+          ) : canReview ? (
+            <form className="ticket-review-form" onSubmit={submitReview}>
+              <label>
+                <span>Số sao</span>
+                <select value={reviewForm.rating} onChange={(event) => setReviewForm((current) => ({ ...current, rating: event.target.value }))}>
+                  {[5, 4, 3, 2, 1].map((value) => (
+                    <option key={value} value={value}>{value} sao</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Bình luận</span>
+                <textarea
+                  value={reviewForm.comment}
+                  onChange={(event) => setReviewForm((current) => ({ ...current, comment: event.target.value }))}
+                  rows="4"
+                  maxLength="500"
+                  placeholder="Chia sẻ trải nghiệm về nhà xe, xe và phục vụ"
+                />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={actionLoading}>Gửi đánh giá</button>
+            </form>
+          ) : (
+            <p className="muted">Bạn có thể đánh giá nhà xe sau khi chuyến xe hoàn thành.</p>
+          )}
+          {reviewMessage && <p className={`profile-status ${review ? 'success' : ''}`}>{reviewMessage}</p>}
         </main>
 
         <aside className="ticket-detail-side">

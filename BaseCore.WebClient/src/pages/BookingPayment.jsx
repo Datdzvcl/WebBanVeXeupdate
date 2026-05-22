@@ -352,6 +352,34 @@ export default function BookingPayment() {
             ))}
           </div>
 
+          {paymentMethod === 'BankTransfer' && (
+            <div className="payment-bank-transfer-box">
+              <div className="payment-bank-qr" aria-label="QR chuyển khoản giả lập">
+                <i className="fa-solid fa-qrcode" />
+              </div>
+              <div>
+                <span>Chuyển khoản giả lập</span>
+                <strong>Ngân hàng VéXeAZ Demo</strong>
+                <p>Nội dung chuyển khoản: <b>VEXEAZ BookingID</b></p>
+                <small>Sau khi tạo đơn, hệ thống ghi nhận đã thanh toán và đơn sẽ chờ admin xác nhận vé.</small>
+              </div>
+            </div>
+          )}
+
+          {paymentMethod === 'VNPay' && (
+            <div className="payment-bank-transfer-box">
+              <div className="payment-bank-qr" aria-label="Thanh toán ví điện tử giả lập">
+                <i className="fa-solid fa-wallet" />
+              </div>
+              <div>
+                <span>Ví điện tử giả lập</span>
+                <strong>VNPay Demo</strong>
+                <p>Giao dịch được ghi nhận là đã thanh toán sau khi bấm xác nhận.</p>
+                <small>Vé vẫn cần admin xác nhận trước khi chuyển sang trạng thái đã xác nhận.</small>
+              </div>
+            </div>
+          )}
+
           <div className="payment-promo-box">
             <div className="payment-promo-head">
               <div>

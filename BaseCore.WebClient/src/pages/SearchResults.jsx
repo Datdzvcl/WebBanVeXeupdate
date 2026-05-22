@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { API_BASE, formatVND, pick } from '../api';
 import { tripApi } from '../services/tripApi';
+import { reviewApi } from '../services/reviewApi';
 
 const PAGE_SIZE = 10;
 const LAST_SEARCH_KEY = 'lastTripSearchQuery';
@@ -29,6 +30,17 @@ const sortOptions = [
 function formatDate(value) {
   if (!value) return '--';
   return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function formatReviewDate(value) {
+  if (!value) return '--';
+  return new Intl.DateTimeFormat('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -196,6 +208,16 @@ export default function SearchResults() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [reviewModal, setReviewModal] = useState({
+    open: false,
+    loading: false,
+    title: '',
+    subtitle: '',
+    items: [],
+    averageRating: 0,
+    reviewCount: 0,
+    error: '',
+  });
   const today = useMemo(() => getToday(), []);
   const [locations, setLocations] = useState([]);
 
@@ -342,6 +364,44 @@ export default function SearchResults() {
     }
 
     navigate(`/trips/${id}/seats`);
+  };
+
+  const openReviewModal = async ({ id, title, subtitle }) => {
+    if (!id) return;
+    setReviewModal({
+      open: true,
+      loading: true,
+      title,
+      subtitle,
+      items: [],
+      averageRating: 0,
+      reviewCount: 0,
+      error: '',
+    });
+
+    try {
+      const data = await reviewApi.byOperator(id);
+      setReviewModal({
+        open: true,
+        loading: false,
+        title,
+        subtitle,
+        items: data?.items || data?.Items || [],
+        averageRating: Number(data?.averageRating ?? data?.AverageRating ?? 0),
+        reviewCount: Number(data?.reviewCount ?? data?.ReviewCount ?? 0),
+        error: '',
+      });
+    } catch (err) {
+      setReviewModal((current) => ({
+        ...current,
+        loading: false,
+        error: err.message || 'Không tải được đánh giá.',
+      }));
+    }
+  };
+
+  const closeReviewModal = () => {
+    setReviewModal((current) => ({ ...current, open: false }));
   };
 
   const updateSearchForm = (key, value) => {
@@ -628,6 +688,9 @@ export default function SearchResults() {
                 const operatorImageUrl = pick(trip, ['operatorImageUrl', 'OperatorImageUrl'], '');
                 const departureTime = pick(trip, ['departureTime', 'DepartureTime']);
                 const arrivalTime = pick(trip, ['arrivalTime', 'ArrivalTime']);
+                const operatorId = pick(trip, ['operatorID', 'operatorId', 'OperatorID']);
+                const averageRating = Number(pick(trip, ['averageRating', 'AverageRating'], 0));
+                const reviewCount = Number(pick(trip, ['reviewCount', 'ReviewCount'], 0));
 
                 return (
                   <article className="trip-result-card" key={tripId || `${operatorName}-${departureTime}`}>
@@ -644,6 +707,18 @@ export default function SearchResults() {
                         <div>
                           <h2>{operatorName}</h2>
                           <p>{pick(trip, ['busType', 'BusType'], 'Xe khách')}</p>
+                          <button
+                            type="button"
+                            className="trip-rating-line"
+                            disabled={!operatorId || reviewCount <= 0}
+                            onClick={() => openReviewModal({
+                              id: operatorId,
+                              title: `Đánh giá nhà xe ${operatorName}`,
+                              subtitle: `${averageRating.toFixed(1)} ★ | ${reviewCount} đánh giá`,
+                            })}
+                          >
+                            {reviewCount > 0 ? `Nhà xe ${averageRating.toFixed(1)} ★ | ${reviewCount} đánh giá` : 'Nhà xe chưa có đánh giá'}
+                          </button>
                         </div>
                         <span>{pick(trip, ['availableSeats', 'AvailableSeats'], 0)} ghế còn</span>
                       </div>
@@ -688,6 +763,51 @@ export default function SearchResults() {
           )}
         </main>
       </section>
+
+      {reviewModal.open && (
+        <div className="review-modal-backdrop" role="dialog" aria-modal="true" aria-label={reviewModal.title}>
+          <div className="review-modal">
+            <div className="review-modal-head">
+              <div>
+                <span>Đánh giá</span>
+                <h2>{reviewModal.title}</h2>
+                <p>{reviewModal.subtitle || `${reviewModal.averageRating.toFixed(1)} ★ | ${reviewModal.reviewCount} đánh giá`}</p>
+              </div>
+              <button type="button" onClick={closeReviewModal} aria-label="Đóng đánh giá">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            {reviewModal.loading && <div className="loading">Đang tải đánh giá...</div>}
+            {reviewModal.error && <div className="error-msg">{reviewModal.error}</div>}
+            {!reviewModal.loading && !reviewModal.error && reviewModal.items.length === 0 && (
+              <div className="empty-state compact">
+                <i className="fa-regular fa-star" />
+                <h3>Chưa có đánh giá</h3>
+                <p>Các đánh giá sau chuyến đi sẽ hiển thị tại đây.</p>
+              </div>
+            )}
+            {!reviewModal.loading && reviewModal.items.length > 0 && (
+              <div className="review-modal-list">
+                {reviewModal.items.map((item) => {
+                  const rating = Number(pick(item, ['rating', 'Rating'], 0));
+                  const reviewId = pick(item, ['reviewID', 'ReviewID']);
+                  return (
+                    <article className="review-modal-item" key={reviewId}>
+                      <div>
+                        <strong>{pick(item, ['userName', 'UserName'], 'Khách hàng')}</strong>
+                        <span>{formatReviewDate(pick(item, ['createdAt', 'CreatedAt']))}</span>
+                      </div>
+                      <b>{'★'.repeat(rating)}{'☆'.repeat(Math.max(0, 5 - rating))}</b>
+                      <p>{pick(item, ['comment', 'Comment'], '') || 'Khách hàng không nhập bình luận.'}</p>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </UserLayout>
   );
 }

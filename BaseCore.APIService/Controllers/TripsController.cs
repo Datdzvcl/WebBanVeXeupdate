@@ -47,7 +47,17 @@ namespace BaseCore.APIService.Controllers
                     x.AvailableSeats,
                     x.Status,
                     BusType      = x.Bus != null ? x.Bus.BusType      : null,
-                    OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null
+                    OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
+                    AverageRating = x.Bus == null
+                        ? 0
+                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                            ? Math.Round(_context.Reviews
+                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Average(r => r.Rating), 1)
+                            : 0),
+                    ReviewCount = x.Bus == null
+                        ? 0
+                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -127,7 +137,17 @@ namespace BaseCore.APIService.Controllers
                     BusType = x.Bus != null ? x.Bus.BusType : null,
                     LicensePlate = x.Bus != null ? x.Bus.LicensePlate : null,
                     OperatorID = x.Bus != null ? x.Bus.OperatorID : (int?)null,
-                    OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null
+                    OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
+                    AverageRating = x.Bus == null
+                        ? 0
+                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                            ? Math.Round(_context.Reviews
+                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Average(r => r.Rating), 1)
+                            : 0),
+                    ReviewCount = x.Bus == null
+                        ? 0
+                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -362,6 +382,8 @@ namespace BaseCore.APIService.Controllers
                 .Select(x => new
                 {
                     tripID = x.TripID,
+                    busID = x.BusID,
+                    operatorID = x.Bus != null ? x.Bus.OperatorID : (int?)null,
                     operatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     operatorImageUrl = (string?)null,
                     busType = x.Bus != null ? x.Bus.BusType : null,
@@ -372,7 +394,17 @@ namespace BaseCore.APIService.Controllers
                     arrivalTime = x.ArrivalTime,
                     price = x.Price,
                     availableSeats = x.AvailableSeats,
-                    status = x.Status
+                    status = x.Status,
+                    averageRating = x.Bus == null
+                        ? 0
+                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                            ? Math.Round(_context.Reviews
+                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Average(r => r.Rating), 1)
+                            : 0),
+                    reviewCount = x.Bus == null
+                        ? 0
+                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -405,7 +437,7 @@ namespace BaseCore.APIService.Controllers
             AddDefaultStopPoints(trip);
             await _context.SaveChangesAsync();
 
-            return Ok(trip);
+            return Ok(await BuildTripResponse(trip.TripID));
         }
 
         [HttpPut("{id}")]
@@ -431,7 +463,7 @@ namespace BaseCore.APIService.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(trip);
+            return Ok(await BuildTripResponse(id));
         }
 
         [HttpDelete("{id}")]
@@ -500,6 +532,41 @@ namespace BaseCore.APIService.Controllers
                 return BadRequest(new { message = "AvailableSeats không được lớn hơn Capacity của xe" });
 
             return null;
+        }
+
+        private async Task<object?> BuildTripResponse(int tripId)
+        {
+            return await _context.Trips
+                .AsNoTracking()
+                .Include(x => x.Bus).ThenInclude(x => x.Operator)
+                .Where(x => x.TripID == tripId)
+                .Select(x => new
+                {
+                    x.TripID,
+                    x.BusID,
+                    x.DepartureLocation,
+                    x.ArrivalLocation,
+                    x.DepartureTime,
+                    x.ArrivalTime,
+                    x.Price,
+                    x.AvailableSeats,
+                    x.Status,
+                    BusType = x.Bus != null ? x.Bus.BusType : null,
+                    LicensePlate = x.Bus != null ? x.Bus.LicensePlate : null,
+                    OperatorID = x.Bus != null ? x.Bus.OperatorID : (int?)null,
+                    OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
+                    AverageRating = x.Bus == null
+                        ? 0
+                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                            ? Math.Round(_context.Reviews
+                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Average(r => r.Rating), 1)
+                            : 0),
+                    ReviewCount = x.Bus == null
+                        ? 0
+                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                })
+                .FirstOrDefaultAsync();
         }
 
         private void AddDefaultStopPoints(Trip trip)

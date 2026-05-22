@@ -17,6 +17,8 @@ import { operatorApi } from "../services/operatorApi";
 import { tripApi } from "../services/tripApi";
 import { userApi } from "../services/userApi";
 import { promotionApi } from "../services/promotionApi";
+import { paymentApi } from "../services/paymentApi";
+import { reviewApi } from "../services/reviewApi";
 import { useAuth } from "../contexts/AuthContext";
 import AdminDashboard from "./admin/AdminDashboard";
 const includesText = (value, query) =>
@@ -83,6 +85,8 @@ const tabs = [
   ["trips", "Chuyến xe", "fa-route"],
   ["orders", "Đơn hàng", "fa-file-invoice"], // ← gộp 3 tab
   ["promotions", "Khuyến mãi", "fa-tags"],
+  ["payments", "Thanh toán", "fa-credit-card"],
+  ["reviews", "Đánh giá", "fa-star"],
   // ["tickets", "Quản lý vé", "fa-couch"],
   ["buses", "Xe", "fa-bus"],
   ["operators", "Nhà xe", "fa-building"],
@@ -296,6 +300,8 @@ function AdminContent({
     );
   if (active === "orders") return <BookingsManager />;
   if (active === "promotions") return <PromotionsManager />;
+  if (active === "payments") return <PaymentsManager />;
+  if (active === "reviews") return <ReviewsManager />;
   // if (active === "tickets") return <TicketsManager ticketSeats={ticketSeats} trips={trips} operators={operators} />;  // ← thêm props
   if (active === "buses")
     return (
@@ -849,58 +855,63 @@ function UsersManager({ onRefresh }) {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <form className="admin-form-grid" onSubmit={submit}>
-          <input
-            value={form.fullName}
-            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-            placeholder="Họ tên"
-            required
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="Email"
-            required
-          />
-          <input
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            placeholder="Số điện thoại"
-            required
-          />
-          <select
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-          >
-            <option value="Customer">Khách hàng</option>
-            <option value="Operator">Nhà xe</option>
-            <option value="Admin">Quản trị viên</option>
-          </select>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder={form.userID ? "Mật khẩu mới nếu muốn đổi" : "Mật khẩu"}
-            required={!form.userID}
-          />
-          <div className="admin-form-actions">
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={loading}
+        <AdminFormModal
+          title={form.userID ? "Sửa người dùng" : "Thêm người dùng"}
+          onClose={() => setShowForm(false)}
+        >
+          <form className="admin-form-grid" onSubmit={submit}>
+            <input
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              placeholder="Họ tên"
+              required
+            />
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="Email"
+              required
+            />
+            <input
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="Số điện thoại"
+              required
+            />
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
-              {form.userID ? "Cập nhật" : "Lưu user"}
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={() => setShowForm(false)}
-            >
-              Hủy
-            </button>
-          </div>
-        </form>
+              <option value="Customer">Khách hàng</option>
+              <option value="Operator">Nhà xe</option>
+              <option value="Admin">Quản trị viên</option>
+            </select>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder={form.userID ? "Mật khẩu mới nếu muốn đổi" : "Mật khẩu"}
+              required={!form.userID}
+            />
+            <div className="admin-form-actions">
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={loading}
+              >
+                {form.userID ? "Cập nhật" : "Lưu user"}
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => setShowForm(false)}
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        </AdminFormModal>
       )}
       <div className="admin-filter-grid">
         <input
@@ -1148,91 +1159,96 @@ function TripsManager({ buses, operators, onRefresh }) {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <form className="admin-form-grid" onSubmit={submit}>
-          <select
-            value={form.busID}
-            onChange={(e) => setForm({ ...form, busID: e.target.value })}
-            required
-          >
-            <option value="">Chọn xe</option>
-            {buses.map((b) => {
-              const busId = pick(b, ["busID", "BusID"]);
-              return (
-                <option key={busId} value={busId}>
-                  Xe #{busId} - {pick(b, ["licensePlate", "LicensePlate"])} (
-                  {pick(b, ["busType", "BusType"])}) -{" "}
-                  {pick(
-                    b,
-                    ["operatorName", "OperatorName"],
-                    findOperatorName(
-                      operators,
-                      pick(b, ["operatorID", "OperatorID"]),
-                    ),
-                  )}
-                </option>
-              );
-            })}
-          </select>
-          <input
-            value={form.departureLocation}
-            onChange={(e) =>
-              setForm({ ...form, departureLocation: e.target.value })
-            }
-            placeholder="Điểm đi"
-            required
-          />
-          <input
-            value={form.arrivalLocation}
-            onChange={(e) =>
-              setForm({ ...form, arrivalLocation: e.target.value })
-            }
-            placeholder="Điểm đến"
-            required
-          />
-          <input
-            type="datetime-local"
-            value={form.departureTime}
-            onChange={(e) =>
-              setForm({ ...form, departureTime: e.target.value })
-            }
-            required
-          />
-          <input
-            type="datetime-local"
-            value={form.arrivalTime}
-            onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
-            required
-          />
-          <input
-            type="number"
-            min="0"
-            value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
-            placeholder="Giá vé"
-            required
-          />
-          <select
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-          >
-            <option value="Scheduled">Đã lên lịch</option>
-            <option value="On-going">Đang chạy</option>
-            <option value="Completed">Hoàn thành</option>
-            <option value="Cancelled">Đã hủy</option>
-          </select>
-          <div className="admin-form-actions">
-            <button className="btn btn-primary" type="submit">
-              {form.tripID ? "Cập nhật" : "Lưu chuyến xe"}
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={() => cancelForm(setShowForm, setForm, EMPTY_TRIP)}
+        <AdminFormModal
+          title={form.tripID ? "Sửa chuyến xe" : "Thêm chuyến xe"}
+          onClose={() => cancelForm(setShowForm, setForm, EMPTY_TRIP)}
+        >
+          <form className="admin-form-grid" onSubmit={submit}>
+            <select
+              value={form.busID}
+              onChange={(e) => setForm({ ...form, busID: e.target.value })}
+              required
             >
-              Hủy
-            </button>
-          </div>
-        </form>
+              <option value="">Chọn xe</option>
+              {buses.map((b) => {
+                const busId = pick(b, ["busID", "BusID"]);
+                return (
+                  <option key={busId} value={busId}>
+                    Xe #{busId} - {pick(b, ["licensePlate", "LicensePlate"])} (
+                    {pick(b, ["busType", "BusType"])}) -{" "}
+                    {pick(
+                      b,
+                      ["operatorName", "OperatorName"],
+                      findOperatorName(
+                        operators,
+                        pick(b, ["operatorID", "OperatorID"]),
+                      ),
+                    )}
+                  </option>
+                );
+              })}
+            </select>
+            <input
+              value={form.departureLocation}
+              onChange={(e) =>
+                setForm({ ...form, departureLocation: e.target.value })
+              }
+              placeholder="Điểm đi"
+              required
+            />
+            <input
+              value={form.arrivalLocation}
+              onChange={(e) =>
+                setForm({ ...form, arrivalLocation: e.target.value })
+              }
+              placeholder="Điểm đến"
+              required
+            />
+            <input
+              type="datetime-local"
+              value={form.departureTime}
+              onChange={(e) =>
+                setForm({ ...form, departureTime: e.target.value })
+              }
+              required
+            />
+            <input
+              type="datetime-local"
+              value={form.arrivalTime}
+              onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
+              required
+            />
+            <input
+              type="number"
+              min="0"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              placeholder="Giá vé"
+              required
+            />
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+            >
+              <option value="Scheduled">Đã lên lịch</option>
+              <option value="On-going">Đang chạy</option>
+              <option value="Completed">Hoàn thành</option>
+              <option value="Cancelled">Đã hủy</option>
+            </select>
+            <div className="admin-form-actions">
+              <button className="btn btn-primary" type="submit">
+                {form.tripID ? "Cập nhật" : "Lưu chuyến xe"}
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => cancelForm(setShowForm, setForm, EMPTY_TRIP)}
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        </AdminFormModal>
       )}
       <div className="admin-filter-grid">
         <input
@@ -2145,6 +2161,299 @@ export function AdminBookingDetail({ bookingId }) {
   );
 }
 
+// ==================== PAYMENTS ====================
+function PaymentsManager() {
+  const [rows, setRows] = useState([]);
+  const [filters, setFilters] = useState({
+    paymentStatus: "",
+    bookingId: "",
+    fromDate: "",
+    toDate: "",
+    page: 1,
+    pageSize: 20,
+  });
+  const [paging, setPaging] = useState({
+    totalCount: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+  });
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const loadPayments = async (nextFilters = filters) => {
+    setLoading(true);
+    setNotice(null);
+    try {
+      const data = await paymentApi.list(cleanParams(nextFilters));
+      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
+      setRows(normalized.items);
+      setPaging(normalized);
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không tải được lịch sử thanh toán." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPayments();
+  }, []);
+
+  const updateFilter = (field, value) => {
+    setFilters((current) => ({ ...current, [field]: value, page: 1 }));
+  };
+
+  const applyFilters = (event) => {
+    event.preventDefault();
+    const nextFilters = { ...filters, page: 1 };
+    setFilters(nextFilters);
+    loadPayments(nextFilters);
+  };
+
+  const changePage = (page) => {
+    const nextFilters = { ...filters, page };
+    setFilters(nextFilters);
+    loadPayments(nextFilters);
+  };
+
+  const confirmPayment = async (id) => {
+    if (!window.confirm("Xác nhận giao dịch này đã thanh toán?")) return;
+    setLoading(true);
+    try {
+      await paymentApi.confirm(id);
+      await loadPayments(filters);
+      setNotice({ type: "success", text: "Đã xác nhận thanh toán." });
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không xác nhận được thanh toán." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="admin-card table-card">
+      <div className="admin-section-head">
+        <div>
+          <p className="eyebrow">Thanh toán</p>
+          <h3>Lịch sử giao dịch</h3>
+        </div>
+        <button className="btn btn-outline" type="button" onClick={() => loadPayments(filters)} disabled={loading}>
+          Làm mới
+        </button>
+      </div>
+
+      {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+
+      <form className="admin-filter-grid" onSubmit={applyFilters}>
+        <input
+          type="number"
+          value={filters.bookingId}
+          onChange={(e) => updateFilter("bookingId", e.target.value)}
+          placeholder="Mã đơn"
+        />
+        <select value={filters.paymentStatus} onChange={(e) => updateFilter("paymentStatus", e.target.value)}>
+          <option value="">Tất cả trạng thái</option>
+          <option value="Pending">Chờ xác nhận</option>
+          <option value="Paid">Đã thanh toán</option>
+          <option value="Cancelled">Đã hủy</option>
+          <option value="Refunded">Đã hoàn tiền</option>
+        </select>
+        <input type="date" value={filters.fromDate} onChange={(e) => updateFilter("fromDate", e.target.value)} />
+        <input type="date" value={filters.toDate} onChange={(e) => updateFilter("toDate", e.target.value)} />
+        <button className="btn btn-primary" type="submit" disabled={loading}>Lọc</button>
+      </form>
+
+      {loading && <div className="admin-loading">Đang tải giao dịch...</div>}
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã GD</th>
+              <th>Đơn</th>
+              <th>Khách hàng</th>
+              <th>Tuyến</th>
+              <th>Số tiền</th>
+              <th>Phương thức</th>
+              <th>Trạng thái</th>
+              <th>Mã giao dịch</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => {
+              const id = pick(item, ["paymentID", "PaymentID"]);
+              const status = pick(item, ["paymentStatus", "PaymentStatus"], "");
+              return (
+                <tr key={id}>
+                  <td>#{id}</td>
+                  <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+                  <td>
+                    <strong>{pick(item, ["customerName", "CustomerName"], "Chưa rõ")}</strong>
+                    <br />
+                    <small>{pick(item, ["customerPhone", "CustomerPhone"], "")}</small>
+                  </td>
+                  <td>
+                    {pick(item, ["route", "Route"], "Chưa rõ tuyến")}
+                    <br />
+                    <small>{formatDateTime(pick(item, ["departureTime", "DepartureTime"]))}</small>
+                  </td>
+                  <td>{formatVND(pick(item, ["amount", "Amount"], 0))}</td>
+                  <td>{labelPaymentMethod(pick(item, ["paymentMethod", "PaymentMethod"], ""))}</td>
+                  <td><span className="badge">{labelPaymentStatus(status)}</span></td>
+                  <td>{pick(item, ["transactionCode", "TransactionCode"], "--")}</td>
+                  <td>{formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}</td>
+                  <td className="admin-actions">
+                    {String(status).toLowerCase() === "pending" && (
+                      <button className="btn btn-primary" type="button" onClick={() => confirmPayment(id)} disabled={loading}>
+                        Xác nhận
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan="10" className="empty-cell">Chưa có giao dịch thanh toán.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+    </section>
+  );
+}
+
+// ==================== REVIEWS ====================
+function ReviewsManager() {
+  const [rows, setRows] = useState([]);
+  const [filters, setFilters] = useState({ tripId: "", operatorId: "", page: 1, pageSize: 20 });
+  const [paging, setPaging] = useState({ totalCount: 0, page: 1, pageSize: 20, totalPages: 1 });
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const loadReviews = async (nextFilters = filters) => {
+    setLoading(true);
+    setNotice(null);
+    try {
+      const data = await reviewApi.list(cleanParams(nextFilters));
+      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
+      setRows(normalized.items);
+      setPaging(normalized);
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không tải được đánh giá." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  const updateFilter = (field, value) => {
+    setFilters((current) => ({ ...current, [field]: value, page: 1 }));
+  };
+
+  const applyFilters = (event) => {
+    event.preventDefault();
+    const nextFilters = { ...filters, page: 1 };
+    setFilters(nextFilters);
+    loadReviews(nextFilters);
+  };
+
+  const changePage = (page) => {
+    const nextFilters = { ...filters, page };
+    setFilters(nextFilters);
+    loadReviews(nextFilters);
+  };
+
+  const deleteReview = async (id) => {
+    if (!window.confirm("Xóa đánh giá này?")) return;
+    setLoading(true);
+    try {
+      await reviewApi.remove(id);
+      await loadReviews(filters);
+      setNotice({ type: "success", text: "Đã xóa đánh giá." });
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không xóa được đánh giá." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="admin-card table-card">
+      <div className="admin-section-head">
+        <div>
+          <p className="eyebrow">Đánh giá</p>
+          <h3>Quản lý đánh giá nhà xe</h3>
+        </div>
+        <button className="btn btn-outline" type="button" onClick={() => loadReviews(filters)} disabled={loading}>
+          Làm mới
+        </button>
+      </div>
+
+      {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+
+      <form className="admin-filter-grid" onSubmit={applyFilters}>
+        <input type="number" value={filters.tripId} onChange={(e) => updateFilter("tripId", e.target.value)} placeholder="Mã chuyến" />
+        <input type="number" value={filters.operatorId} onChange={(e) => updateFilter("operatorId", e.target.value)} placeholder="Mã nhà xe" />
+        <button className="btn btn-primary" type="submit" disabled={loading}>Lọc</button>
+      </form>
+
+      {loading && <div className="admin-loading">Đang tải đánh giá...</div>}
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Đơn</th>
+              <th>Khách hàng</th>
+              <th>Tuyến</th>
+              <th>Nhà xe</th>
+              <th>Rating</th>
+              <th>Bình luận</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => {
+              const id = pick(item, ["reviewID", "ReviewID"]);
+              const rating = Number(pick(item, ["rating", "Rating"], 0));
+              return (
+                <tr key={id}>
+                  <td>#{id}</td>
+                  <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+                  <td>{pick(item, ["userName", "UserName", "customerName", "CustomerName"], "Chưa rõ")}</td>
+                  <td>{pick(item, ["route", "Route"], "Chưa rõ tuyến")}</td>
+                  <td>{pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}</td>
+                  <td>{'★'.repeat(rating)}{'☆'.repeat(Math.max(0, 5 - rating))}</td>
+                  <td>{pick(item, ["comment", "Comment"], "") || "Không có bình luận"}</td>
+                  <td>{formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}</td>
+                  <td className="admin-actions">
+                    <button className="btn btn-danger" type="button" disabled={loading} onClick={() => deleteReview(id)}>Xóa</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan="9" className="empty-cell">Chưa có đánh giá.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+    </section>
+  );
+}
+
 // ==================== PROMOTIONS ====================
 function PromotionsManager() {
   const [rows, setRows] = useState([]);
@@ -2251,27 +2560,32 @@ function PromotionsManager() {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <form className="admin-form-grid" onSubmit={submitForm}>
-          <input value={form.code} onChange={(e) => updateForm("code", e.target.value)} placeholder="Mã giảm giá" required />
-          <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Mô tả/điều kiện hiển thị cho khách" rows="3" />
-          <select value={form.discountType} onChange={(e) => updateForm("discountType", e.target.value)}>
-            <option value="1">Phần trăm</option>
-            <option value="2">Số tiền cố định</option>
-          </select>
-          <input type="number" value={form.discountValue} onChange={(e) => updateForm("discountValue", e.target.value)} placeholder="Giá trị giảm" required />
-          <input type="number" value={form.minOrderValue} onChange={(e) => updateForm("minOrderValue", e.target.value)} placeholder="Đơn tối thiểu" />
-          <input type="number" value={form.maxDiscount} onChange={(e) => updateForm("maxDiscount", e.target.value)} placeholder="Giảm tối đa" />
-          <input type="number" value={form.usageLimit} onChange={(e) => updateForm("usageLimit", e.target.value)} placeholder="Giới hạn lượt dùng" />
-          <input type="date" value={form.startDate} onChange={(e) => updateForm("startDate", e.target.value)} required />
-          <input type="date" value={form.endDate} onChange={(e) => updateForm("endDate", e.target.value)} required />
-          <label><input type="checkbox" checked={form.isActive} onChange={(e) => updateForm("isActive", e.target.checked)} /> Đang bật</label>
-          <label><input type="checkbox" checked={form.isPublic} onChange={(e) => updateForm("isPublic", e.target.checked)} /> Công khai</label>
-          {!form.isPublic && <input type="number" value={form.userID} onChange={(e) => updateForm("userID", e.target.value)} placeholder="UserID áp dụng" />}
-          <div className="admin-form-actions">
-            <button className="btn btn-primary" disabled={loading}>Lưu</button>
-            <button type="button" className="btn btn-outline" onClick={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}>Hủy</button>
-          </div>
-        </form>
+        <AdminFormModal
+          title={form.promotionID ? "Sửa mã giảm giá" : "Thêm mã giảm giá"}
+          onClose={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}
+        >
+          <form className="admin-form-grid" onSubmit={submitForm}>
+            <input value={form.code} onChange={(e) => updateForm("code", e.target.value)} placeholder="Mã giảm giá" required />
+            <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Mô tả/điều kiện hiển thị cho khách" rows="3" />
+            <select value={form.discountType} onChange={(e) => updateForm("discountType", e.target.value)}>
+              <option value="1">Phần trăm</option>
+              <option value="2">Số tiền cố định</option>
+            </select>
+            <input type="number" value={form.discountValue} onChange={(e) => updateForm("discountValue", e.target.value)} placeholder="Giá trị giảm" required />
+            <input type="number" value={form.minOrderValue} onChange={(e) => updateForm("minOrderValue", e.target.value)} placeholder="Đơn tối thiểu" />
+            <input type="number" value={form.maxDiscount} onChange={(e) => updateForm("maxDiscount", e.target.value)} placeholder="Giảm tối đa" />
+            <input type="number" value={form.usageLimit} onChange={(e) => updateForm("usageLimit", e.target.value)} placeholder="Giới hạn lượt dùng" />
+            <input type="date" value={form.startDate} onChange={(e) => updateForm("startDate", e.target.value)} required />
+            <input type="date" value={form.endDate} onChange={(e) => updateForm("endDate", e.target.value)} required />
+            <label><input type="checkbox" checked={form.isActive} onChange={(e) => updateForm("isActive", e.target.checked)} /> Đang bật</label>
+            <label><input type="checkbox" checked={form.isPublic} onChange={(e) => updateForm("isPublic", e.target.checked)} /> Công khai</label>
+            {!form.isPublic && <input type="number" value={form.userID} onChange={(e) => updateForm("userID", e.target.value)} placeholder="UserID áp dụng" />}
+            <div className="admin-form-actions">
+              <button className="btn btn-primary" disabled={loading}>Lưu</button>
+              <button type="button" className="btn btn-outline" onClick={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}>Hủy</button>
+            </div>
+          </form>
+        </AdminFormModal>
       )}
       {loading && <div className="admin-loading">Đang tải mã giảm giá...</div>}
       <div className="table-wrap">
@@ -2636,55 +2950,60 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <form className="admin-form-grid" onSubmit={submit}>
-          <select
-            value={form.operatorID}
-            onChange={(e) => setForm({ ...form, operatorID: e.target.value })}
-            required
-          >
-            <option value="">Chọn nhà xe</option>
-            {operators.map((o) => (
-              <option
-                key={pick(o, ["operatorID", "OperatorID"])}
-                value={pick(o, ["operatorID", "OperatorID"])}
-              >
-                {pick(o, ["name", "Name"])}
-              </option>
-            ))}
-          </select>
-          <input
-            value={form.licensePlate}
-            onChange={(e) => setForm({ ...form, licensePlate: e.target.value })}
-            placeholder="Biển số"
-            required
-          />
-          <input
-            type="number"
-            min="1"
-            value={form.capacity}
-            onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-            placeholder="Sức chứa"
-            required
-          />
-          <input
-            value={form.busType}
-            onChange={(e) => setForm({ ...form, busType: e.target.value })}
-            placeholder="Loại xe"
-            required
-          />
-          <div className="admin-form-actions">
-            <button className="btn btn-primary" type="submit">
-              {form.busID ? "Cập nhật" : "Lưu xe"}
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={() => cancelForm(setShowForm, setForm, EMPTY_BUS)}
+        <AdminFormModal
+          title={form.busID ? "Sửa xe" : "Thêm xe"}
+          onClose={() => cancelForm(setShowForm, setForm, EMPTY_BUS)}
+        >
+          <form className="admin-form-grid" onSubmit={submit}>
+            <select
+              value={form.operatorID}
+              onChange={(e) => setForm({ ...form, operatorID: e.target.value })}
+              required
             >
-              Hủy
-            </button>
-          </div>
-        </form>
+              <option value="">Chọn nhà xe</option>
+              {operators.map((o) => (
+                <option
+                  key={pick(o, ["operatorID", "OperatorID"])}
+                  value={pick(o, ["operatorID", "OperatorID"])}
+                >
+                  {pick(o, ["name", "Name"])}
+                </option>
+              ))}
+            </select>
+            <input
+              value={form.licensePlate}
+              onChange={(e) => setForm({ ...form, licensePlate: e.target.value })}
+              placeholder="Biển số"
+              required
+            />
+            <input
+              type="number"
+              min="1"
+              value={form.capacity}
+              onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+              placeholder="Sức chứa"
+              required
+            />
+            <input
+              value={form.busType}
+              onChange={(e) => setForm({ ...form, busType: e.target.value })}
+              placeholder="Loại xe"
+              required
+            />
+            <div className="admin-form-actions">
+              <button className="btn btn-primary" type="submit">
+                {form.busID ? "Cập nhật" : "Lưu xe"}
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => cancelForm(setShowForm, setForm, EMPTY_BUS)}
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        </AdminFormModal>
       )}
       <div className="admin-filter-grid">
         <input
@@ -2895,42 +3214,47 @@ function OperatorsManager({ onRefresh }) {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <form className="admin-form-grid" onSubmit={submit}>
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Tên nhà xe"
-            required
-          />
-          <input
-            value={form.contactPhone}
-            onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
-            placeholder="Số điện thoại"
-            required
-          />
-          <input
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="Email"
-          />
-          <input
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Mô tả"
-          />
-          <div className="admin-form-actions">
-            <button className="btn btn-primary" type="submit">
-              {form.operatorID ? "Cập nhật" : "Lưu nhà xe"}
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
-            >
-              Hủy
-            </button>
-          </div>
-        </form>
+        <AdminFormModal
+          title={form.operatorID ? "Sửa nhà xe" : "Thêm nhà xe"}
+          onClose={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
+        >
+          <form className="admin-form-grid" onSubmit={submit}>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Tên nhà xe"
+              required
+            />
+            <input
+              value={form.contactPhone}
+              onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+              placeholder="Số điện thoại"
+              required
+            />
+            <input
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="Email"
+            />
+            <input
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Mô tả"
+            />
+            <div className="admin-form-actions">
+              <button className="btn btn-primary" type="submit">
+                {form.operatorID ? "Cập nhật" : "Lưu nhà xe"}
+              </button>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        </AdminFormModal>
       )}
       <div className="admin-filter-grid">
         <input
@@ -3083,8 +3407,35 @@ function SectionHeader({ title, showForm, onToggle }) {
       <h3>{title}</h3>
       <button className="btn btn-primary" onClick={onToggle}>
         <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />{" "}
-        {showForm ? "Đóng form" : "Thêm mới"}
+        {showForm ? "Đóng" : "Thêm mới"}
       </button>
+    </div>
+  );
+}
+
+function AdminFormModal({ title, onClose, children }) {
+  return (
+    <div
+      className="admin-form-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="admin-form-modal">
+        <div className="admin-form-modal-head">
+          <div>
+            <span>Biểu mẫu</span>
+            <h3>{title}</h3>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Đóng popup">
+            <i className="fa-solid fa-xmark" />
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
@@ -4289,76 +4640,81 @@ function OrdersManager({ bookings, trips, operators, onRefresh }) {
             }
           >
             <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />{" "}
-            {showForm ? "Đóng form" : "Thêm đơn"}
+            {showForm ? "Đóng" : "Thêm đơn"}
           </button>
         </div>
 
         {/* Form thêm đơn */}
         {showForm && (
-          <form className="admin-form-grid" onSubmit={submitBooking}>
-            <input
-              value={form.customerName}
-              onChange={(e) =>
-                setForm({ ...form, customerName: e.target.value })
-              }
-              placeholder="Tên khách"
-              required
-            />
-            <input
-              value={form.customerPhone}
-              onChange={(e) =>
-                setForm({ ...form, customerPhone: e.target.value })
-              }
-              placeholder="SĐT"
-              required
-            />
-            <input
-              value={form.customerEmail}
-              onChange={(e) =>
-                setForm({ ...form, customerEmail: e.target.value })
-              }
-              placeholder="Email"
-            />
-            <input
-              type="number"
-              min="1"
-              value={form.totalSeats}
-              onChange={(e) => setForm({ ...form, totalSeats: e.target.value })}
-              placeholder="Số ghế"
-              required
-            />
-            <select
-              value={form.paymentMethod}
-              onChange={(e) =>
-                setForm({ ...form, paymentMethod: e.target.value })
-              }
-            >
-              <option value="Online">Online</option>
-              <option value="Cash">Cash</option>
-            </select>
-            <select
-              value={form.paymentStatus}
-              onChange={(e) =>
-                setForm({ ...form, paymentStatus: e.target.value })
-              }
-            >
-              <option value="Pending">Pending</option>
-              <option value="Paid">Paid</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-            <div className="admin-form-actions">
-              <button className="btn btn-primary" type="submit">
-                Lưu đơn
-              </button>
-              <button
-                className="btn btn-outline"
-                type="button"
-                onClick={() => cancelForm(setShowForm, setForm, EMPTY_BOOKING)}
+          <AdminFormModal
+            title="Thêm đơn đặt vé"
+            onClose={() => cancelForm(setShowForm, setForm, EMPTY_BOOKING)}
+          >
+            <form className="admin-form-grid" onSubmit={submitBooking}>
+              <input
+                value={form.customerName}
+                onChange={(e) =>
+                  setForm({ ...form, customerName: e.target.value })
+                }
+                placeholder="Tên khách"
+                required
+              />
+              <input
+                value={form.customerPhone}
+                onChange={(e) =>
+                  setForm({ ...form, customerPhone: e.target.value })
+                }
+                placeholder="SĐT"
+                required
+              />
+              <input
+                value={form.customerEmail}
+                onChange={(e) =>
+                  setForm({ ...form, customerEmail: e.target.value })
+                }
+                placeholder="Email"
+              />
+              <input
+                type="number"
+                min="1"
+                value={form.totalSeats}
+                onChange={(e) => setForm({ ...form, totalSeats: e.target.value })}
+                placeholder="Số ghế"
+                required
+              />
+              <select
+                value={form.paymentMethod}
+                onChange={(e) =>
+                  setForm({ ...form, paymentMethod: e.target.value })
+                }
               >
-                Hủy
-              </button>
-            </div>
-          </form>
+                <option value="Online">Online</option>
+                <option value="Cash">Cash</option>
+              </select>
+              <select
+                value={form.paymentStatus}
+                onChange={(e) =>
+                  setForm({ ...form, paymentStatus: e.target.value })
+                }
+              >
+                <option value="Pending">Pending</option>
+                <option value="Paid">Paid</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+              <div className="admin-form-actions">
+                <button className="btn btn-primary" type="submit">
+                  Lưu đơn
+                </button>
+                <button
+                  className="btn btn-outline"
+                  type="button"
+                  onClick={() => cancelForm(setShowForm, setForm, EMPTY_BOOKING)}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </AdminFormModal>
         )}
 
         {/* Lọc đơn */}

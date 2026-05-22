@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 export const ADMIN_MENU = [
   { id: 'dashboard', label: 'Thống kê', icon: 'fa-chart-line' },
   { id: 'promotions', label: 'Quản lý mã giảm giá', icon: 'fa-tags' },
+  { id: 'payments', label: 'Lịch sử thanh toán', icon: 'fa-credit-card' },
+  { id: 'reviews', label: 'Quản lý đánh giá', icon: 'fa-star' },
   { id: 'buses', label: 'Quản lý xe', icon: 'fa-bus' },
   { id: 'trips', label: 'Quản lý chuyến xe', icon: 'fa-route' },
   { id: 'operators', label: 'Quản lý nhà xe', icon: 'fa-building' },

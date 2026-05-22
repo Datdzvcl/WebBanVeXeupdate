@@ -25,6 +25,26 @@ function getQrText(booking) {
   return qrCodes[0] || ticketSeats[0]?.qrCode || ticketSeats[0]?.QRCode || `BOOKING:${booking?.bookingID || booking?.BookingID}`;
 }
 
+function getSuccessMode(bookings) {
+  const methods = bookings.map((booking) =>
+    String(pick(booking, ['paymentMethod', 'PaymentMethod'], '')).toLowerCase()
+  );
+  const hasCash = methods.some((method) => method === 'cash' || method.includes('tiền mặt') || method.includes('tien mat'));
+  const hasOnline = methods.some((method) =>
+    method === 'banktransfer' ||
+    method === 'ewallet' ||
+    method === 'vnpay' ||
+    method.includes('chuyển khoản') ||
+    method.includes('chuyen khoan') ||
+    method.includes('ví điện tử') ||
+    method.includes('vi dien tu')
+  );
+
+  if (hasCash && !hasOnline) return 'cash';
+  if (hasOnline && !hasCash) return 'online';
+  return 'mixed';
+}
+
 function readSuccessBookingIds(currentId) {
   try {
     const ids = JSON.parse(localStorage.getItem(SUCCESS_BOOKINGS_KEY) || '[]')
@@ -147,18 +167,36 @@ export default function BookingSuccess() {
   const continueSearchQuery = localStorage.getItem(LAST_SEARCH_KEY) || '';
   const continueSearchUrl = continueSearchQuery ? `/search-results?${continueSearchQuery}` : '/search-results';
   const isRoundTrip = bookings.length > 1;
+  const successMode = getSuccessMode(bookings);
+  const heroLabel = successMode === 'cash'
+    ? 'Đặt chỗ thành công'
+    : successMode === 'online'
+      ? 'Thanh toán thành công'
+      : 'Đặt vé thành công';
+  const heroTitle = successMode === 'cash'
+    ? 'Đặt chỗ đang chờ xác nhận'
+    : successMode === 'online'
+      ? 'Thanh toán đã ghi nhận'
+      : 'Đơn đặt vé đã được tạo';
+  const heroMessage = successMode === 'cash'
+    ? 'Đơn đã được tạo và đang chờ nhân viên/admin xác nhận sau khi thu tiền mặt.'
+    : successMode === 'online'
+      ? 'Thanh toán đã được ghi nhận, vé sẽ chuyển sang đã xác nhận sau khi admin duyệt đơn.'
+      : 'Đơn đã được tạo thành công và đang chờ admin xác nhận.';
 
   return (
     <UserLayout>
       <section className="success-hero">
         <div className="container success-hero-inner">
           <i className="fa-solid fa-circle-check" />
-          <span>Thanh toán thành công</span>
-          <h1>Đặt vé hoàn tất</h1>
+          <span>{heroLabel}</span>
+          <h1>{heroTitle}</h1>
           <p>
             {isRoundTrip
               ? `Các mã đơn #${bookingIds.join(', #')} đã được tạo thành công.`
               : `Mã đơn #${bookingIds[0]} đã được tạo thành công.`}
+            {' '}
+            {heroMessage}
           </p>
         </div>
       </section>

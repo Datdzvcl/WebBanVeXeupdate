@@ -179,6 +179,7 @@ namespace BaseCore.APIService.Controllers
                     departureLocation = x.Trip == null ? null : x.Trip.DepartureLocation,
                     arrivalLocation = x.Trip == null ? null : x.Trip.ArrivalLocation,
                     departureTime = x.Trip == null ? (DateTime?)null : x.Trip.DepartureTime,
+                    arrivalTime = x.Trip == null ? (DateTime?)null : x.Trip.ArrivalTime,
                     seatLabels = x.TicketSeats == null
                         ? new List<string>()
                         : x.TicketSeats.Select(s => s.SeatLabel).ToList(),
@@ -190,6 +191,11 @@ namespace BaseCore.APIService.Controllers
                     cancelReason = x.CancelReason,
                     cancelledAt = x.CancelledAt,
                     refundAmount = x.RefundAmount,
+                    hasReview = _context.Reviews.Any(r => r.BookingID == x.BookingID),
+                    reviewRating = _context.Reviews
+                        .Where(r => r.BookingID == x.BookingID)
+                        .Select(r => (int?)r.Rating)
+                        .FirstOrDefault(),
                     pickupStop = _context.StopPoints
                         .Where(s => s.StopPointID == x.PickupStopID)
                         .Select(s => new { s.StopPointID, s.StopName, s.StopAddress, s.StopType })
@@ -234,6 +240,16 @@ namespace BaseCore.APIService.Controllers
                     cancelReason = x.CancelReason,
                     cancelledAt = x.CancelledAt,
                     refundAmount = x.RefundAmount,
+                    review = _context.Reviews
+                        .Where(r => r.BookingID == x.BookingID)
+                        .Select(r => new
+                        {
+                            r.ReviewID,
+                            r.Rating,
+                            r.Comment,
+                            r.CreatedAt
+                        })
+                        .FirstOrDefault(),
                     operatorName = x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.Operator != null
                         ? x.Trip.Bus.Operator.Name
                         : null,
@@ -442,6 +458,9 @@ namespace BaseCore.APIService.Controllers
                     totalPrice = promotionResult.FinalAmount;
                 }
 
+                var paymentMethod = PaymentsController.NormalizePaymentMethod(request.PaymentMethod);
+                var paymentStatus = PaymentsController.IsPendingMethod(paymentMethod) ? PaymentPendingStatus : PaymentPaidStatus;
+
                 var booking = new Booking
                 {
                     TripID = request.TripId,
@@ -453,9 +472,9 @@ namespace BaseCore.APIService.Controllers
                     TotalPrice = totalPrice,
                     PromotionID = promotionId,
                     DiscountAmount = discountAmount,
-                    PaymentMethod = NormalizeOptionalText(request.PaymentMethod) ?? "Chuyển khoản",
-                    PaymentStatus = "Paid",
-                    BookingStatus = "PendingConfirm",
+                    PaymentMethod = paymentMethod,
+                    PaymentStatus = paymentStatus,
+                    BookingStatus = BookingPendingConfirmStatus,
                     BookingDate = now,
                     PickupStopID = request.PickupStopId,
                     DropoffStopID = request.DropoffStopId
@@ -463,6 +482,17 @@ namespace BaseCore.APIService.Controllers
 
                 _context.Bookings.Add(booking);
                 await _context.SaveChangesAsync();
+
+                _context.Payments.Add(new Payment
+                {
+                    BookingID = booking.BookingID,
+                    Amount = booking.TotalPrice,
+                    PaymentMethod = paymentMethod,
+                    PaymentStatus = paymentStatus,
+                    TransactionCode = PaymentsController.CreateTransactionCode(booking.BookingID),
+                    PaidAt = paymentStatus == PaymentPaidStatus ? now : null,
+                    CreatedAt = now
+                });
 
                 foreach (var seatLabel in seatLabels)
                 {
@@ -526,6 +556,36 @@ namespace BaseCore.APIService.Controllers
                 return NotFound();
 
             booking.PaymentStatus = status;
+
+            var payment = await _context.Payments
+                .Where(x => x.BookingID == id)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var now = DateTime.Now;
+            if (payment == null)
+            {
+                _context.Payments.Add(new Payment
+                {
+                    BookingID = booking.BookingID,
+                    Amount = booking.TotalPrice,
+                    PaymentMethod = PaymentsController.NormalizePaymentMethod(booking.PaymentMethod),
+                    PaymentStatus = status,
+                    TransactionCode = PaymentsController.CreateTransactionCode(booking.BookingID),
+                    PaidAt = string.Equals(status, PaymentPaidStatus, StringComparison.OrdinalIgnoreCase) ? now : null,
+                    CreatedAt = now
+                });
+            }
+            else
+            {
+                payment.PaymentStatus = status;
+                if (string.Equals(status, PaymentPaidStatus, StringComparison.OrdinalIgnoreCase))
+                {
+                    payment.PaidAt = now;
+                    payment.TransactionCode ??= PaymentsController.CreateTransactionCode(booking.BookingID);
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             return Ok(new { booking.BookingID, booking.PaymentStatus });
@@ -585,6 +645,13 @@ namespace BaseCore.APIService.Controllers
             booking.PaymentStatus = isPaid ? PaymentRefundedStatus : PaymentCancelledStatus;
             booking.CancelledAt = now;
             booking.RefundAmount = refundAmount;
+
+            var latestPayment = await _context.Payments
+                .Where(x => x.BookingID == booking.BookingID)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (latestPayment != null)
+                latestPayment.PaymentStatus = booking.PaymentStatus;
 
             if (booking.Trip != null && booking.TotalSeats > 0 && booking.Trip.DepartureTime > now)
                 booking.Trip.AvailableSeats += booking.TotalSeats;
@@ -652,6 +719,13 @@ namespace BaseCore.APIService.Controllers
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
             booking.PaymentStatus = PaymentCancelledStatus;
+            var latestPayment = await _context.Payments
+                .Where(x => x.BookingID == booking.BookingID)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (latestPayment != null)
+                latestPayment.PaymentStatus = PaymentCancelledStatus;
+
             await _context.SaveChangesAsync();
 
             return Ok(new
