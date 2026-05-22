@@ -892,7 +892,9 @@ function UsersManager({ onRefresh }) {
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder={form.userID ? "Mật khẩu mới nếu muốn đổi" : "Mật khẩu"}
+              placeholder={
+                form.userID ? "Mật khẩu mới nếu muốn đổi" : "Mật khẩu"
+              }
               required={!form.userID}
             />
             <div className="admin-form-actions">
@@ -1216,7 +1218,9 @@ function TripsManager({ buses, operators, onRefresh }) {
             <input
               type="datetime-local"
               value={form.arrivalTime}
-              onChange={(e) => setForm({ ...form, arrivalTime: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, arrivalTime: e.target.value })
+              }
               required
             />
             <input
@@ -2095,7 +2099,11 @@ export function AdminBookingDetail({ bookingId }) {
               </div>
               <div>
                 <span>Số tiền hoàn</span>
-                <b>{refundAmount !== null && refundAmount !== undefined ? formatVND(refundAmount) : "Chưa tính"}</b>
+                <b>
+                  {refundAmount !== null && refundAmount !== undefined
+                    ? formatVND(refundAmount)
+                    : "Chưa tính"}
+                </b>
               </div>
             </>
           )}
@@ -2187,11 +2195,18 @@ function PaymentsManager() {
     setNotice(null);
     try {
       const data = await paymentApi.list(cleanParams(nextFilters));
-      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
+      const normalized = normalizePagedResponse(
+        data,
+        nextFilters.page,
+        nextFilters.pageSize,
+      );
       setRows(normalized.items);
       setPaging(normalized);
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không tải được lịch sử thanh toán." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không tải được lịch sử thanh toán.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2226,7 +2241,10 @@ function PaymentsManager() {
       await loadPayments(filters);
       setNotice({ type: "success", text: "Đã xác nhận thanh toán." });
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không xác nhận được thanh toán." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không xác nhận được thanh toán.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2239,7 +2257,12 @@ function PaymentsManager() {
           <p className="eyebrow">Thanh toán</p>
           <h3>Lịch sử giao dịch</h3>
         </div>
-        <button className="btn btn-outline" type="button" onClick={() => loadPayments(filters)} disabled={loading}>
+        <button
+          className="btn btn-outline"
+          type="button"
+          onClick={() => loadPayments(filters)}
+          disabled={loading}
+        >
           Làm mới
         </button>
       </div>
@@ -2253,16 +2276,29 @@ function PaymentsManager() {
           onChange={(e) => updateFilter("bookingId", e.target.value)}
           placeholder="Mã đơn"
         />
-        <select value={filters.paymentStatus} onChange={(e) => updateFilter("paymentStatus", e.target.value)}>
+        <select
+          value={filters.paymentStatus}
+          onChange={(e) => updateFilter("paymentStatus", e.target.value)}
+        >
           <option value="">Tất cả trạng thái</option>
           <option value="Pending">Chờ xác nhận</option>
           <option value="Paid">Đã thanh toán</option>
           <option value="Cancelled">Đã hủy</option>
           <option value="Refunded">Đã hoàn tiền</option>
         </select>
-        <input type="date" value={filters.fromDate} onChange={(e) => updateFilter("fromDate", e.target.value)} />
-        <input type="date" value={filters.toDate} onChange={(e) => updateFilter("toDate", e.target.value)} />
-        <button className="btn btn-primary" type="submit" disabled={loading}>Lọc</button>
+        <input
+          type="date"
+          value={filters.fromDate}
+          onChange={(e) => updateFilter("fromDate", e.target.value)}
+        />
+        <input
+          type="date"
+          value={filters.toDate}
+          onChange={(e) => updateFilter("toDate", e.target.value)}
+        />
+        <button className="btn btn-primary" type="submit" disabled={loading}>
+          Lọc
+        </button>
       </form>
 
       {loading && <div className="admin-loading">Đang tải giao dịch...</div>}
@@ -2292,23 +2328,46 @@ function PaymentsManager() {
                   <td>#{id}</td>
                   <td>#{pick(item, ["bookingID", "BookingID"])}</td>
                   <td>
-                    <strong>{pick(item, ["customerName", "CustomerName"], "Chưa rõ")}</strong>
+                    <strong>
+                      {pick(item, ["customerName", "CustomerName"], "Chưa rõ")}
+                    </strong>
                     <br />
-                    <small>{pick(item, ["customerPhone", "CustomerPhone"], "")}</small>
+                    <small>
+                      {pick(item, ["customerPhone", "CustomerPhone"], "")}
+                    </small>
                   </td>
                   <td>
                     {pick(item, ["route", "Route"], "Chưa rõ tuyến")}
                     <br />
-                    <small>{formatDateTime(pick(item, ["departureTime", "DepartureTime"]))}</small>
+                    <small>
+                      {formatDateTime(
+                        pick(item, ["departureTime", "DepartureTime"]),
+                      )}
+                    </small>
                   </td>
                   <td>{formatVND(pick(item, ["amount", "Amount"], 0))}</td>
-                  <td>{labelPaymentMethod(pick(item, ["paymentMethod", "PaymentMethod"], ""))}</td>
-                  <td><span className="badge">{labelPaymentStatus(status)}</span></td>
-                  <td>{pick(item, ["transactionCode", "TransactionCode"], "--")}</td>
-                  <td>{formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}</td>
+                  <td>
+                    {labelPaymentMethod(
+                      pick(item, ["paymentMethod", "PaymentMethod"], ""),
+                    )}
+                  </td>
+                  <td>
+                    <span className="badge">{labelPaymentStatus(status)}</span>
+                  </td>
+                  <td>
+                    {pick(item, ["transactionCode", "TransactionCode"], "--")}
+                  </td>
+                  <td>
+                    {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
+                  </td>
                   <td className="admin-actions">
                     {String(status).toLowerCase() === "pending" && (
-                      <button className="btn btn-primary" type="button" onClick={() => confirmPayment(id)} disabled={loading}>
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={() => confirmPayment(id)}
+                        disabled={loading}
+                      >
                         Xác nhận
                       </button>
                     )}
@@ -2317,13 +2376,21 @@ function PaymentsManager() {
               );
             })}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan="10" className="empty-cell">Chưa có giao dịch thanh toán.</td></tr>
+              <tr>
+                <td colSpan="10" className="empty-cell">
+                  Chưa có giao dịch thanh toán.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+      <Pagination
+        page={paging.page}
+        totalPages={paging.totalPages}
+        onPageChange={changePage}
+      />
     </section>
   );
 }
@@ -2331,8 +2398,18 @@ function PaymentsManager() {
 // ==================== REVIEWS ====================
 function ReviewsManager() {
   const [rows, setRows] = useState([]);
-  const [filters, setFilters] = useState({ tripId: "", operatorId: "", page: 1, pageSize: 20 });
-  const [paging, setPaging] = useState({ totalCount: 0, page: 1, pageSize: 20, totalPages: 1 });
+  const [filters, setFilters] = useState({
+    tripId: "",
+    operatorId: "",
+    page: 1,
+    pageSize: 20,
+  });
+  const [paging, setPaging] = useState({
+    totalCount: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+  });
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -2341,11 +2418,18 @@ function ReviewsManager() {
     setNotice(null);
     try {
       const data = await reviewApi.list(cleanParams(nextFilters));
-      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
+      const normalized = normalizePagedResponse(
+        data,
+        nextFilters.page,
+        nextFilters.pageSize,
+      );
       setRows(normalized.items);
       setPaging(normalized);
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không tải được đánh giá." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không tải được đánh giá.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2380,7 +2464,10 @@ function ReviewsManager() {
       await loadReviews(filters);
       setNotice({ type: "success", text: "Đã xóa đánh giá." });
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không xóa được đánh giá." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không xóa được đánh giá.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2393,7 +2480,12 @@ function ReviewsManager() {
           <p className="eyebrow">Đánh giá</p>
           <h3>Quản lý đánh giá nhà xe</h3>
         </div>
-        <button className="btn btn-outline" type="button" onClick={() => loadReviews(filters)} disabled={loading}>
+        <button
+          className="btn btn-outline"
+          type="button"
+          onClick={() => loadReviews(filters)}
+          disabled={loading}
+        >
           Làm mới
         </button>
       </div>
@@ -2401,9 +2493,21 @@ function ReviewsManager() {
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
 
       <form className="admin-filter-grid" onSubmit={applyFilters}>
-        <input type="number" value={filters.tripId} onChange={(e) => updateFilter("tripId", e.target.value)} placeholder="Mã chuyến" />
-        <input type="number" value={filters.operatorId} onChange={(e) => updateFilter("operatorId", e.target.value)} placeholder="Mã nhà xe" />
-        <button className="btn btn-primary" type="submit" disabled={loading}>Lọc</button>
+        <input
+          type="number"
+          value={filters.tripId}
+          onChange={(e) => updateFilter("tripId", e.target.value)}
+          placeholder="Mã chuyến"
+        />
+        <input
+          type="number"
+          value={filters.operatorId}
+          onChange={(e) => updateFilter("operatorId", e.target.value)}
+          placeholder="Mã nhà xe"
+        />
+        <button className="btn btn-primary" type="submit" disabled={loading}>
+          Lọc
+        </button>
       </form>
 
       {loading && <div className="admin-loading">Đang tải đánh giá...</div>}
@@ -2431,26 +2535,57 @@ function ReviewsManager() {
                 <tr key={id}>
                   <td>#{id}</td>
                   <td>#{pick(item, ["bookingID", "BookingID"])}</td>
-                  <td>{pick(item, ["userName", "UserName", "customerName", "CustomerName"], "Chưa rõ")}</td>
+                  <td>
+                    {pick(
+                      item,
+                      ["userName", "UserName", "customerName", "CustomerName"],
+                      "Chưa rõ",
+                    )}
+                  </td>
                   <td>{pick(item, ["route", "Route"], "Chưa rõ tuyến")}</td>
-                  <td>{pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}</td>
-                  <td>{'★'.repeat(rating)}{'☆'.repeat(Math.max(0, 5 - rating))}</td>
-                  <td>{pick(item, ["comment", "Comment"], "") || "Không có bình luận"}</td>
-                  <td>{formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}</td>
+                  <td>
+                    {pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}
+                  </td>
+                  <td>
+                    {"★".repeat(rating)}
+                    {"☆".repeat(Math.max(0, 5 - rating))}
+                  </td>
+                  <td>
+                    {pick(item, ["comment", "Comment"], "") ||
+                      "Không có bình luận"}
+                  </td>
+                  <td>
+                    {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
+                  </td>
                   <td className="admin-actions">
-                    <button className="btn btn-danger" type="button" disabled={loading} onClick={() => deleteReview(id)}>Xóa</button>
+                    <button
+                      className="btn btn-danger"
+                      type="button"
+                      disabled={loading}
+                      onClick={() => deleteReview(id)}
+                    >
+                      Xóa
+                    </button>
                   </td>
                 </tr>
               );
             })}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan="9" className="empty-cell">Chưa có đánh giá.</td></tr>
+              <tr>
+                <td colSpan="9" className="empty-cell">
+                  Chưa có đánh giá.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+      <Pagination
+        page={paging.page}
+        totalPages={paging.totalPages}
+        onPageChange={changePage}
+      />
     </section>
   );
 }
@@ -2470,7 +2605,10 @@ function PromotionsManager() {
       const data = await promotionApi.list();
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không tải được mã giảm giá." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không tải được mã giảm giá.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2512,7 +2650,8 @@ function PromotionsManager() {
       description: form.description,
       discountType: Number(form.discountType),
       discountValue: Number(form.discountValue || 0),
-      minOrderValue: form.minOrderValue === "" ? null : Number(form.minOrderValue),
+      minOrderValue:
+        form.minOrderValue === "" ? null : Number(form.minOrderValue),
       maxDiscount: form.maxDiscount === "" ? null : Number(form.maxDiscount),
       usageLimit: form.usageLimit === "" ? null : Number(form.usageLimit),
       startDate: form.startDate,
@@ -2533,7 +2672,10 @@ function PromotionsManager() {
       await loadPromotions();
       setNotice({ type: "success", text: "Đã lưu mã giảm giá." });
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không lưu được mã giảm giá." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không lưu được mã giảm giá.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2546,7 +2688,10 @@ function PromotionsManager() {
       await promotionApi.disable(id);
       await loadPromotions();
     } catch (e) {
-      setNotice({ type: "error", text: e.message || "Không tắt được mã giảm giá." });
+      setNotice({
+        type: "error",
+        text: e.message || "Không tắt được mã giảm giá.",
+      });
     } finally {
       setLoading(false);
     }
@@ -2557,7 +2702,9 @@ function PromotionsManager() {
       <SectionHeader
         title="Quản lý khuyến mãi"
         showForm={showForm}
-        onToggle={() => toggleCreateForm(showForm, setShowForm, setForm, EMPTY_PROMOTION)}
+        onToggle={() =>
+          toggleCreateForm(showForm, setShowForm, setForm, EMPTY_PROMOTION)
+        }
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
@@ -2566,24 +2713,99 @@ function PromotionsManager() {
           onClose={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}
         >
           <form className="admin-form-grid" onSubmit={submitForm}>
-            <input value={form.code} onChange={(e) => updateForm("code", e.target.value)} placeholder="Mã giảm giá" required />
-            <textarea value={form.description} onChange={(e) => updateForm("description", e.target.value)} placeholder="Mô tả/điều kiện hiển thị cho khách" rows="3" />
-            <select value={form.discountType} onChange={(e) => updateForm("discountType", e.target.value)}>
+            <input
+              value={form.code}
+              onChange={(e) => updateForm("code", e.target.value)}
+              placeholder="Mã giảm giá"
+              required
+            />
+            <textarea
+              value={form.description}
+              onChange={(e) => updateForm("description", e.target.value)}
+              placeholder="Mô tả/điều kiện hiển thị cho khách"
+              rows="3"
+            />
+            <select
+              value={form.discountType}
+              onChange={(e) => updateForm("discountType", e.target.value)}
+            >
               <option value="1">Phần trăm</option>
               <option value="2">Số tiền cố định</option>
             </select>
-            <input type="number" value={form.discountValue} onChange={(e) => updateForm("discountValue", e.target.value)} placeholder="Giá trị giảm" required />
-            <input type="number" value={form.minOrderValue} onChange={(e) => updateForm("minOrderValue", e.target.value)} placeholder="Đơn tối thiểu" />
-            <input type="number" value={form.maxDiscount} onChange={(e) => updateForm("maxDiscount", e.target.value)} placeholder="Giảm tối đa" />
-            <input type="number" value={form.usageLimit} onChange={(e) => updateForm("usageLimit", e.target.value)} placeholder="Giới hạn lượt dùng" />
-            <input type="date" value={form.startDate} onChange={(e) => updateForm("startDate", e.target.value)} required />
-            <input type="date" value={form.endDate} onChange={(e) => updateForm("endDate", e.target.value)} required />
-            <label><input type="checkbox" checked={form.isActive} onChange={(e) => updateForm("isActive", e.target.checked)} /> Đang bật</label>
-            <label><input type="checkbox" checked={form.isPublic} onChange={(e) => updateForm("isPublic", e.target.checked)} /> Công khai</label>
-            {!form.isPublic && <input type="number" value={form.userID} onChange={(e) => updateForm("userID", e.target.value)} placeholder="UserID áp dụng" />}
+            <input
+              type="number"
+              value={form.discountValue}
+              onChange={(e) => updateForm("discountValue", e.target.value)}
+              placeholder="Giá trị giảm"
+              required
+            />
+            <input
+              type="number"
+              value={form.minOrderValue}
+              onChange={(e) => updateForm("minOrderValue", e.target.value)}
+              placeholder="Đơn tối thiểu"
+            />
+            <input
+              type="number"
+              value={form.maxDiscount}
+              onChange={(e) => updateForm("maxDiscount", e.target.value)}
+              placeholder="Giảm tối đa"
+            />
+            <input
+              type="number"
+              value={form.usageLimit}
+              onChange={(e) => updateForm("usageLimit", e.target.value)}
+              placeholder="Giới hạn lượt dùng"
+            />
+            <input
+              type="date"
+              value={form.startDate}
+              onChange={(e) => updateForm("startDate", e.target.value)}
+              required
+            />
+            <input
+              type="date"
+              value={form.endDate}
+              onChange={(e) => updateForm("endDate", e.target.value)}
+              required
+            />
+            <label>
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => updateForm("isActive", e.target.checked)}
+              />{" "}
+              Đang bật
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={form.isPublic}
+                onChange={(e) => updateForm("isPublic", e.target.checked)}
+              />{" "}
+              Công khai
+            </label>
+            {!form.isPublic && (
+              <input
+                type="number"
+                value={form.userID}
+                onChange={(e) => updateForm("userID", e.target.value)}
+                placeholder="UserID áp dụng"
+              />
+            )}
             <div className="admin-form-actions">
-              <button className="btn btn-primary" disabled={loading}>Lưu</button>
-              <button type="button" className="btn btn-outline" onClick={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}>Hủy</button>
+              <button className="btn btn-primary" disabled={loading}>
+                Lưu
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() =>
+                  cancelForm(setShowForm, setForm, EMPTY_PROMOTION)
+                }
+              >
+                Hủy
+              </button>
             </div>
           </form>
         </AdminFormModal>
@@ -2608,27 +2830,73 @@ function PromotionsManager() {
           <tbody>
             {rows.map((item) => {
               const id = pick(item, ["promotionID", "PromotionID"]);
-              const active = Boolean(pick(item, ["isActive", "IsActive"], false));
+              const active = Boolean(
+                pick(item, ["isActive", "IsActive"], false),
+              );
               return (
                 <tr key={id}>
-                  <td><b>{pick(item, ["code", "Code"])}</b></td>
-                  <td>{pick(item, ["description", "Description"], "") || "Chưa có"}</td>
-                  <td>{Number(pick(item, ["discountType", "DiscountType"], 1)) === 1 ? "Phần trăm" : "Cố định"}</td>
+                  <td>
+                    <b>{pick(item, ["code", "Code"])}</b>
+                  </td>
+                  <td>
+                    {pick(item, ["description", "Description"], "") ||
+                      "Chưa có"}
+                  </td>
+                  <td>
+                    {Number(pick(item, ["discountType", "DiscountType"], 1)) ===
+                    1
+                      ? "Phần trăm"
+                      : "Cố định"}
+                  </td>
                   <td>{pick(item, ["discountValue", "DiscountValue"], 0)}</td>
-                  <td>{formatVND(pick(item, ["minOrderValue", "MinOrderValue"], 0))}</td>
-                  <td>{formatVND(pick(item, ["maxDiscount", "MaxDiscount"], 0))}</td>
-                  <td>{pick(item, ["usedCount", "UsedCount"], 0)} / {pick(item, ["usageLimit", "UsageLimit"], "∞")}</td>
-                  <td>{dateOnly(pick(item, ["startDate", "StartDate"]))} - {dateOnly(pick(item, ["endDate", "EndDate"]))}</td>
-                  <td><span className="badge">{active ? "Đang bật" : "Đã tắt"}</span></td>
+                  <td>
+                    {formatVND(
+                      pick(item, ["minOrderValue", "MinOrderValue"], 0),
+                    )}
+                  </td>
+                  <td>
+                    {formatVND(pick(item, ["maxDiscount", "MaxDiscount"], 0))}
+                  </td>
+                  <td>
+                    {pick(item, ["usedCount", "UsedCount"], 0)} /{" "}
+                    {pick(item, ["usageLimit", "UsageLimit"], "∞")}
+                  </td>
+                  <td>
+                    {dateOnly(pick(item, ["startDate", "StartDate"]))} -{" "}
+                    {dateOnly(pick(item, ["endDate", "EndDate"]))}
+                  </td>
+                  <td>
+                    <span className="badge">
+                      {active ? "Đang bật" : "Đã tắt"}
+                    </span>
+                  </td>
                   <td className="admin-actions">
-                    <button className="btn btn-outline" type="button" onClick={() => editPromotion(item)}>Sửa</button>
-                    {active && <button className="btn btn-danger" type="button" onClick={() => disablePromotion(id)}>Tắt</button>}
+                    <button
+                      className="btn btn-outline"
+                      type="button"
+                      onClick={() => editPromotion(item)}
+                    >
+                      Sửa
+                    </button>
+                    {active && (
+                      <button
+                        className="btn btn-danger"
+                        type="button"
+                        onClick={() => disablePromotion(id)}
+                      >
+                        Tắt
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
             })}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan="10" className="empty-cell">Chưa có mã giảm giá.</td></tr>
+              <tr>
+                <td colSpan="10" className="empty-cell">
+                  Chưa có mã giảm giá.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -2973,7 +3241,9 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
             </select>
             <input
               value={form.licensePlate}
-              onChange={(e) => setForm({ ...form, licensePlate: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, licensePlate: e.target.value })
+              }
               placeholder="Biển số"
               required
             />
@@ -3228,7 +3498,9 @@ function OperatorsManager({ onRefresh }) {
             />
             <input
               value={form.contactPhone}
-              onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, contactPhone: e.target.value })
+              }
               placeholder="Số điện thoại"
               required
             />
@@ -3239,7 +3511,9 @@ function OperatorsManager({ onRefresh }) {
             />
             <input
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
               placeholder="Mô tả"
             />
             <div className="admin-form-actions">
@@ -3438,7 +3712,7 @@ function AdminFormModal({ title, onClose, children }) {
         {children}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -4680,7 +4954,9 @@ function OrdersManager({ bookings, trips, operators, onRefresh }) {
                 type="number"
                 min="1"
                 value={form.totalSeats}
-                onChange={(e) => setForm({ ...form, totalSeats: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, totalSeats: e.target.value })
+                }
                 placeholder="Số ghế"
                 required
               />
@@ -4710,7 +4986,9 @@ function OrdersManager({ bookings, trips, operators, onRefresh }) {
                 <button
                   className="btn btn-outline"
                   type="button"
-                  onClick={() => cancelForm(setShowForm, setForm, EMPTY_BOOKING)}
+                  onClick={() =>
+                    cancelForm(setShowForm, setForm, EMPTY_BOOKING)
+                  }
                 >
                   Hủy
                 </button>
