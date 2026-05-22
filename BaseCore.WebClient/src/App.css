@@ -27,6 +27,7 @@ body {
   line-height: 1.6;
   background-color: var(--bg-light);
   text-rendering: optimizeLegibility;
+  scrollbar-gutter: stable;
 }
 
 a {
@@ -3717,8 +3718,7 @@ a:hover,
   color: #1d4ed8;
   background:
     linear-gradient(90deg, rgba(37, 99, 235, 0.14) 1px, transparent 1px),
-    linear-gradient(rgba(37, 99, 235, 0.14) 1px, transparent 1px),
-    #fff;
+    linear-gradient(rgba(37, 99, 235, 0.14) 1px, transparent 1px), #fff;
   background-size: 14px 14px;
   font-size: 2rem;
 }
@@ -4955,7 +4955,10 @@ a:hover,
 }
 .admin-form-modal-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -5466,10 +5469,9 @@ a:hover,
 .home-search-widget {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(
-      0,
-      1fr
-    ) minmax(0, 0.95fr) 170px;
+  grid-template-columns:
+    minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr)
+    minmax(0, 0.95fr) 170px;
   align-items: stretch;
   background: #fff;
   border: 1px solid #e2e8f0;
