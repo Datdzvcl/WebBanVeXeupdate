@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   apiFetch,
@@ -3414,7 +3415,7 @@ function SectionHeader({ title, showForm, onToggle }) {
 }
 
 function AdminFormModal({ title, onClose, children }) {
-  return (
+  return createPortal(
     <div
       className="admin-form-modal-backdrop"
       role="dialog"
@@ -3436,7 +3437,8 @@ function AdminFormModal({ title, onClose, children }) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
