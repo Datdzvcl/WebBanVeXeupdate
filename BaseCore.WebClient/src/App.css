@@ -1105,7 +1105,11 @@ a {
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
 .admin-layout-nav button i,
@@ -1324,7 +1328,11 @@ a {
   gap: 9px;
   font-weight: 800;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
 .admin-toggle span {
@@ -1419,7 +1427,9 @@ a {
 }
 
 @keyframes admin-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .clickable-row {
@@ -1490,7 +1500,11 @@ a {
   padding: 9px 13px;
   font-weight: 800;
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
 .admin-filter-pills button:hover,
@@ -1510,7 +1524,10 @@ a {
 .pickup-card,
 .payment-card,
 .success-card {
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .admin-card:hover,
@@ -2160,7 +2177,12 @@ a:hover,
 .home-hero-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(6, 32, 77, 0.82), rgba(15, 79, 184, 0.62), rgba(255, 255, 255, 0.05));
+  background: linear-gradient(
+    90deg,
+    rgba(6, 32, 77, 0.82),
+    rgba(15, 79, 184, 0.62),
+    rgba(255, 255, 255, 0.05)
+  );
 }
 
 .home-hero-inner {
@@ -4653,7 +4675,10 @@ a:hover,
   justify-content: space-between;
   align-items: center;
   border: 1px solid #e8eef7;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 .stat-card:hover {
   transform: translateY(-3px);
@@ -5181,7 +5206,10 @@ a:hover,
 .home-search-widget {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.95fr) 170px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(
+      0,
+      1fr
+    ) minmax(0, 0.95fr) 170px;
   align-items: stretch;
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -5331,7 +5359,10 @@ a:hover,
   color: #374151;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
   cursor: pointer;
-  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
 .home-swap-button:hover {
@@ -5367,7 +5398,10 @@ a:hover,
   font-size: 1.15rem;
   font-weight: 900;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
 .home-search-button:hover {

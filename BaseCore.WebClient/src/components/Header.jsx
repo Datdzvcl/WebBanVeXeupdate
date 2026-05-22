@@ -1,8 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import Navbar from './Navbar';
-import { useAuth } from '../contexts/AuthContext';
-import { isAdminRole } from '../api';
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import Navbar from "./Navbar";
+import { useAuth } from "../contexts/AuthContext";
+import { isAdminRole } from "../api";
 
 export default function Header({ simple = false }) {
   const navigate = useNavigate();
@@ -18,18 +18,18 @@ export default function Header({ simple = false }) {
   const handleLogout = () => {
     logout();
     closeMenus();
-    navigate('/');
+    navigate("/");
   };
 
   useEffect(() => {
     const handleClick = (event) => {
-      if (!event.target.closest('.user-header')) {
+      if (!event.target.closest(".user-header")) {
         closeMenus();
       }
     };
 
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
   }, []);
 
   return (
@@ -53,10 +53,10 @@ export default function Header({ simple = false }) {
               }}
               aria-label="Mở menu"
             >
-              <i className={`fa-solid ${menuOpen ? 'fa-xmark' : 'fa-bars'}`} />
+              <i className={`fa-solid ${menuOpen ? "fa-xmark" : "fa-bars"}`} />
             </button>
 
-            <div className={`user-header-center ${menuOpen ? 'open' : ''}`}>
+            <div className={`user-header-center ${menuOpen ? "open" : ""}`}>
               <Navbar onNavigate={closeMenus} />
             </div>
           </>
@@ -75,7 +75,9 @@ export default function Header({ simple = false }) {
               >
                 <i className="fa-solid fa-user" />
                 <span>{user.fullName || user.email}</span>
-                <i className={`fa-solid fa-chevron-${accountOpen ? 'up' : 'down'}`} />
+                <i
+                  className={`fa-solid fa-chevron-${accountOpen ? "up" : "down"}`}
+                />
               </button>
 
               {accountOpen && (
@@ -87,6 +89,10 @@ export default function Header({ simple = false }) {
                   <Link to="/my-tickets" onClick={closeMenus}>
                     <i className="fa-solid fa-ticket" />
                     Vé của tôi
+                  </Link>
+                  <Link to="/change-password" onClick={closeMenus}>
+                    <i className="fa-solid fa-lock" />
+                    Đổi mật khẩu
                   </Link>
                   {isAdminRole(user.role) && (
                     <Link to="/admin" onClick={closeMenus}>
@@ -103,8 +109,12 @@ export default function Header({ simple = false }) {
             </div>
           ) : (
             <div className="guest-actions">
-              <Link to="/login" className="btn btn-outline">Đăng nhập</Link>
-              <Link to="/register" className="btn btn-primary">Đăng ký</Link>
+              <Link to="/login" className="btn btn-outline">
+                Đăng nhập
+              </Link>
+              <Link to="/register" className="btn btn-primary">
+                Đăng ký
+              </Link>
             </div>
           )}
         </div>

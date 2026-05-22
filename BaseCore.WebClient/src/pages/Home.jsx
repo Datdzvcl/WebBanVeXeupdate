@@ -43,17 +43,20 @@ const popularRoutes = [
   {
     route: "Sài Gòn - Đà Lạt",
     price: "Từ 220.000đ",
-    image: "https://statics.vinpearl.com/du-lich-da-lat_1688466093.jpg",
+    image:
+      "https://kenh14cdn.com/2016/12662627-1265391450144557-7741251277725824130-n-1-1454160360419.jpg",
   },
   {
     route: "Hà Nội - Hạ Long",
     price: "Từ 180.000đ",
-    image: "https://statics.vinpearl.com/ha-long-bay-vietnam-1_1689846823.jpg",
+    image:
+      "https://cdn-media.sforum.vn/storage/app/media/anh-vinh-ha-long-28.jpg",
   },
   {
     route: "Đà Nẵng - Huế",
     price: "Từ 150.000đ",
-    image: "https://statics.vinpearl.com/hue-vietnam_1688712155.jpg",
+    image:
+      "https://static-images.vnncdn.net/files/publish/2022/8/24/emag-cover-desk-240.jpg?width=0&s=G6YvaRqM9_6S67asebgCXQ",
   },
 ];
 
@@ -125,9 +128,15 @@ function formatPromotionDate(value) {
 }
 
 function getPromotionTitle(item) {
-  const type = Number(getPromotionValue(item, ["discountType", "DiscountType"], 1));
-  const value = Number(getPromotionValue(item, ["discountValue", "DiscountValue"], 0));
-  const maxDiscount = Number(getPromotionValue(item, ["maxDiscount", "MaxDiscount"], 0));
+  const type = Number(
+    getPromotionValue(item, ["discountType", "DiscountType"], 1),
+  );
+  const value = Number(
+    getPromotionValue(item, ["discountValue", "DiscountValue"], 0),
+  );
+  const maxDiscount = Number(
+    getPromotionValue(item, ["maxDiscount", "MaxDiscount"], 0),
+  );
 
   if (type === 1) {
     return `Giảm ${value}%${maxDiscount > 0 ? ` tối đa ${formatMoney(maxDiscount)}` : ""}`;
@@ -137,27 +146,51 @@ function getPromotionTitle(item) {
 }
 
 function getPromotionRules(item) {
-  const minOrder = Number(getPromotionValue(item, ["minOrderValue", "MinOrderValue"], 0));
-  const remainingUses = getPromotionValue(item, ["remainingUses", "RemainingUses"], null);
+  const minOrder = Number(
+    getPromotionValue(item, ["minOrderValue", "MinOrderValue"], 0),
+  );
+  const remainingUses = getPromotionValue(
+    item,
+    ["remainingUses", "RemainingUses"],
+    null,
+  );
   const endDate = getPromotionValue(item, ["endDate", "EndDate"]);
   const rules = [];
 
   if (minOrder > 0) rules.push(`Đơn tối thiểu ${formatMoney(minOrder)}`);
-  rules.push(remainingUses === null ? "Không giới hạn lượt dùng" : `Còn ${remainingUses} lượt`);
+  rules.push(
+    remainingUses === null
+      ? "Không giới hạn lượt dùng"
+      : `Còn ${remainingUses} lượt`,
+  );
   rules.push(`Hạn dùng đến ${formatPromotionDate(endDate)}`);
   return rules;
 }
 
 function getPromotionDescription(item) {
-  return getPromotionValue(item, ["description", "Description"], "") || "Áp dụng theo điều kiện của chương trình ưu đãi.";
+  return (
+    getPromotionValue(item, ["description", "Description"], "") ||
+    "Áp dụng theo điều kiện của chương trình ưu đãi."
+  );
 }
 
 function getVisibleItems(items, start, size = 3) {
   if (!items.length) return [];
-  return Array.from({ length: Math.min(size, items.length) }, (_, index) => items[(start + index) % items.length]);
+  return Array.from(
+    { length: Math.min(size, items.length) },
+    (_, index) => items[(start + index) % items.length],
+  );
 }
 
-function LocationPicker({ label, value, onChange, options, icon, accentClass, placeholder }) {
+function LocationPicker({
+  label,
+  value,
+  onChange,
+  options,
+  icon,
+  accentClass,
+  placeholder,
+}) {
   const [open, setOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const filteredOptions = useMemo(() => {
@@ -191,10 +224,12 @@ function LocationPicker({ label, value, onChange, options, icon, accentClass, pl
             setIsTyping(true);
             setOpen(true);
           }}
-          onBlur={() => window.setTimeout(() => {
-            setIsTyping(false);
-            setOpen(false);
-          }, 120)}
+          onBlur={() =>
+            window.setTimeout(() => {
+              setIsTyping(false);
+              setOpen(false);
+            }, 120)
+          }
         />
       </label>
 
@@ -270,14 +305,20 @@ export default function Home() {
   });
 
   const locationOptions = useMemo(() => {
-    return Array.from(new Set(
-      locations
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    )).sort((a, b) => a.localeCompare(b, "vi"));
+    return Array.from(
+      new Set(
+        locations.map((item) => String(item || "").trim()).filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "vi"));
   }, [locations]);
-  const visibleRoutes = useMemo(() => getVisibleItems(popularRoutes, routeIndex), [routeIndex]);
-  const visiblePromotions = useMemo(() => getVisibleItems(publicPromotions, promotionIndex), [publicPromotions, promotionIndex]);
+  const visibleRoutes = useMemo(
+    () => getVisibleItems(popularRoutes, routeIndex),
+    [routeIndex],
+  );
+  const visiblePromotions = useMemo(
+    () => getVisibleItems(publicPromotions, promotionIndex),
+    [publicPromotions, promotionIndex],
+  );
 
   useEffect(() => {
     fetch(`${API_BASE}/api/trips/locations`)
@@ -287,7 +328,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    promotionApi.publicList()
+    promotionApi
+      .publicList()
       .then((data) => {
         const items = Array.isArray(data) ? data : [];
         setPublicPromotions(items);
@@ -390,7 +432,10 @@ export default function Home() {
             </p>
           </div>
 
-          <form className="featured-search modern-home-search" onSubmit={submit}>
+          <form
+            className="featured-search modern-home-search"
+            onSubmit={submit}
+          >
             <div className="home-search-widget">
               <LocationPicker
                 label="Nơi xuất phát"
@@ -467,10 +512,22 @@ export default function Home() {
             <h2>Những hành trình được chọn nhiều</h2>
           </div>
           <div className="home-carousel-actions">
-            <button type="button" onClick={() => moveCarousel(setRouteIndex, popularRoutes.length, -1)} aria-label="Xem hành trình trước">
+            <button
+              type="button"
+              onClick={() =>
+                moveCarousel(setRouteIndex, popularRoutes.length, -1)
+              }
+              aria-label="Xem hành trình trước"
+            >
               <i className="fa-solid fa-chevron-left" />
             </button>
-            <button type="button" onClick={() => moveCarousel(setRouteIndex, popularRoutes.length, 1)} aria-label="Xem hành trình tiếp theo">
+            <button
+              type="button"
+              onClick={() =>
+                moveCarousel(setRouteIndex, popularRoutes.length, 1)
+              }
+              aria-label="Xem hành trình tiếp theo"
+            >
               <i className="fa-solid fa-chevron-right" />
             </button>
           </div>
@@ -496,10 +553,22 @@ export default function Home() {
           </div>
           {publicPromotions.length > 3 && (
             <div className="home-carousel-actions">
-              <button type="button" onClick={() => moveCarousel(setPromotionIndex, publicPromotions.length, -1)} aria-label="Xem mã trước">
+              <button
+                type="button"
+                onClick={() =>
+                  moveCarousel(setPromotionIndex, publicPromotions.length, -1)
+                }
+                aria-label="Xem mã trước"
+              >
                 <i className="fa-solid fa-chevron-left" />
               </button>
-              <button type="button" onClick={() => moveCarousel(setPromotionIndex, publicPromotions.length, 1)} aria-label="Xem mã tiếp theo">
+              <button
+                type="button"
+                onClick={() =>
+                  moveCarousel(setPromotionIndex, publicPromotions.length, 1)
+                }
+                aria-label="Xem mã tiếp theo"
+              >
                 <i className="fa-solid fa-chevron-right" />
               </button>
             </div>
@@ -510,10 +579,20 @@ export default function Home() {
             <div className="promotion-showcase-grid">
               {visiblePromotions.map((item) => {
                 const code = getPromotionValue(item, ["code", "Code"]);
-                const selected = selectedPromotion && getPromotionValue(selectedPromotion, ["code", "Code"]) === code;
+                const selected =
+                  selectedPromotion &&
+                  getPromotionValue(selectedPromotion, ["code", "Code"]) ===
+                    code;
                 return (
-                  <article className={`promotion-showcase-card ${selected ? "selected" : ""}`} key={code}>
-                    <button type="button" className="promotion-showcase-select" onClick={() => setSelectedPromotion(item)}>
+                  <article
+                    className={`promotion-showcase-card ${selected ? "selected" : ""}`}
+                    key={code}
+                  >
+                    <button
+                      type="button"
+                      className="promotion-showcase-select"
+                      onClick={() => setSelectedPromotion(item)}
+                    >
                       <div className="promotion-showcase-top">
                         <i className="fa-solid fa-ticket" />
                         <span>Mã ưu đãi</span>
@@ -529,7 +608,11 @@ export default function Home() {
                         ))}
                       </ul>
                     </button>
-                    <button type="button" className="promotion-copy-button" onClick={() => copyPromotionCode(code)}>
+                    <button
+                      type="button"
+                      className="promotion-copy-button"
+                      onClick={() => copyPromotionCode(code)}
+                    >
                       Sao chép
                     </button>
                   </article>
@@ -539,7 +622,9 @@ export default function Home() {
             {selectedPromotion && (
               <div className="promotion-detail-panel">
                 <span>Chi tiết mã</span>
-                <h3>{getPromotionValue(selectedPromotion, ["code", "Code"])}</h3>
+                <h3>
+                  {getPromotionValue(selectedPromotion, ["code", "Code"])}
+                </h3>
                 <p>{getPromotionDescription(selectedPromotion)}</p>
                 <ul>
                   {getPromotionRules(selectedPromotion).map((rule) => (
