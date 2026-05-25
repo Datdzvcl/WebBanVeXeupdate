@@ -19,6 +19,7 @@ namespace BaseCore.Repository
         public DbSet<Promotion> Promotions { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Review> Reviews { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -174,6 +175,24 @@ namespace BaseCore.Repository
 
                 entity.HasOne(e => e.User)
                       .WithMany(e => e.Reviews)
+                      .HasForeignKey(e => e.UserID)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.ToTable("Notifications");
+                entity.HasKey(e => e.NotificationID);
+
+                entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Message).HasMaxLength(500).IsRequired();
+                entity.Property(e => e.Type).HasDefaultValue((byte)1);
+                entity.Property(e => e.IsRead).HasDefaultValue(false);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("getdate()");
+
+                entity.HasIndex(e => e.UserID);
+                entity.HasOne(e => e.User)
+                      .WithMany(e => e.Notifications)
                       .HasForeignKey(e => e.UserID)
                       .OnDelete(DeleteBehavior.Restrict);
             });

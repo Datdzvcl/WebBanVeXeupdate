@@ -172,6 +172,14 @@ namespace BaseCore.APIService.Controllers
             booking.PaymentStatus = status;
 
             _context.Payments.Add(payment);
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                status == PaymentPaidStatus ? "Thanh toán thành công" : "Đã ghi nhận phương thức thanh toán",
+                status == PaymentPaidStatus
+                    ? $"Đơn #{booking.BookingID} đã thanh toán thành công và đang chờ admin xác nhận."
+                    : $"Đơn #{booking.BookingID} đang chờ thanh toán/xác nhận.",
+                status == PaymentPaidStatus ? (byte)1 : (byte)3);
             await _context.SaveChangesAsync();
 
             return Ok(ToResponse(payment, booking));
@@ -198,6 +206,12 @@ namespace BaseCore.APIService.Controllers
                 payment.Booking.PaymentMethod = payment.PaymentMethod;
                 payment.Booking.PaymentStatus = PaymentPaidStatus;
                 payment.Booking.BookingStatus = BookingConfirmedStatus;
+                NotificationsController.AddNotification(
+                    _context,
+                    payment.Booking.UserID,
+                    "Thanh toán đã được xác nhận",
+                    $"Admin đã xác nhận thanh toán cho đơn #{payment.BookingID}.",
+                    1);
             }
 
             await _context.SaveChangesAsync();

@@ -514,6 +514,13 @@ namespace BaseCore.APIService.Controllers
                 if (promotion != null)
                     promotion.UsedCount += 1;
 
+                NotificationsController.AddNotification(
+                    _context,
+                    booking.UserID,
+                    "Đặt vé thành công",
+                    $"Đơn #{booking.BookingID} tuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã được tạo thành công.",
+                    paymentStatus == PaymentPaidStatus ? (byte)1 : (byte)3);
+
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -586,6 +593,16 @@ namespace BaseCore.APIService.Controllers
                 }
             }
 
+            if (string.Equals(status, PaymentPaidStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                NotificationsController.AddNotification(
+                    _context,
+                    booking.UserID,
+                    "Thanh toán thành công",
+                    $"Đơn #{booking.BookingID} đã được ghi nhận thanh toán thành công và đang chờ admin xác nhận.",
+                    1);
+            }
+
             await _context.SaveChangesAsync();
 
             return Ok(new { booking.BookingID, booking.PaymentStatus });
@@ -605,6 +622,12 @@ namespace BaseCore.APIService.Controllers
                 return BadRequest(new { message = "Chi co the xac nhan don co BookingStatus = PendingConfirm" });
 
             booking.BookingStatus = BookingConfirmedStatus;
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                "Đơn đặt vé đã được xác nhận",
+                $"Đơn #{booking.BookingID} đã được admin xác nhận.",
+                1);
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -656,6 +679,13 @@ namespace BaseCore.APIService.Controllers
             if (booking.Trip != null && booking.TotalSeats > 0 && booking.Trip.DepartureTime > now)
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                "Hủy vé được duyệt",
+                $"Yêu cầu hủy đơn #{booking.BookingID} đã được duyệt. Số tiền hoàn dự kiến: {refundAmount:N0} đ.",
+                4);
+
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
@@ -686,6 +716,12 @@ namespace BaseCore.APIService.Controllers
                 return BadRequest(new { message = "Chi co the tu choi huy don co BookingStatus = CancelRequested" });
 
             booking.BookingStatus = BookingCancelRejectedStatus;
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                "Yêu cầu hủy vé bị từ chối",
+                $"Yêu cầu hủy đơn #{booking.BookingID} đã bị từ chối.",
+                4);
 
             await _context.SaveChangesAsync();
 
@@ -725,6 +761,13 @@ namespace BaseCore.APIService.Controllers
                 .FirstOrDefaultAsync();
             if (latestPayment != null)
                 latestPayment.PaymentStatus = PaymentCancelledStatus;
+
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                "Vé đã bị hủy",
+                $"Đơn #{booking.BookingID} đã bị hủy bởi admin.",
+                4);
 
             await _context.SaveChangesAsync();
 
@@ -770,6 +813,13 @@ namespace BaseCore.APIService.Controllers
 
             booking.BookingStatus = BookingCancelRequestedStatus;
             booking.CancelReason = NormalizeOptionalText(request?.CancelReason);
+
+            NotificationsController.AddNotification(
+                _context,
+                booking.UserID,
+                "Đã gửi yêu cầu hủy vé",
+                $"Yêu cầu hủy đơn #{booking.BookingID} đã được ghi nhận và đang chờ admin xử lý.",
+                4);
 
             await _context.SaveChangesAsync();
 

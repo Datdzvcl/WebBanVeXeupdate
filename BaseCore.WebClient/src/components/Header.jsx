@@ -3,16 +3,33 @@ import { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import { useAuth } from "../contexts/AuthContext";
 import { isAdminRole } from "../api";
+import { notificationApi } from "../services/notificationApi";
 
 export default function Header({ simple = false }) {
   const navigate = useNavigate();
   const { token, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const closeMenus = () => {
     setMenuOpen(false);
     setAccountOpen(false);
+    setNotificationOpen(false);
+  };
+
+  const loadNotifications = async () => {
+    if (!token || !user) return;
+    try {
+      const data = await notificationApi.my(8);
+      setNotifications(data?.items || data?.Items || []);
+      setUnreadCount(Number(data?.unreadCount ?? data?.UnreadCount ?? 0));
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
   };
 
   const handleLogout = () => {
@@ -31,6 +48,47 @@ export default function Header({ simple = false }) {
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
+
+  useEffect(() => {
+    if (!token || !user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 30000);
+    return () => window.clearInterval(timer);
+  }, [token, user?.userId]);
+
+  const openNotifications = async (event) => {
+    event.stopPropagation();
+    const nextOpen = !notificationOpen;
+    setNotificationOpen(nextOpen);
+    setAccountOpen(false);
+    if (nextOpen) await loadNotifications();
+  };
+
+  const markNotificationRead = async (notification) => {
+    const id = notification.notificationID || notification.NotificationID;
+    if (!id) return;
+    try {
+      await notificationApi.markRead(id);
+      await loadNotifications();
+    } catch {
+      // Keep the header usable even if notification sync fails.
+    }
+  };
+
+  const markAllNotificationsRead = async (event) => {
+    event.stopPropagation();
+    try {
+      await notificationApi.markAllRead();
+      await loadNotifications();
+    } catch {
+      // Keep the header usable even if notification sync fails.
+    }
+  };
 
   return (
     <header className="user-header">
@@ -64,49 +122,96 @@ export default function Header({ simple = false }) {
 
         <div className="user-header-actions">
           {token && user ? (
-            <div className="account-menu">
-              <button
-                className="account-trigger"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setAccountOpen((value) => !value);
-                }}
-              >
-                <i className="fa-solid fa-user" />
-                <span>{user.fullName || user.email}</span>
-                <i
-                  className={`fa-solid fa-chevron-${accountOpen ? "up" : "down"}`}
-                />
-              </button>
+            <>
+              <div className="notification-menu">
+                <button
+                  className="notification-trigger"
+                  type="button"
+                  onClick={openNotifications}
+                  aria-label="Thông báo"
+                >
+                  <i className="fa-regular fa-bell" />
+                  {unreadCount > 0 && <span>{unreadCount > 9 ? "9+" : unreadCount}</span>}
+                </button>
 
-              {accountOpen && (
-                <div className="account-dropdown">
-                  <Link to="/profile" onClick={closeMenus}>
-                    <i className="fa-solid fa-user-pen" />
-                    Thông tin cá nhân
-                  </Link>
-                  <Link to="/my-tickets" onClick={closeMenus}>
-                    <i className="fa-solid fa-ticket" />
-                    Vé của tôi
-                  </Link>
-                  <Link to="/change-password" onClick={closeMenus}>
-                    <i className="fa-solid fa-lock" />
-                    Đổi mật khẩu
-                  </Link>
-                  {isAdminRole(user.role) && (
-                    <Link to="/admin" onClick={closeMenus}>
-                      <i className="fa-solid fa-gauge-high" />
-                      Xem trang quản trị
+                {notificationOpen && (
+                  <div className="notification-dropdown">
+                    <div className="notification-dropdown-head">
+                      <strong>Thông báo</strong>
+                      <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount <= 0}>
+                        Đã đọc tất cả
+                      </button>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <p className="notification-empty">Chưa có thông báo.</p>
+                    ) : (
+                      <div className="notification-list">
+                        {notifications.map((item) => {
+                          const id = item.notificationID || item.NotificationID;
+                          const isRead = Boolean(item.isRead ?? item.IsRead);
+                          return (
+                            <button
+                              type="button"
+                              className={`notification-item ${isRead ? "" : "unread"}`}
+                              key={id}
+                              onClick={() => markNotificationRead(item)}
+                            >
+                              <span>{item.title || item.Title}</span>
+                              <small>{item.message || item.Message}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="account-menu">
+                <button
+                  className="account-trigger"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setNotificationOpen(false);
+                    setAccountOpen((value) => !value);
+                  }}
+                >
+                  <i className="fa-solid fa-user" />
+                  <span>{user.fullName || user.email}</span>
+                  <i
+                    className={`fa-solid fa-chevron-${accountOpen ? "up" : "down"}`}
+                  />
+                </button>
+
+                {accountOpen && (
+                  <div className="account-dropdown">
+                    <Link to="/profile" onClick={closeMenus}>
+                      <i className="fa-solid fa-user-pen" />
+                      Thông tin cá nhân
                     </Link>
-                  )}
-                  <button type="button" onClick={handleLogout}>
-                    <i className="fa-solid fa-right-from-bracket" />
-                    Đăng xuất
-                  </button>
-                </div>
-              )}
-            </div>
+                    <Link to="/my-tickets" onClick={closeMenus}>
+                      <i className="fa-solid fa-ticket" />
+                      Vé của tôi
+                    </Link>
+                    <Link to="/change-password" onClick={closeMenus}>
+                      <i className="fa-solid fa-lock" />
+                      Đổi mật khẩu
+                    </Link>
+                    {isAdminRole(user.role) && (
+                      <Link to="/admin" onClick={closeMenus}>
+                        <i className="fa-solid fa-gauge-high" />
+                        Xem trang quản trị
+                      </Link>
+                    )}
+                    <button type="button" onClick={handleLogout}>
+                      <i className="fa-solid fa-right-from-bracket" />
+                      Đăng xuất
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <div className="guest-actions">
               <Link to="/login" className="btn btn-outline">

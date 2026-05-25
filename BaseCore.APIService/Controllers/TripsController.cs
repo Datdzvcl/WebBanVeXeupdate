@@ -451,8 +451,40 @@ namespace BaseCore.APIService.Controllers
             if (validationResult != null)
                 return validationResult;
 
+            var currentTrip = await _context.Trips
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.TripID == id);
+            if (currentTrip == null)
+                return NotFound();
+
             trip.Status = NormalizeStatus(trip.Status);
             _context.Entry(trip).State = EntityState.Modified;
+
+            var timeChanged = currentTrip.DepartureTime != trip.DepartureTime || currentTrip.ArrivalTime != trip.ArrivalTime;
+            var cancelled = !string.Equals(currentTrip.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(trip.Status, "Cancelled", StringComparison.OrdinalIgnoreCase);
+
+            if (timeChanged || cancelled)
+            {
+                var userIds = await _context.Bookings
+                    .Where(x => x.TripID == id && x.UserID.HasValue)
+                    .Select(x => x.UserID)
+                    .Distinct()
+                    .ToListAsync();
+
+                foreach (var userId in userIds)
+                {
+                    NotificationsController.AddNotification(
+                        _context,
+                        userId,
+                        cancelled ? "Chuyến xe đã bị hủy" : "Chuyến xe thay đổi thời gian",
+                        cancelled
+                            ? $"Chuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã bị hủy. Vui lòng kiểm tra vé của bạn."
+                            : $"Chuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã thay đổi thời gian khởi hành.",
+                        2);
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             var hasActiveStops = await _context.StopPoints

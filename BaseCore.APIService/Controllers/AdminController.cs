@@ -38,6 +38,169 @@ namespace BaseCore.APIService.Controllers
             });
         }
 
+        [HttpGet("dashboard-summary")]
+        public async Task<IActionResult> DashboardSummary(DateTime? fromDate, DateTime? toDate)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate);
+            var today = DateTime.Today;
+            var monthStart = new DateTime(today.Year, today.Month, 1);
+
+            var validRevenueQuery = BuildValidRevenueBookings();
+            var rangedRevenueQuery = ApplyBookingDateRange(validRevenueQuery, from, to);
+
+            var totalRevenue = await validRevenueQuery.SumAsync(x => x.TotalPrice);
+            var revenueInRange = await rangedRevenueQuery.SumAsync(x => x.TotalPrice);
+            var todayRevenue = await ApplyBookingDateRange(validRevenueQuery, today, today.AddDays(1)).SumAsync(x => x.TotalPrice);
+            var monthRevenue = await ApplyBookingDateRange(validRevenueQuery, monthStart, monthStart.AddMonths(1)).SumAsync(x => x.TotalPrice);
+
+            var totalBookings = await _context.Bookings.CountAsync();
+            var filteredBookings = await ApplyBookingDateRange(_context.Bookings.AsNoTracking(), from, to).CountAsync();
+            var totalTicketsSold = await validRevenueQuery.SumAsync(x => (int?)x.TotalSeats) ?? 0;
+            var ticketsSoldInRange = await rangedRevenueQuery.SumAsync(x => (int?)x.TotalSeats) ?? 0;
+
+            var pendingPaymentCount = await _context.Bookings.CountAsync(x => x.PaymentStatus == "Pending" || x.PaymentStatus == null);
+            var paidCount = await _context.Bookings.CountAsync(x => x.PaymentStatus == "Paid");
+            var cancelRequestedCount = await _context.Bookings.CountAsync(x => x.BookingStatus == "CancelRequested");
+            var cancelledCount = await _context.Bookings.CountAsync(x =>
+                x.BookingStatus == "Cancelled" ||
+                x.PaymentStatus == "Cancelled" ||
+                x.PaymentStatus == "Refunded");
+
+            return Ok(new
+            {
+                totalRevenue,
+                revenueInRange,
+                todayRevenue,
+                monthRevenue,
+                totalBookings,
+                filteredBookings,
+                totalTicketsSold,
+                ticketsSoldInRange,
+                totalTrips = await _context.Trips.CountAsync(),
+                totalUsers = await _context.Users.CountAsync(),
+                totalOperators = await _context.Operators.CountAsync(),
+                totalBuses = await _context.Buses.CountAsync(),
+                pendingPaymentCount,
+                paidCount,
+                cancelRequestedCount,
+                cancelledCount,
+                fromDate = from,
+                toDate = to
+            });
+        }
+
+        [HttpGet("revenue-by-day")]
+        public async Task<IActionResult> RevenueByDay(DateTime? fromDate, DateTime? toDate)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate, 7);
+            var stats = await ApplyBookingDateRange(BuildValidRevenueBookings(), from, to)
+                .GroupBy(x => x.BookingDate!.Value.Date)
+                .Select(g => new
+                {
+                    date = g.Key,
+                    revenue = g.Sum(x => x.TotalPrice),
+                    bookingCount = g.Count(),
+                    ticketCount = g.Sum(x => x.TotalSeats)
+                })
+                .OrderBy(x => x.date)
+                .ToListAsync();
+
+            return Ok(stats);
+        }
+
+        [HttpGet("revenue-by-month")]
+        public async Task<IActionResult> RevenueByMonth(DateTime? fromDate, DateTime? toDate)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate, 365);
+            var stats = await ApplyBookingDateRange(BuildValidRevenueBookings(), from, to)
+                .GroupBy(x => new { x.BookingDate!.Value.Year, x.BookingDate.Value.Month })
+                .Select(g => new
+                {
+                    year = g.Key.Year,
+                    month = g.Key.Month,
+                    revenue = g.Sum(x => x.TotalPrice),
+                    bookingCount = g.Count(),
+                    ticketCount = g.Sum(x => x.TotalSeats)
+                })
+                .OrderBy(x => x.year)
+                .ThenBy(x => x.month)
+                .ToListAsync();
+
+            return Ok(stats);
+        }
+
+        [HttpGet("top-routes")]
+        public async Task<IActionResult> TopRoutes(DateTime? fromDate, DateTime? toDate, int take = 5)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate);
+            take = Math.Clamp(take, 1, 20);
+
+            var routes = await ApplyBookingDateRange(BuildValidRevenueBookings(), from, to)
+                .Where(x => x.Trip != null)
+                .GroupBy(x => new { x.Trip!.DepartureLocation, x.Trip.ArrivalLocation })
+                .Select(g => new
+                {
+                    departureLocation = g.Key.DepartureLocation,
+                    arrivalLocation = g.Key.ArrivalLocation,
+                    route = g.Key.DepartureLocation + " - " + g.Key.ArrivalLocation,
+                    revenue = g.Sum(x => x.TotalPrice),
+                    bookingCount = g.Count(),
+                    ticketCount = g.Sum(x => x.TotalSeats)
+                })
+                .OrderByDescending(x => x.ticketCount)
+                .ThenByDescending(x => x.revenue)
+                .Take(take)
+                .ToListAsync();
+
+            return Ok(routes);
+        }
+
+        [HttpGet("top-operators")]
+        public async Task<IActionResult> TopOperators(DateTime? fromDate, DateTime? toDate, int take = 5)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate);
+            take = Math.Clamp(take, 1, 20);
+
+            var operators = await ApplyBookingDateRange(BuildValidRevenueBookings(), from, to)
+                .Where(x => x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.Operator != null)
+                .GroupBy(x => new { x.Trip!.Bus!.OperatorID, x.Trip.Bus.Operator!.Name })
+                .Select(g => new
+                {
+                    operatorID = g.Key.OperatorID,
+                    operatorName = g.Key.Name,
+                    revenue = g.Sum(x => x.TotalPrice),
+                    bookingCount = g.Count(),
+                    ticketCount = g.Sum(x => x.TotalSeats)
+                })
+                .OrderByDescending(x => x.revenue)
+                .ThenByDescending(x => x.ticketCount)
+                .Take(take)
+                .ToListAsync();
+
+            return Ok(operators);
+        }
+
+        [HttpGet("booking-status-statistics")]
+        public async Task<IActionResult> BookingStatusStatistics(DateTime? fromDate, DateTime? toDate)
+        {
+            var (from, to) = NormalizeDateRange(fromDate, toDate);
+            var query = ApplyBookingDateRange(_context.Bookings.AsNoTracking(), from, to);
+
+            var paymentStatuses = await query
+                .GroupBy(x => x.PaymentStatus ?? "Pending")
+                .Select(g => new { status = g.Key, count = g.Count() })
+                .OrderByDescending(x => x.count)
+                .ToListAsync();
+
+            var bookingStatuses = await query
+                .GroupBy(x => x.BookingStatus ?? "PendingConfirm")
+                .Select(g => new { status = g.Key, count = g.Count() })
+                .OrderByDescending(x => x.count)
+                .ToListAsync();
+
+            return Ok(new { paymentStatuses, bookingStatuses });
+        }
+
         // [HttpGet("trips")]
         // public async Task<IActionResult> Trips()
         // {
@@ -205,6 +368,43 @@ namespace BaseCore.APIService.Controllers
             return _context.Trips
                 .Include(x => x.Bus)
                 .ThenInclude(x => x.Operator);
+        }
+
+        private IQueryable<Booking> BuildValidRevenueBookings()
+        {
+            return _context.Bookings
+                .AsNoTracking()
+                .Include(x => x.Trip)
+                    .ThenInclude(x => x.Bus)
+                        .ThenInclude(x => x.Operator)
+                .Where(x =>
+                    x.BookingDate.HasValue &&
+                    x.PaymentStatus == "Paid" &&
+                    x.BookingStatus == "Confirmed");
+        }
+
+        private static IQueryable<Booking> ApplyBookingDateRange(IQueryable<Booking> query, DateTime? fromDate, DateTime? toDate)
+        {
+            if (fromDate.HasValue)
+                query = query.Where(x => x.BookingDate >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(x => x.BookingDate < toDate.Value);
+
+            return query;
+        }
+
+        private static (DateTime? from, DateTime? to) NormalizeDateRange(DateTime? fromDate, DateTime? toDate, int? defaultDays = null)
+        {
+            if (!fromDate.HasValue && !toDate.HasValue && defaultDays.HasValue)
+            {
+                var to = DateTime.Today.AddDays(1);
+                return (to.AddDays(-defaultDays.Value), to);
+            }
+
+            var from = fromDate?.Date;
+            var toDateExclusive = toDate?.Date.AddDays(1);
+            return (from, toDateExclusive);
         }
 
         private static Expression<Func<Trip, object>> ProjectTrip()

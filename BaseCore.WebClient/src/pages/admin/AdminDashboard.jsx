@@ -1,15 +1,113 @@
-import { formatVND, labelPaymentStatus, pick } from "../../api";
+import { useEffect, useMemo, useState } from "react";
+import { formatVND, labelBookingStatus, labelPaymentStatus, pick } from "../../api";
+import { dashboardApi } from "../../services/dashboardApi";
 import StatusBadge from "./components/StatusBadge";
+
+function toDateInput(value) {
+  return value.toISOString().slice(0, 10);
+}
+
+function buildRange(period) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (period === "today") {
+    return { fromDate: toDateInput(today), toDate: toDateInput(today) };
+  }
+
+  if (period === "month") {
+    return {
+      fromDate: toDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+      toDate: toDateInput(today),
+    };
+  }
+
+  if (period === "year") {
+    return {
+      fromDate: toDateInput(new Date(now.getFullYear(), 0, 1)),
+      toDate: toDateInput(today),
+    };
+  }
+
+  const from = new Date(today);
+  from.setDate(from.getDate() - 6);
+  return { fromDate: toDateInput(from), toDate: toDateInput(today) };
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString("vi-VN") : "";
+}
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("vi-VN") : "";
 }
 
 function getPaymentStatus(item) {
-  return pick(
-    item,
-    ["paymentStatus", "PaymentStatus", "status", "Status"],
-    "Pending",
+  return pick(item, ["paymentStatus", "PaymentStatus", "status", "Status"], "Pending");
+}
+
+function getMax(items, key) {
+  return Math.max(1, ...items.map((item) => Number(pick(item, [key, key[0].toUpperCase() + key.slice(1)], 0))));
+}
+
+function MiniBarChart({ items, valueKey = "revenue", labelFor, valueFor }) {
+  if (!items.length) {
+    return <div className="dashboard-empty">Chưa có dữ liệu trong khoảng thời gian này.</div>;
+  }
+
+  const max = getMax(items, valueKey);
+
+  return (
+    <div className="dashboard-bars">
+      {items.map((item, index) => {
+        const value = Number(pick(item, [valueKey, valueKey[0].toUpperCase() + valueKey.slice(1)], 0));
+        const height = Math.max(16, Math.round((value / max) * 150));
+        return (
+          <div className="dashboard-bar-item" key={`${labelFor(item)}-${index}`}>
+            <span>{valueFor ? valueFor(item) : formatVND(value)}</span>
+            <div className="dashboard-bar-track">
+              <div className="dashboard-bar" style={{ height }} />
+            </div>
+            <small>{labelFor(item)}</small>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RankTable({ title, items, nameFor }) {
+  return (
+    <div className="admin-card dashboard-rank-card">
+      <h3>{title}</h3>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tên</th>
+              <th>Doanh thu</th>
+              <th>Booking</th>
+              <th>Vé</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => (
+              <tr key={`${nameFor(item)}-${index}`}>
+                <td><b>{nameFor(item)}</b></td>
+                <td>{formatVND(pick(item, ["revenue", "Revenue"], 0))}</td>
+                <td>{pick(item, ["bookingCount", "BookingCount"], 0)}</td>
+                <td>{pick(item, ["ticketCount", "TicketCount"], 0)}</td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan="4" className="empty-cell">Chưa có dữ liệu.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -33,7 +131,7 @@ function DashboardTripsTable({ trips }) {
             const id = pick(trip, ["tripID", "TripID", "id"]);
             return (
               <tr key={id}>
-                <td>{trip.id}</td>
+                <td>{id}</td>
                 <td>
                   <b>{trip.departureLocation}</b>
                   {" -> "}
@@ -58,71 +156,115 @@ export default function AdminDashboard({
   trips,
   upcomingTrips,
   bookings,
-  revenueStats,
   buses = [],
   operators = [],
   users = [],
 }) {
+  const [period, setPeriod] = useState("7days");
+  const [dashboard, setDashboard] = useState({
+    summary: null,
+    revenueByDay: [],
+    revenueByMonth: [],
+    topRoutes: [],
+    topOperators: [],
+    statusStats: { paymentStatuses: [], bookingStatuses: [] },
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const range = useMemo(() => buildRange(period), [period]);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const params = { ...range };
+        const [summary, revenueByDay, revenueByMonth, topRoutes, topOperators, statusStats] = await Promise.all([
+          dashboardApi.adminSummary(params),
+          dashboardApi.revenueByDay(params),
+          dashboardApi.revenueByMonth(params),
+          dashboardApi.topRoutes({ ...params, take: 5 }),
+          dashboardApi.topOperators({ ...params, take: 5 }),
+          dashboardApi.bookingStatusStatistics(params),
+        ]);
+
+        if (!alive) return;
+        setDashboard({
+          summary,
+          revenueByDay: Array.isArray(revenueByDay) ? revenueByDay : [],
+          revenueByMonth: Array.isArray(revenueByMonth) ? revenueByMonth : [],
+          topRoutes: Array.isArray(topRoutes) ? topRoutes : [],
+          topOperators: Array.isArray(topOperators) ? topOperators : [],
+          statusStats: statusStats || { paymentStatuses: [], bookingStatuses: [] },
+        });
+      } catch (err) {
+        if (alive) setError(err.message || "Không tải được thống kê dashboard.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [range.fromDate, range.toDate]);
+
+  const summary = dashboard.summary || stats || {};
   const cards = [
-    [
-      "Tổng số vé",
-      pick(
-        stats,
-        ["totalTickets", "TotalTickets"],
-        bookings.reduce(
-          (sum, item) =>
-            sum + Number(pick(item, ["totalSeats", "TotalSeats"], 0)),
-          0,
-        ),
-      ),
-      "fa-ticket",
-      "#16a34a",
-    ],
-    [
-      "Tổng số xe",
-      pick(stats, ["totalBuses", "TotalBuses"], buses.length),
-      "fa-bus",
-      "#2563eb",
-    ],
-    [
-      "Tổng nhà xe",
-      pick(stats, ["totalOperators", "TotalOperators"], operators.length),
-      "fa-building",
-      "#0ea5e9",
-    ],
-    [
-      "Tổng doanh thu",
-      formatVND(
-        pick(stats, ["totalRevenue", "TotalRevenue", "revenue", "Revenue"], 0),
-      ),
-      "fa-money-bill-wave",
-      "#ea580c",
-    ],
-    [
-      "Tổng chuyến xe",
-      pick(stats, ["totalTrips", "TotalTrips"], trips.length),
-      "fa-route",
-      "#7c3aed",
-    ],
-    [
-      "Tổng người dùng",
-      pick(stats, ["totalUsers", "TotalUsers"], users.length),
-      "fa-users",
-      "#db2777",
-    ],
+    ["Tổng doanh thu", formatVND(pick(summary, ["totalRevenue", "TotalRevenue", "revenue", "Revenue"], 0)), "fa-money-bill-wave", "#ea580c"],
+    ["Doanh thu hôm nay", formatVND(pick(summary, ["todayRevenue", "TodayRevenue"], 0)), "fa-calendar-day", "#16a34a"],
+    ["Doanh thu tháng này", formatVND(pick(summary, ["monthRevenue", "MonthRevenue"], 0)), "fa-calendar-check", "#0ea5e9"],
+    ["Booking", pick(summary, ["totalBookings", "TotalBookings"], bookings.length), "fa-file-invoice", "#2563eb"],
+    ["Vé đã bán", pick(summary, ["totalTicketsSold", "TotalTicketsSold"], 0), "fa-ticket", "#7c3aed"],
+    ["Chuyến xe", pick(summary, ["totalTrips", "TotalTrips"], trips.length), "fa-route", "#db2777"],
+    ["Người dùng", pick(summary, ["totalUsers", "TotalUsers"], users.length), "fa-users", "#0891b2"],
+    ["Nhà xe", pick(summary, ["totalOperators", "TotalOperators"], operators.length), "fa-building", "#475569"],
+    ["Xe", pick(summary, ["totalBuses", "TotalBuses"], buses.length), "fa-bus", "#65a30d"],
+    ["Chờ thanh toán", pick(summary, ["pendingPaymentCount", "PendingPaymentCount"], 0), "fa-clock", "#f59e0b"],
+    ["Đã thanh toán", pick(summary, ["paidCount", "PaidCount"], 0), "fa-circle-check", "#16a34a"],
+    ["Chờ duyệt hủy", pick(summary, ["cancelRequestedCount", "CancelRequestedCount"], 0), "fa-rotate-left", "#dc2626"],
   ];
 
-  const last6 = revenueStats.slice(-6);
+  const bookingStatuses = dashboard.statusStats?.bookingStatuses || dashboard.statusStats?.BookingStatuses || [];
+  const paymentStatuses = dashboard.statusStats?.paymentStatuses || dashboard.statusStats?.PaymentStatuses || [];
 
   return (
     <>
-      <section className="admin-stats">
+      <div className="dashboard-toolbar">
+        <div>
+          <h2>Dashboard vận hành</h2>
+          <p>
+            Doanh thu chỉ tính đơn <b>đã thanh toán</b> và <b>đã xác nhận</b>; đơn hủy/hoàn tiền không được tính.
+          </p>
+        </div>
+        <div className="dashboard-periods">
+          {[
+            ["today", "Hôm nay"],
+            ["7days", "7 ngày"],
+            ["month", "Tháng này"],
+            ["year", "Năm nay"],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              className={period === value ? "active" : ""}
+              onClick={() => setPeriod(value)}
+              key={value}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error && <div className="error-msg">{error}</div>}
+      {loading && <div className="admin-loading">Đang tải thống kê...</div>}
+
+      <section className="admin-stats dashboard-stats">
         {cards.map(([label, value, icon, color]) => (
-          <div
-            className="stat-card"
-            key={label}
-            style={{ borderLeft: `4px solid ${color}` }}
-          >
+          <div className="stat-card" key={label} style={{ borderLeft: `4px solid ${color}` }}>
             <div>
               <p>{label}</p>
               <h2>{value}</h2>
@@ -132,58 +274,60 @@ export default function AdminDashboard({
         ))}
       </section>
 
-      {last6.length > 0 && (
-        <div className="admin-card" style={{ marginBottom: 24 }}>
-          <h3>Doanh thu theo tháng (đã thanh toán)</h3>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 12,
-              height: 200,
-              padding: "16px 0",
-            }}
-          >
-            {last6.map((item) => {
-              const maxRevenue = Math.max(
-                ...last6.map((x) => Number(x.revenue || x.Revenue)),
-              );
-              const revenue = Number(item.revenue || item.Revenue);
-              const height =
-                maxRevenue > 0
-                  ? Math.max(20, (revenue / maxRevenue) * 160)
-                  : 20;
-              return (
-                <div
-                  key={`${item.year || item.Year}-${item.month || item.Month}`}
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  <small style={{ fontSize: 10, color: "#666" }}>
-                    {formatVND(revenue)}
-                  </small>
-                  <div
-                    style={{
-                      width: "100%",
-                      height,
-                      background: "#2563eb",
-                      borderRadius: "4px 4px 0 0",
-                    }}
-                  />
-                  <small style={{ fontSize: 11 }}>
-                    {item.month || item.Month}/{item.year || item.Year}
-                  </small>
-                </div>
-              );
-            })}
+      <section className="dashboard-chart-grid">
+        <div className="admin-card">
+          <h3>Doanh thu theo ngày</h3>
+          <MiniBarChart
+            items={dashboard.revenueByDay}
+            labelFor={(item) => formatDate(pick(item, ["date", "Date"]))}
+          />
+        </div>
+        <div className="admin-card">
+          <h3>Doanh thu theo tháng</h3>
+          <MiniBarChart
+            items={dashboard.revenueByMonth}
+            labelFor={(item) => `${pick(item, ["month", "Month"])}/${pick(item, ["year", "Year"])}`}
+          />
+        </div>
+      </section>
+
+      <section className="dashboard-chart-grid">
+        <RankTable
+          title="Top tuyến bán chạy"
+          items={dashboard.topRoutes}
+          nameFor={(item) => pick(item, ["route", "Route"], "Chưa rõ tuyến")}
+        />
+        <RankTable
+          title="Top nhà xe doanh thu cao"
+          items={dashboard.topOperators}
+          nameFor={(item) => pick(item, ["operatorName", "OperatorName"], "Chưa rõ nhà xe")}
+        />
+      </section>
+
+      <section className="dashboard-chart-grid">
+        <div className="admin-card">
+          <h3>Trạng thái booking</h3>
+          <div className="dashboard-status-list">
+            {bookingStatuses.map((item) => (
+              <div key={pick(item, ["status", "Status"])}>
+                <StatusBadge>{labelBookingStatus(pick(item, ["status", "Status"]))}</StatusBadge>
+                <strong>{pick(item, ["count", "Count"], 0)}</strong>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+        <div className="admin-card">
+          <h3>Trạng thái thanh toán</h3>
+          <div className="dashboard-status-list">
+            {paymentStatuses.map((item) => (
+              <div key={pick(item, ["status", "Status"])}>
+                <StatusBadge>{labelPaymentStatus(pick(item, ["status", "Status"]))}</StatusBadge>
+                <strong>{pick(item, ["count", "Count"], 0)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="admin-grid">
         <div className="admin-card">
@@ -199,7 +343,7 @@ export default function AdminDashboard({
                   <th>ID</th>
                   <th>Khách</th>
                   <th>Tuyến</th>
-                  <th>Trạng thái</th>
+                  <th>Thanh toán</th>
                   <th>Tiền</th>
                 </tr>
               </thead>
@@ -212,15 +356,9 @@ export default function AdminDashboard({
                       <td>{pick(booking, ["customerName", "CustomerName"])}</td>
                       <td>{pick(booking, ["route", "Route"]) || "..."}</td>
                       <td>
-                        <StatusBadge>
-                          {labelPaymentStatus(getPaymentStatus(booking))}
-                        </StatusBadge>
+                        <StatusBadge>{labelPaymentStatus(getPaymentStatus(booking))}</StatusBadge>
                       </td>
-                      <td>
-                        {formatVND(
-                          pick(booking, ["totalPrice", "TotalPrice"], 0),
-                        )}
-                      </td>
+                      <td>{formatVND(pick(booking, ["totalPrice", "TotalPrice"], 0))}</td>
                     </tr>
                   );
                 })}

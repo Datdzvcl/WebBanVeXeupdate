@@ -5,6 +5,7 @@ export { seatApi } from './seatApi';
 export { bookingApi } from './bookingApi';
 export { paymentApi } from './paymentApi';
 export { reviewApi } from './reviewApi';
+export { notificationApi } from './notificationApi';
 export { busApi } from './busApi';
 export { operatorApi } from './operatorApi';
 export { userApi } from './userApi';
