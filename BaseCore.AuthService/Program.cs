@@ -98,13 +98,18 @@ builder.Services.AddAuthentication(x =>
     };
 });
 
+// builder.Services.AddAuthorization(options =>
+// {
+//     options.AddPolicy("AdminOnly", policy => policy.RequireRole(RoleConstant.Admin));
+//     options.AddPolicy("CustomerOnly", policy => policy.RequireRole(RoleConstant.Customer));
+//     options.AddPolicy("OperatorOnly", policy => policy.RequireRole(RoleConstant.Operator));
+// });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole(RoleConstant.Admin));
-    options.AddPolicy("CustomerOnly", policy => policy.RequireRole(RoleConstant.Customer));
-    options.AddPolicy("OperatorOnly", policy => policy.RequireRole(RoleConstant.Operator));
+    options.AddPolicy("AdminOnly",    policy => policy.RequireRole(RoleConstant.Admin.ToString()));
+    options.AddPolicy("CustomerOnly", policy => policy.RequireRole(RoleConstant.Customer.ToString()));
+    options.AddPolicy("OperatorOnly", policy => policy.RequireRole(RoleConstant.Operator.ToString()));
 });
-
 var app = builder.Build();
 
 // Ensure database exists and seed default admin account

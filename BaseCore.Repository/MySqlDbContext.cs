@@ -20,7 +20,7 @@ namespace BaseCore.Repository
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Review> Reviews { get; set; }
         public DbSet<Notification> Notifications { get; set; }
-
+        public DbSet<BookingStatusHistory> BookingStatusHistory { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -91,7 +91,7 @@ namespace BaseCore.Repository
                 entity.Property(e => e.CustomerEmail).HasMaxLength(100);
                 entity.Property(e => e.TotalPrice).HasPrecision(18, 2);
                 entity.Property(e => e.PaymentMethod).HasMaxLength(20);
-                entity.Property(e => e.PaymentStatus).HasMaxLength(20);
+            //     entity.Property(e => e.PaymentStatus).HasMaxLength(20);
                 entity.Property(e => e.BookingStatus).HasMaxLength(30);
                 entity.Property(e => e.PickupStopID);
                 entity.Property(e => e.DropoffStopID);
@@ -141,7 +141,7 @@ namespace BaseCore.Repository
 
                 entity.Property(e => e.Amount).HasPrecision(18, 2);
                 entity.Property(e => e.PaymentMethod).HasMaxLength(30).IsRequired();
-                entity.Property(e => e.PaymentStatus).HasMaxLength(30).IsRequired();
+            //     entity.Property(e => e.PaymentStatus).HasMaxLength(30).IsRequired();
                 entity.Property(e => e.TransactionCode).HasMaxLength(100);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("getdate()");
 
@@ -151,7 +151,15 @@ namespace BaseCore.Repository
                       .HasForeignKey(e => e.BookingID)
                       .OnDelete(DeleteBehavior.Restrict);
             });
-
+            modelBuilder.Entity<BookingStatusHistory>(entity =>
+            {
+            entity.ToTable("BookingStatusHistory");
+            entity.HasKey(e => e.HistoryID);
+            entity.Property(e => e.Note).HasMaxLength(300);
+            entity.HasOne(e => e.Booking)
+                  .WithMany()
+                  .HasForeignKey(e => e.BookingID);
+            });
             modelBuilder.Entity<Review>(entity =>
             {
                 entity.ToTable("Reviews");
@@ -168,10 +176,10 @@ namespace BaseCore.Repository
                       .HasForeignKey<Review>(e => e.BookingID)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.Trip)
-                      .WithMany(e => e.Reviews)
-                      .HasForeignKey(e => e.TripID)
-                      .OnDelete(DeleteBehavior.Restrict);
+            //     entity.HasOne(e => e.Trip)
+            //           .WithMany(e => e.Reviews)
+            //           .HasForeignKey(e => e.TripID)
+            //           .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasOne(e => e.User)
                       .WithMany(e => e.Reviews)

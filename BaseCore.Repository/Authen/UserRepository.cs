@@ -99,7 +99,7 @@ namespace BaseCore.Repository.Authen
                     u.FullName.ToLower().Contains(keywordLower) ||
                     u.Email.ToLower().Contains(keywordLower) ||
                     u.Phone.ToLower().Contains(keywordLower) ||
-                    (u.Role != null && u.Role.ToLower().Contains(keywordLower)));
+                    u.Role.ToString().Contains(keywordLower));
             }
 
             var totalCount = await query.CountAsync();

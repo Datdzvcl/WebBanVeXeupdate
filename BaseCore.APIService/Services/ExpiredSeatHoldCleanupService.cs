@@ -1,3 +1,4 @@
+using BaseCore.Common;
 using BaseCore.Repository;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,8 +6,6 @@ namespace BaseCore.APIService.Services
 {
     public class ExpiredSeatHoldCleanupService : BackgroundService
     {
-        private const string HoldingStatus = "Holding";
-        private const string ExpiredStatus = "Expired";
         private static readonly TimeSpan RunInterval = TimeSpan.FromMinutes(1);
 
         private readonly IServiceScopeFactory _scopeFactory;
@@ -17,7 +16,7 @@ namespace BaseCore.APIService.Services
             ILogger<ExpiredSeatHoldCleanupService> logger)
         {
             _scopeFactory = scopeFactory;
-            _logger = logger;
+            _logger       = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,12 +45,12 @@ namespace BaseCore.APIService.Services
         private async Task CleanupAsync(CancellationToken ct)
         {
             using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<MySqlDbContext>();
-            var now = DateTime.Now;
+            var context     = scope.ServiceProvider.GetRequiredService<MySqlDbContext>();
+            var now         = DateTime.Now;
 
             var expiredHolds = await context.SeatHolds
                 .Where(x =>
-                    x.Status == HoldingStatus &&
+                    x.Status == SeatHoldStatusConstant.Holding &&
                     x.HoldExpiresAt <= now)
                 .ToListAsync(ct);
 
@@ -59,9 +58,7 @@ namespace BaseCore.APIService.Services
                 return;
 
             foreach (var hold in expiredHolds)
-            {
-                hold.Status = ExpiredStatus;
-            }
+                hold.Status = SeatHoldStatusConstant.Released;
 
             await context.SaveChangesAsync(ct);
             _logger.LogInformation("Expired {Count} seat holds.", expiredHolds.Count);

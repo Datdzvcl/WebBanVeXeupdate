@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BaseCore.Repository;
+using BaseCore.Common;
 
 namespace BaseCore.APIService.Controllers
 {
@@ -21,7 +22,7 @@ namespace BaseCore.APIService.Controllers
         public async Task<IActionResult> GetStats()
         {
             var totalRevenue = await _context.Bookings
-                .Where(x => x.PaymentStatus == "Paid")
+                .Where(x => x.BookingStatus == BookingStatusConstant.Confirmed)
                 .SumAsync(x => (decimal?)x.TotalPrice) ?? 0;
 
             return Ok(new

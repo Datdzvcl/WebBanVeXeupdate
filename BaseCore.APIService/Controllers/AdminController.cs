@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using BaseCore.Repository;
 using BaseCore.Entities;
 using System.Linq.Expressions;
+using BaseCore.Common;
 
 namespace BaseCore.APIService.Controllers
 {
@@ -26,7 +27,7 @@ namespace BaseCore.APIService.Controllers
             var totalBookings = await _context.Bookings.CountAsync();
             var totalUsers = await _context.Users.CountAsync();
             var revenue = await _context.Bookings
-                .Where(x => x.PaymentStatus == "Paid")
+                .Where(x => x.BookingStatus == BookingStatusConstant.Confirmed)
                 .SumAsync(x => x.TotalPrice);
 
             return Ok(new
@@ -58,13 +59,13 @@ namespace BaseCore.APIService.Controllers
             var totalTicketsSold = await validRevenueQuery.SumAsync(x => (int?)x.TotalSeats) ?? 0;
             var ticketsSoldInRange = await rangedRevenueQuery.SumAsync(x => (int?)x.TotalSeats) ?? 0;
 
-            var pendingPaymentCount = await _context.Bookings.CountAsync(x => x.PaymentStatus == "Pending" || x.PaymentStatus == null);
-            var paidCount = await _context.Bookings.CountAsync(x => x.PaymentStatus == "Paid");
-            var cancelRequestedCount = await _context.Bookings.CountAsync(x => x.BookingStatus == "CancelRequested");
+            var pendingPaymentCount = await _context.Bookings.CountAsync(x => x.BookingStatus == BookingStatusConstant.Pending || x.BookingStatus == null);
+            var paidCount = await _context.Bookings.CountAsync(x => x.BookingStatus == BookingStatusConstant.Confirmed);
+            var cancelRequestedCount = await _context.Bookings.CountAsync(x => x.BookingStatus == BookingStatusConstant.CancelRequested);
             var cancelledCount = await _context.Bookings.CountAsync(x =>
-                x.BookingStatus == "Cancelled" ||
-                x.PaymentStatus == "Cancelled" ||
-                x.PaymentStatus == "Refunded");
+                x.BookingStatus == BookingStatusConstant.Cancelled ||
+                x.BookingStatus == BookingStatusConstant.Cancelled ||
+                x.BookingStatus == BookingStatusConstant.Refunded);
 
             return Ok(new
             {
@@ -187,13 +188,13 @@ namespace BaseCore.APIService.Controllers
             var query = ApplyBookingDateRange(_context.Bookings.AsNoTracking(), from, to);
 
             var paymentStatuses = await query
-                .GroupBy(x => x.PaymentStatus ?? "Pending")
+                .GroupBy(x => x.BookingStatus)
                 .Select(g => new { status = g.Key, count = g.Count() })
                 .OrderByDescending(x => x.count)
                 .ToListAsync();
 
             var bookingStatuses = await query
-                .GroupBy(x => x.BookingStatus ?? "PendingConfirm")
+                .GroupBy(x => x.BookingStatus )
                 .Select(g => new { status = g.Key, count = g.Count() })
                 .OrderByDescending(x => x.count)
                 .ToListAsync();
@@ -278,7 +279,7 @@ namespace BaseCore.APIService.Controllers
                 x.TotalSeats,
                 x.TotalPrice,
                 PaymentMethod = x.PaymentMethod ?? "",
-                PaymentStatus = x.PaymentStatus ?? "",
+                x.BookingStatus,
                 x.BookingDate,
                 Route = x.Trip != null
                     ? (x.Trip.DepartureLocation ?? "") + " -> " + (x.Trip.ArrivalLocation ?? "")
@@ -330,8 +331,8 @@ namespace BaseCore.APIService.Controllers
                     Route = x.Booking != null && x.Booking.Trip != null
                         ? $"{x.Booking.Trip.DepartureLocation} -> {x.Booking.Trip.ArrivalLocation}"
                         : null,
-                    PaymentStatus = x.Booking != null ? x.Booking.PaymentStatus : null,
-                    BookingDate = x.Booking != null ? x.Booking.BookingDate : null
+                    BookingStatus = x.Booking != null ? x.Booking.BookingStatus : (byte?)null,
+                    BookingDate   = x.Booking != null ? x.Booking.BookingDate   : null
                 })
                 .ToListAsync();
 
@@ -354,7 +355,7 @@ namespace BaseCore.APIService.Controllers
                     x.TotalSeats,
                     x.TotalPrice,
                     x.PaymentMethod,
-                    x.PaymentStatus,
+                    x.BookingStatus,
                     x.BookingDate,
                     Route = x.Trip != null ? $"{x.Trip.DepartureLocation} -> {x.Trip.ArrivalLocation}" : null
                 })
@@ -379,8 +380,7 @@ namespace BaseCore.APIService.Controllers
                         .ThenInclude(x => x.Operator)
                 .Where(x =>
                     x.BookingDate.HasValue &&
-                    x.PaymentStatus == "Paid" &&
-                    x.BookingStatus == "Confirmed");
+                    x.BookingStatus == BookingStatusConstant.Confirmed);
         }
 
         private static IQueryable<Booking> ApplyBookingDateRange(IQueryable<Booking> query, DateTime? fromDate, DateTime? toDate)
@@ -444,7 +444,7 @@ namespace BaseCore.APIService.Controllers
         public async Task<IActionResult> RevenueStats()
         {
             var stats = await _context.Bookings
-                .Where(x => x.PaymentStatus == "Paid" && x.BookingDate.HasValue)
+                .Where(x => x.BookingStatus == BookingStatusConstant.Confirmed && x.BookingDate.HasValue)
                 .GroupBy(x => new { x.BookingDate.Value.Year, x.BookingDate.Value.Month })
                 .Select(g => new {
                     Year = g.Key.Year,
@@ -477,7 +477,7 @@ namespace BaseCore.APIService.Controllers
                 booking.TotalSeats,
                 booking.TotalPrice,
                 booking.PaymentMethod,
-                booking.PaymentStatus,
+                booking.BookingStatus,
                 booking.BookingDate,
                 Trip = booking.Trip != null ? new {
                     booking.Trip.DepartureLocation,

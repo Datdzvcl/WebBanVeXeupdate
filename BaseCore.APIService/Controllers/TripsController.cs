@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using BaseCore.Entities;
 using BaseCore.Repository;
+using BaseCore.Common;
 
 namespace BaseCore.APIService.Controllers
 {
@@ -50,14 +51,32 @@ namespace BaseCore.APIService.Controllers
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     AverageRating = x.Bus == null
                         ? 0
-                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : (_context.Reviews.Any(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                             ? Math.Round(_context.Reviews
-                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Where(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                                 .Average(r => r.Rating), 1)
                             : 0),
+//                             namespace BaseCore.Entities
+// {
+//     public class Review
+//     {
+//         public int ReviewID { get; set; }
+//         public int BookingID { get; set; }
+//         public int UserID { get; set; }
+//         // public int TripID { get; set; }
+//         public byte Rating { get; set; }
+//         public string? Comment { get; set; }
+//         public DateTime? CreatedAt { get; set; }
+
+//         public Booking? Booking { get; set; }
+//         public User? User { get; set; }
+//         // public Trip? Trip { get; set; }
+//     }
+// }
+
                     ReviewCount = x.Bus == null
                         ? 0
-                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : _context.Reviews.Count(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -112,12 +131,26 @@ namespace BaseCore.APIService.Controllers
             if (operatorId.HasValue)
                 query = query.Where(x => x.Bus != null && x.Bus.OperatorID == operatorId.Value);
 
+            // if (!string.IsNullOrWhiteSpace(status))
+            // {
+            //     var normalizedStatus = NormalizeStatus(status);
+            //     query = query.Where(x => x.Status == normalizedStatus);
+            // }
             if (!string.IsNullOrWhiteSpace(status))
-            {
-                var normalizedStatus = NormalizeStatus(status);
-                query = query.Where(x => x.Status == normalizedStatus);
+{
+                var statusByte = status.Trim().ToLowerInvariant() switch
+                {
+                    "active"    => TripStatusConstant.Scheduled,
+                    "scheduled" => TripStatusConstant.Scheduled,
+                    "on-going"  => TripStatusConstant.Ongoing,
+                    "ongoing"   => TripStatusConstant.Ongoing,
+                    "completed" => TripStatusConstant.Completed,
+                    "cancelled" => TripStatusConstant.Cancelled,
+                    "canceled"  => TripStatusConstant.Cancelled,
+                    _           => TripStatusConstant.Scheduled
+                };
+                query = query.Where(x => x.Status == statusByte);
             }
-
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(x => x.DepartureTime)
@@ -140,14 +173,14 @@ namespace BaseCore.APIService.Controllers
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     AverageRating = x.Bus == null
                         ? 0
-                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : (_context.Reviews.Any(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                             ? Math.Round(_context.Reviews
-                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Where(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                                 .Average(r => r.Rating), 1)
                             : 0),
                     ReviewCount = x.Bus == null
                         ? 0
-                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : _context.Reviews.Count(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -253,8 +286,9 @@ namespace BaseCore.APIService.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetTripBookings(
             int id,
-            [FromQuery] string? bookingStatus,
-            [FromQuery] string? paymentStatus)
+            // [FromQuery] string? bookingStatus,
+            // [FromQuery] string? paymentStatus
+            [FromQuery] byte? bookingStatus)
         {
             var tripExists = await _context.Trips.AsNoTracking().AnyAsync(x => x.TripID == id);
             if (!tripExists)
@@ -264,30 +298,40 @@ namespace BaseCore.APIService.Controllers
                 .AsNoTracking()
                 .Where(x => x.TripID == id);
 
-            if (!string.IsNullOrWhiteSpace(bookingStatus))
-            {
-                var keyword = bookingStatus.Trim();
-                query = query.Where(x => x.BookingStatus == keyword);
-            }
+            // if (!string.IsNullOrWhiteSpace(bookingStatus))
+            // {
+            //     var keyword = bookingStatus.Trim();
+            //     query = query.Where(x => x.BookingStatus == keyword);
+            // }
 
-            if (!string.IsNullOrWhiteSpace(paymentStatus))
+            // if (!string.IsNullOrWhiteSpace(paymentStatus))
+            // {
+            //     var keyword = paymentStatus.Trim();
+            //     query = query.Where(x => x.PaymentStatus == keyword);
+            // }
+            if (bookingStatus.HasValue)
             {
-                var keyword = paymentStatus.Trim();
-                query = query.Where(x => x.PaymentStatus == keyword);
+                query = query.Where(x => x.BookingStatus == bookingStatus.Value);
             }
-
             var bookings = await query
                 .OrderByDescending(x => x.BookingDate)
                 .Select(x => new
                 {
-                    bookingID = x.BookingID,
-                    customerName = x.CustomerName,
+                    // bookingID = x.BookingID,
+                    // customerName = x.CustomerName,
+                    // customerPhone = x.CustomerPhone,
+                    // totalSeats = x.TotalSeats,
+                    // totalPrice = x.TotalPrice,
+                    // paymentStatus = x.PaymentStatus,
+                    // bookingStatus = x.BookingStatus ?? "PendingConfirm",
+                    // bookingDate = x.BookingDate
+                    bookingID     = x.BookingID,
+                    customerName  = x.CustomerName,
                     customerPhone = x.CustomerPhone,
-                    totalSeats = x.TotalSeats,
-                    totalPrice = x.TotalPrice,
-                    paymentStatus = x.PaymentStatus,
-                    bookingStatus = x.BookingStatus ?? "PendingConfirm",
-                    bookingDate = x.BookingDate
+                    totalSeats    = x.TotalSeats,
+                    totalPrice    = x.TotalPrice,
+                    bookingStatus = x.BookingStatus,
+                    bookingDate   = x.BookingDate
                 })
                 .ToListAsync();
 
@@ -324,8 +368,8 @@ namespace BaseCore.APIService.Controllers
                 .Where(x =>
                     x.AvailableSeats > 0 &&
                     x.DepartureTime >= DateTime.Now &&
-                    x.Status != "Cancelled" &&
-                    x.Status != "Completed");
+                    x.Status != BookingStatusConstant.Cancelled &&
+                    x.Status != BookingStatusConstant.Completed);
 
             if (!string.IsNullOrWhiteSpace(from))
             {
@@ -397,14 +441,14 @@ namespace BaseCore.APIService.Controllers
                     status = x.Status,
                     averageRating = x.Bus == null
                         ? 0
-                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : (_context.Reviews.Any(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                             ? Math.Round(_context.Reviews
-                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Where(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                                 .Average(r => r.Rating), 1)
                             : 0),
                     reviewCount = x.Bus == null
                         ? 0
-                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : _context.Reviews.Count(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .ToListAsync();
 
@@ -430,7 +474,7 @@ namespace BaseCore.APIService.Controllers
             if (trip.AvailableSeats <= 0)
                 trip.AvailableSeats = bus.Capacity;
 
-            trip.Status = NormalizeStatus(trip.Status);
+            trip.Status = TripStatusConstant.Scheduled;
             _context.Trips.Add(trip);
             await _context.SaveChangesAsync();
 
@@ -457,12 +501,15 @@ namespace BaseCore.APIService.Controllers
             if (currentTrip == null)
                 return NotFound();
 
-            trip.Status = NormalizeStatus(trip.Status);
+            // trip.Status = NormalizeStatus(trip.Status);
             _context.Entry(trip).State = EntityState.Modified;
 
-            var timeChanged = currentTrip.DepartureTime != trip.DepartureTime || currentTrip.ArrivalTime != trip.ArrivalTime;
-            var cancelled = !string.Equals(currentTrip.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(trip.Status, "Cancelled", StringComparison.OrdinalIgnoreCase);
+            var timeChanged = currentTrip.DepartureTime != trip.DepartureTime 
+               || currentTrip.ArrivalTime != trip.ArrivalTime;
+
+            // Thay string.Equals bằng so sánh byte
+            var cancelled = currentTrip.Status != TripStatusConstant.Cancelled
+             && trip.Status == TripStatusConstant.Cancelled;
 
             if (timeChanged || cancelled)
             {
@@ -526,21 +573,21 @@ namespace BaseCore.APIService.Controllers
             return Ok(all);
         }
 
-        private static string NormalizeStatus(string? status)
-        {
-            var value = (status ?? string.Empty).Trim();
-            return value.ToLowerInvariant() switch
-            {
-                "active"    => "Scheduled",
-                "scheduled" => "Scheduled",
-                "on-going"  => "On-going",
-                "ongoing"   => "On-going",
-                "completed" => "Completed",
-                "cancelled" => "Cancelled",
-                "canceled"  => "Cancelled",
-                _           => "Scheduled"
-            };
-        }
+        // private static string NormalizeStatus(string? status)
+        // {
+        //     var value = (status ?? string.Empty).Trim();
+        //     return value.ToLowerInvariant() switch
+        //     {
+        //         "active"    => "Scheduled",
+        //         "scheduled" => "Scheduled",
+        //         "on-going"  => "On-going",
+        //         "ongoing"   => "On-going",
+        //         "completed" => "Completed",
+        //         "cancelled" => "Cancelled",
+        //         "canceled"  => "Cancelled",
+        //         _           => "Scheduled"
+        //     };
+        // }
 
         private async Task<IActionResult?> ValidateTripRequest(Trip trip)
         {
@@ -589,14 +636,14 @@ namespace BaseCore.APIService.Controllers
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     AverageRating = x.Bus == null
                         ? 0
-                        : (_context.Reviews.Any(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : (_context.Reviews.Any(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                             ? Math.Round(_context.Reviews
-                                .Where(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                                .Where(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                                 .Average(r => r.Rating), 1)
                             : 0),
                     ReviewCount = x.Bus == null
                         ? 0
-                        : _context.Reviews.Count(r => r.Trip != null && r.Trip.Bus != null && r.Trip.Bus.OperatorID == x.Bus.OperatorID)
+                        : _context.Reviews.Count(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
                 })
                 .FirstOrDefaultAsync();
         }
@@ -645,18 +692,18 @@ namespace BaseCore.APIService.Controllers
             return (sortBy ?? string.Empty).Trim().ToLowerInvariant() switch
             {
                 "price_asc" => query
-                    .OrderByDescending(x => x.Status == "Scheduled")
+                    .OrderByDescending(x => x.Status == TripStatusConstant.Scheduled)
                     .ThenBy(x => x.Price)
                     .ThenBy(x => x.DepartureTime),
                 "price_desc" => query
-                    .OrderByDescending(x => x.Status == "Scheduled")
+                    .OrderByDescending(x => x.Status == TripStatusConstant.Scheduled)
                     .ThenByDescending(x => x.Price)
                     .ThenBy(x => x.DepartureTime),
                 "departure_desc" => query
-                    .OrderByDescending(x => x.Status == "Scheduled")
+                    .OrderByDescending(x => x.Status == TripStatusConstant.Scheduled)
                     .ThenByDescending(x => x.DepartureTime),
                 _ => query
-                    .OrderByDescending(x => x.Status == "Scheduled")
+                    .OrderByDescending(x => x.Status == TripStatusConstant.Scheduled)
                     .ThenBy(x => x.DepartureTime)
             };
         }

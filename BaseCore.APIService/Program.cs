@@ -6,7 +6,7 @@ using BaseCore.Repository;
 using BaseCore.Repository.EFCore;
 using BaseCore.APIService.Services;
 using System.Text;
-
+using BaseCore.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
@@ -78,7 +78,7 @@ builder.Services.AddScoped<IOperatorRepositoryEF, OperatorRepositoryEF>();
 builder.Services.AddScoped<IBookingRepositoryEF, BookingRepositoryEF>();
 builder.Services.AddScoped<ITicketSeatRepositoryEF, TicketSeatRepositoryEF>();
 builder.Services.AddScoped<IBusRepositoryEF, BusRepositoryEF>();
-
+builder.Services.AddScoped<BaseCore.Services.BookingService>();
 // Background job: tự động xóa booking Pending quá 10 phút
 builder.Services.AddHostedService<ExpiredBookingCleanupService>();
 builder.Services.AddHostedService<ExpiredSeatHoldCleanupService>();
