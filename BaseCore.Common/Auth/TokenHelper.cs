@@ -160,10 +160,38 @@ namespace BaseCore.Common
         //     return tokenHandler.WriteToken(token);
         // }
         // SAU
+        // public static string GenerateToken(string secretKey, int minuteExpireTime, string userId, string userName, byte role)
+        // {
+        //     var tokenHandler = new JwtSecurityTokenHandler();
+        //     var key = Encoding.ASCII.GetBytes(secretKey);
+
+        //     var tokenDescriptor = new SecurityTokenDescriptor
+        //     {
+        //         Subject = new ClaimsIdentity(new Claim[]
+        //         {
+        //             new Claim(ClaimTypes.Name, userName),
+        //             new Claim(ClaimTypes.NameIdentifier, userId),
+        //             new Claim(ClaimTypes.Role, role.ToString())  // byte → "0", "1", "2", "3"
+        //         }),
+        //         Expires = DateTime.UtcNow.AddMinutes(minuteExpireTime),
+        //         SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        //     };
+
+        //     var token = tokenHandler.CreateToken(tokenDescriptor);
+        //     return tokenHandler.WriteToken(token);
+        // }
         public static string GenerateToken(string secretKey, int minuteExpireTime, string userId, string userName, byte role)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(secretKey);
+
+            // Đổi byte role thành string tên
+            var roleName = role switch
+            {
+                RoleConstant.Admin    => "Admin",
+                RoleConstant.Operator => "Operator",
+                _                     => "Customer"
+            };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -171,7 +199,7 @@ namespace BaseCore.Common
                 {
                     new Claim(ClaimTypes.Name, userName),
                     new Claim(ClaimTypes.NameIdentifier, userId),
-                    new Claim(ClaimTypes.Role, role.ToString())  // byte → "0", "1", "2", "3"
+                    new Claim(ClaimTypes.Role, roleName)  // "Admin", "Operator", "Customer"
                 }),
                 Expires = DateTime.UtcNow.AddMinutes(minuteExpireTime),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
