@@ -6,6 +6,20 @@ export const reviewApi = {
     return response.data;
   },
 
+  async suggestTrips(query) {
+    const response = await apiClient.get('/api/reviews/suggest-trips', {
+      params: { q: query },
+    });
+    return response.data;
+  },
+
+  async suggestOperators(query) {
+    const response = await apiClient.get('/api/reviews/suggest-operators', {
+      params: { q: query },
+    });
+    return response.data;
+  },
+
   async byTrip(tripId) {
     const response = await apiClient.get(`/api/reviews/trip/${tripId}`);
     return response.data;

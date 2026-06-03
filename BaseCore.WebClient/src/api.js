@@ -372,66 +372,119 @@ export const normalizeUser = (data) => {
 
 export const isAdminRole = (role) =>
   role === 2 || role === '2' || String(role || '').toLowerCase() === 'admin';
+export const isOperatorRole = (role) =>
+  role === 1 || role === '1' || String(role || '').toLowerCase() === 'operator';
 
 export const formatVND = (value) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value || 0));
 
-export const labelPaymentStatus = (status) => {
-  const value = String(status || '').toLowerCase();
-  if (value === 'paid') return 'Da thanh toan';
-  if (value === 'pending') return 'Chua thanh toan';
-  if (value === 'cancelled' || value === 'canceled') return 'Da huy';
-  if (value === 'refunded') return 'Da hoan tien';
-  return status || 'Chua ro';
-};
+// export const labelPaymentStatus = (status) => {
+//   const value = String(status || '').toLowerCase();
+//   if (value === 1) return 'Da thanh toan';
+//   if (value === 0) return 'Chua thanh toan';
+//   if (value === 2 || value === 'canceled') return 'Da huy';
+//   if (value === 4) return 'Da hoan tien';
+//   return status || 'Chua ro';
+// };
+// export const labelPaymentStatus = (status) => {
+//   const value = Number(status);
 
+//   if (value === 1) return 'Đã thanh toán';
+//   if (value === 0) return 'Chưa thanh toán';
+//   if (value === 2) return 'Đã hủy';
+//   if (value === 4) return 'Đã hoàn tiền';
+
+//   return 'Chưa rõ';
+// };
+// api.js - SỬA LẠI
+// export const labelPaymentStatus = (status) => {
+//   // Xử lý dạng số (BookingStatus enum)
+//   const num = Number(status);
+//   if (!isNaN(num) && String(status).trim() !== '') {
+//     if (num === 1) return 'Đã thanh toán';
+//     if (num === 0) return 'Chưa thanh toán';
+//     if (num === 2) return 'Đã hủy';
+//     if (num === 4) return 'Đã hoàn tiền';
+//   }
+
+//   // Xử lý dạng string (paymentStatus từ API)
+//   const value = String(status || '').toLowerCase();
+//   if (value === 'paid')                          return 'Đã thanh toán';
+//   if (value === 'pending')                       return 'Chưa thanh toán';
+//   if (value === 'cancelled' || value === 'canceled') return 'Đã hủy';
+//   if (value === 'refunded')                      return 'Đã hoàn tiền';
+
+//   return 'Chưa rõ';
+// };
+export const labelPaymentStatus = (status) => {
+  // Ưu tiên xử lý dạng số (BookingStatus enum từ BE)
+  const num = Number(status);
+  if (!isNaN(num) && status !== '' && status !== null && status !== undefined) {
+    if (num === 0) return 'Chưa thanh toán';
+    if (num === 1) return 'Đã thanh toán';
+    if (num === 2) return 'Đã hủy';
+    if (num === 3) return 'Hoàn thành';
+    if (num === 4) return 'Đã hoàn tiền';
+    if (num === 5) return 'Chờ duyệt hủy';
+    if (num === 6) return 'Từ chối hủy';
+  }
+
+  // Fallback: xử lý dạng string (paymentStatus cũ nếu có)
+  const str = String(status || '').toLowerCase();
+  if (str === 'paid')                            return 'Đã thanh toán';
+  if (str === 'pending')                         return 'Chưa thanh toán';
+  if (str === 'cancelled' || str === 'canceled') return 'Đã hủy';
+  if (str === 'refunded')                        return 'Đã hoàn tiền';
+
+  return 'Chưa rõ';
+};
 export const labelPaymentMethod = (method) => {
   const value = String(method || '').toLowerCase();
-  if (value === 'cash' || value === 'tienmat' || value.includes('tien mat'))
-    return 'Tien mat';
-  if (value === 'banktransfer' || value === 'chuyenkhoan' || value.includes('chuyen khoan'))
-    return 'Chuyen khoan ngan hang';
-  if (value === 'ewallet' || value === 'vnpay' || value.includes('vi dien tu'))
-    return 'Vi dien tu/VNPay gia lap';
-  return method || 'Chua ro';
+  if (value === 'cash' || value === 'tienmat' || value.includes('tiền mặt'))
+    return 'Tiền mặt';
+  if (value === 'banktransfer' || value === 'chuyenkhoan' || value.includes('chuyển khoản'))
+    return 'Chuyển khoản ngân hàng';
+  if (value === 'ewallet' || value === 'vnpay' || value.includes('ví điện tử'))
+    return 'Ví điện tử';
+  return method || 'Chưa rõ';
 };
 
 // BookingStatusConstant: Pending=0, Confirmed=1, Cancelled=2, Completed=3, Refunded=4, CancelRequested=5, CancelRejected=6
 export const labelBookingStatus = (status) => {
-  if (status === 0 || status === '0') return 'Cho thanh toan';
-  if (status === 1 || status === '1') return 'Da xac nhan';
-  if (status === 2 || status === '2') return 'Da huy';
-  if (status === 3 || status === '3') return 'Hoan thanh';
-  if (status === 4 || status === '4') return 'Da hoan tien';
-  if (status === 5 || status === '5') return 'Yeu cau huy';
-  if (status === 6 || status === '6') return 'Tu choi huy';
+  if (status === 0 || status === '0') return 'chờ thanh toán';
+  if (status === 1 || status === '1') return 'đã xác nhận';
+  if (status === 2 || status === '2') return 'Đã hủy';
+  if (status === 3 || status === '3') return 'Hoàn thành';
+  if (status === 4 || status === '4') return 'Đã hoàn tiền';
+  if (status === 5 || status === '5') return 'Yêu cầu hủy';
+  if (status === 6 || status === '6') return 'Từ chối hủy';
   return status ?? 'Chua ro';
 };
 
 // TripStatusConstant: Scheduled=0, Ongoing=1, Completed=2, Cancelled=3
 export const labelTripStatus = (status) => {
-  if (status === 0 || status === '0') return 'Da len lich';
-  if (status === 1 || status === '1') return 'Dang chay';
-  if (status === 2 || status === '2') return 'Hoan thanh';
-  if (status === 3 || status === '3') return 'Da huy';
-  return status ?? 'Chua ro';
+  if (status === 0 || status === '0') return 'Đã lên lịch';
+  if (status === 1 || status === '1') return 'Đang chạy';
+  if (status === 2 || status === '2') return 'Hoàn thành';
+  if (status === 3 || status === '3') return 'Đã hủy';
+  return status ?? 'Chưa rõ';
 };
 
 // SeatHoldStatusConstant: Holding=0, Confirmed=1, Released=2
 export const labelSeatStatus = (status) => {
   const value = String(status || '').toLowerCase();
-  if (value === 'available') return 'Con trong';
-  if (value === 'booked') return 'Da dat';
-  if (value === 'holdingbyme') return 'Ban dang giu';
-  if (value === 'holdingbyother') return 'Nguoi khac dang giu';
-  return status || 'Chua ro';
+  if (value === 'available') return 'Còn trống';
+  if (value === 'booked') return 'Đã đặt';
+  if (value === 'holdingbyme') return 'Bạn đang giữ';
+  if (value === 'holdingbyother') return 'Người khác đang giữ';
+  return status || 'Chưa rõ';
 };
 
 // RoleConstant: Customer=0, Operator=1, Admin=2
 export const labelRole = (role) => {
-  if (role === 0 || role === '0') return 'Khach hang';
-  if (role === 1 || role === '1') return 'Nha xe';
-  if (role === 2 || role === '2') return 'Quan tri vien';
+  if (role === 0 || role === '0') return 'Khách hàng';
+  if (role === 1 || role === '1') return 'Nhà xe';
+  if (role === 2 || role === '2') return 'Quản trị viên';
   return role ?? 'Chua ro';
 };
 

@@ -95,9 +95,9 @@ namespace BaseCore.APIService.Controllers
         //     });
         // }
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")] // ← thêm Operator
         public async Task<IActionResult> GetAll(
-            byte? bookingStatus,   // ← đổi string paymentStatus → byte? bookingStatus
+            byte? bookingStatus,
             int? bookingId,
             DateTime? fromDate,
             DateTime? toDate,
@@ -106,46 +106,52 @@ namespace BaseCore.APIService.Controllers
         {
             var query = _context.Bookings
                 .AsNoTracking()
-                .Include(x => x.Trip)
+                .Include(x => x.Trip).ThenInclude(x => x.Bus)
                 .AsQueryable();
+
+            // Filter theo operator nếu là nhà xe
+            if (User.IsInRole("Operator"))
+            {
+                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (int.TryParse(userIdClaim, out var userId))
+                {
+                    var user = await _context.Users.AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.UserID == userId);
+                    if (user?.OperatorID != null)
+                        query = query.Where(x => x.Trip.Bus.OperatorID == user.OperatorID);
+                }
+            }
 
             if (bookingStatus.HasValue)
                 query = query.Where(x => x.BookingStatus == bookingStatus.Value);
-
             if (bookingId.HasValue)
                 query = query.Where(x => x.BookingID == bookingId.Value);
-
             if (fromDate.HasValue)
                 query = query.Where(x => x.BookingDate >= fromDate.Value.Date);
-
             if (toDate.HasValue)
                 query = query.Where(x => x.BookingDate < toDate.Value.Date.AddDays(1));
 
             var totalCount = await query.CountAsync();
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-
             var items = await query
                 .OrderByDescending(x => x.BookingDate)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new
                 {
-                    x.BookingID,
-                    x.TotalPrice,        
-                    x.PaymentMethod,
-                    x.BookingStatus,
-                    x.BookingDate,
-                    customerName  = x.CustomerName,
+                    x.BookingID, x.TotalPrice, x.PaymentMethod,
+                    x.BookingStatus, x.BookingDate,
+                    customerName = x.CustomerName,
                     customerPhone = x.CustomerPhone,
-                    route         = x.Trip == null ? null : $"{x.Trip.DepartureLocation} - {x.Trip.ArrivalLocation}",
+                    route = x.Trip == null ? null : $"{x.Trip.DepartureLocation} - {x.Trip.ArrivalLocation}",
                     departureTime = x.Trip == null ? (DateTime?)null : x.Trip.DepartureTime
                 })
                 .ToListAsync();
 
-            return Ok(new { items, totalCount, page, pageSize, totalPages });
+            return Ok(new { items, totalCount, page, pageSize,
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize) });
         }
-        [HttpGet("booking/{bookingId:int}")]
-        [Authorize]
+        // [HttpGet("booking/{bookingId:int}")]
+        // [Authorize]
         // public async Task<IActionResult> GetByBooking(int bookingId)
         // {
         //     var booking = await _context.Bookings

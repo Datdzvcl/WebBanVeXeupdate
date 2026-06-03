@@ -83,6 +83,8 @@ namespace BaseCore.Repository
 
             modelBuilder.Entity<Booking>(entity =>
             {
+                entity.ToTable(tb => tb.HasTrigger("TRG_CancelTicketSeats"));
+                entity.HasKey(e => e.BookingID);
                 entity.ToTable("Bookings");
                 entity.HasKey(e => e.BookingID);
 
@@ -259,9 +261,13 @@ namespace BaseCore.Repository
                 entity.Property(e => e.PasswordHash).HasMaxLength(255).IsRequired();
                 entity.Property(e => e.Role).HasMaxLength(20);
                 entity.Property(e => e.CreatedAt);
-
+                entity.Property(e => e.OperatorID);
                 entity.HasIndex(e => e.Email).IsUnique();
                 entity.HasIndex(e => e.Phone).IsUnique();
+                 entity.HasOne(e => e.Operator)
+                .WithMany()
+                .HasForeignKey(e => e.OperatorID)
+                .OnDelete(DeleteBehavior.SetNull);
             });
         }
     }

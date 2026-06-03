@@ -64,23 +64,36 @@ export default function MyTicketDetail() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [reviewMessage, setReviewMessage] = useState('');
 
-  const loadBooking = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setBooking(await bookingApi.getById(id));
-      try {
-        setReview(await reviewApi.byBooking(id));
-      } catch {
-        setReview(null);
-      }
-    } catch (err) {
-      setError(err.message || 'Không tải được chi tiết vé.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // const loadBooking = async () => {
+  //   setLoading(true);
+  //   setError('');
+  //   try {
+  //     setBooking(await bookingApi.getById(id));
+  //     try {
+  //       setReview(await reviewApi.byBooking(id));
+  //     } catch {
+  //       setReview(null);
+  //     }
+  //   } catch (err) {
+  //     setError(err.message || 'Không tải được chi tiết vé.');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+const loadBooking = async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const data = await bookingApi.getById(id);
+    setBooking(data);
+    // review đã có sẵn trong response của getById
+    setReview(data?.review ?? null);
+  } catch (err) {
+    setError(err.message || 'Không tải được chi tiết vé.');
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => {
     loadBooking();
   }, [id]);
@@ -151,12 +164,23 @@ export default function MyTicketDetail() {
   const cancelReason = pick(booking, ['cancelReason', 'CancelReason'], '');
   const cancelledAt = pick(booking, ['cancelledAt', 'CancelledAt'], '');
   const refundAmount = pick(booking, ['refundAmount', 'RefundAmount'], null);
-  const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
+  // const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
+  const bs = Number(bookingStatus);
+  const canRequestCancel = bs !== 2   // Cancelled
+                      && bs !== 4   // Refunded
+                      && bs !== 5   // CancelRequested
+                      && bs !== 6;  // CancelRejected
   const arrivalTime = pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime']));
   const tripStatus = pick(trip, ['status', 'Status'], pick(booking, ['tripStatus', 'TripStatus'], ''));
-  const canReview = !review &&
-    !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
-    (String(tripStatus).toLowerCase() === 'completed' || (arrivalTime && new Date(arrivalTime) <= new Date()));
+  // const canReview = !review &&
+  //   !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
+  //   (String(tripStatus).toLowerCase() === 'completed' || (arrivalTime && new Date(arrivalTime) <= new Date()));
+  const canReview = !review
+  && bs !== 2   // Cancelled
+  && bs !== 4   // Refunded
+  && bs !== 5   // CancelRequested
+  && (String(tripStatus).toLowerCase() === 'completed' 
+      || (arrivalTime && new Date(arrivalTime) <= new Date()));
   const code = qrValue(booking);
 
   return (
@@ -174,8 +198,9 @@ export default function MyTicketDetail() {
           <div className="ticket-detail-head">
             <h2>Thông tin chuyến đi</h2>
             <div>
-              <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span>
-              <span className={statusClass(bookingStatus)}>{labelBookingStatus(bookingStatus)}</span>
+              {/* <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span>
+              <span className={statusClass(bookingStatus)}>{labelBookingStatus(bookingStatus)}</span> */}
+               <span className={statusClass(bs)}>{labelBookingStatus(bs)}</span>
             </div>
           </div>
 
@@ -252,14 +277,26 @@ export default function MyTicketDetail() {
           <PseudoQrCode value={code} />
           <p>{code}</p>
           <Link className="btn btn-outline" to="/my-tickets">Quay lại danh sách</Link>
-          <button
+          {/* <button
             type="button"
             className="btn btn-danger"
             disabled={!canRequestCancel || actionLoading}
             onClick={requestCancel}
           >
             {bookingStatus === 'CancelRequested' ? 'Đã yêu cầu hủy' : 'Yêu cầu hủy vé'}
-          </button>
+          </button> */}
+          {canRequestCancel && (
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={actionLoading}
+              onClick={requestCancel}
+            >
+              Yêu cầu hủy vé
+            </button>
+          )}
+          {bs === 5 && <span className="ticket-status status-pending">Đang chờ duyệt hủy</span>}
+          {bs === 6 && <span className="ticket-status status-cancelled">Từ chối hủy</span>}
         </aside>
       </section>
     </UserLayout>

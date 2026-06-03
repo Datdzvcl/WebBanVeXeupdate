@@ -13,9 +13,9 @@ namespace BaseCore.Entities
         public string PasswordHash { get; set; } = string.Empty;
 
         public byte Role { get; set; }
-
+        public Operator? Operator { get; set; }      
         public DateTime? CreatedAt { get; set; }
-
+         public int? OperatorID { get; set; }
         public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
         public ICollection<SeatHold> SeatHolds { get; set; } = new List<SeatHold>();
         public ICollection<Promotion> Promotions { get; set; } = new List<Promotion>();

@@ -32,9 +32,17 @@ namespace BaseCore.APIService.Controllers
         {
             _context = context;
         }
-
+        private async Task<int?> GetCurrentOperatorId()
+        {
+            if (!User.IsInRole("Operator")) return null;
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId)) return null;
+            var user = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserID == userId);
+            return user?.OperatorID;
+        }
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetAll(
             int? bookingId,
             string? customerName,
@@ -56,7 +64,10 @@ namespace BaseCore.APIService.Controllers
                 .Include(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
                 .Include(x => x.TicketSeats)
                 .AsQueryable();
-
+             var operatorIdClaim = await GetCurrentOperatorId();
+            if (operatorIdClaim.HasValue)
+                query = query.Where(x => x.Trip != null && x.Trip.Bus != null 
+                    && x.Trip.Bus.OperatorID == operatorIdClaim.Value);
             if (bookingId.HasValue)
                 query = query.Where(x => x.BookingID == bookingId.Value);
 
@@ -486,34 +497,76 @@ namespace BaseCore.APIService.Controllers
                     DropoffStopID = request.DropoffStopId
                 };
 
-                _context.Bookings.Add(booking);
-                await _context.SaveChangesAsync();
+                // _context.Bookings.Add(booking);
+                // await _context.SaveChangesAsync();
 
-                _context.Payments.Add(new Payment
-                {
-                    BookingID = booking.BookingID,
-                    Amount = booking.TotalPrice,
-                    PaymentMethod = paymentMethod,
-                    // PaymentStatus = paymentStatus,
-                    TransactionCode = PaymentsController.CreateTransactionCode(booking.BookingID),
-                    PaidAt = paymentStatus == PaymentPaidStatus ? now : null,
-                    CreatedAt = now
-                });
+                // _context.Payments.Add(new Payment
+                // {
+                //     BookingID = booking.BookingID,
+                //     Amount = booking.TotalPrice,
+                //     PaymentMethod = paymentMethod,
+                //     // PaymentStatus = paymentStatus,
+                //     TransactionCode = PaymentsController.CreateTransactionCode(booking.BookingID),
+                //     PaidAt = paymentStatus == PaymentPaidStatus ? now : null,
+                //     CreatedAt = now
+                // });
+
+                // foreach (var seatLabel in seatLabels)
+                // {
+                //     _context.TicketSeats.Add(new TicketSeat
+                //     {
+                //         BookingID = booking.BookingID,
+                //         SeatLabel = seatLabel,
+                //         QRCode = $"BOOKING:{booking.BookingID};TRIP:{booking.TripID};SEAT:{seatLabel};PHONE:{booking.CustomerPhone}"
+                //     });
+                // }
+
+                // foreach (var hold in holds.Where(x => ownedHoldSeats.Contains(NormalizeSeatLabel(x.SeatLabel))))
+                // {
+                //     hold.Status = SeatHoldStatusConstant.Confirmed;
+                //     hold.BookingID = booking.BookingID;
+                // }
+
+                // trip.AvailableSeats -= totalSeats;
+                // if (promotion != null)
+                //     promotion.UsedCount += 1;
+
+                // NotificationsController.AddNotification(
+                //     _context,
+                //     booking.UserID,
+                //     "Đặt vé thành công",
+                //     $"Đơn #{booking.BookingID} tuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã được tạo thành công.",
+                //     paymentStatus == PaymentPaidStatus ? (byte)1 : (byte)3);
+
+                // await _context.SaveChangesAsync();
+                // await transaction.CommitAsync();
+                _context.Bookings.Add(booking);
+// Bỏ SaveChangesAsync() ở đây
+
+                // _context.Payments.Add(new Payment
+                // {
+                //     Booking = booking,          // ← Dùng object thay vì BookingID
+                //     Amount = booking.TotalPrice,
+                //     PaymentMethod = paymentMethod,
+                //     TransactionCode = null,     // ← Set sau khi có ID
+                //     PaidAt = paymentStatus == PaymentPaidStatus ? now : null,
+                //     CreatedAt = now
+                // });
 
                 foreach (var seatLabel in seatLabels)
                 {
                     _context.TicketSeats.Add(new TicketSeat
                     {
-                        BookingID = booking.BookingID,
+                        Booking = booking,      // ← Dùng object thay vì BookingID
                         SeatLabel = seatLabel,
-                        QRCode = $"BOOKING:{booking.BookingID};TRIP:{booking.TripID};SEAT:{seatLabel};PHONE:{booking.CustomerPhone}"
+                        QRCode = null           // ← Set sau khi có ID
                     });
                 }
 
                 foreach (var hold in holds.Where(x => ownedHoldSeats.Contains(NormalizeSeatLabel(x.SeatLabel))))
                 {
                     hold.Status = SeatHoldStatusConstant.Confirmed;
-                    hold.BookingID = booking.BookingID;
+                    hold.Booking = booking;     // ← Dùng object thay vì BookingID
                 }
 
                 trip.AvailableSeats -= totalSeats;
@@ -524,10 +577,26 @@ namespace BaseCore.APIService.Controllers
                     _context,
                     booking.UserID,
                     "Đặt vé thành công",
-                    $"Đơn #{booking.BookingID} tuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã được tạo thành công.",
+                    $"Đơn tuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã được tạo thành công.",
                     paymentStatus == PaymentPaidStatus ? (byte)1 : (byte)3);
 
+                // ✅ Save 1 lần - nếu lỗi thì rollback toàn bộ, không có gì lọt vào DB
                 await _context.SaveChangesAsync();
+
+                // Sau khi save, EF đã gán BookingID tự động → update TransactionCode và QRCode
+                // var savedPayment = _context.Payments.Local
+                //     .FirstOrDefault(p => p.BookingID == booking.BookingID);
+                // if (savedPayment != null)
+                //     savedPayment.TransactionCode = PaymentsController.CreateTransactionCode(booking.BookingID);
+
+                foreach (var seat in _context.TicketSeats.Local.Where(s => s.BookingID == booking.BookingID))
+                {
+                    seat.QRCode = $"BOOKING:{booking.BookingID};TRIP:{booking.TripID};SEAT:{seat.SeatLabel};PHONE:{booking.CustomerPhone}";
+                }
+
+                // Notification cũng update lại với BookingID thật
+                await _context.SaveChangesAsync(); // Lần 2 chỉ update code
+
                 await transaction.CommitAsync();
 
                 return Ok(new
@@ -545,18 +614,34 @@ namespace BaseCore.APIService.Controllers
                     booking.TotalPrice,
                     booking.PromotionID,
                     booking.PaymentMethod,
-                    booking.BookingStatus,
+                    // booking.BookingStatus,
                     booking.BookingDate,
                     booking.PickupStopID,
                     booking.DropoffStopID,
                     seatLabels
                 });
             }
-            catch (DbUpdateException)
-            {
-                await transaction.RollbackAsync();
-                return Conflict(new { message = "Không thể tạo booking vì trạng thái ghế vừa thay đổi. Vui lòng chọn lại." });
-            }
+            // catch (DbUpdateException)
+            // {
+            //     await transaction.RollbackAsync();
+            //     return Conflict(new { message = "Không thể tạo booking vì trạng thái ghế vừa thay đổi. Vui lòng chọn lại." });
+            // }
+            catch (DbUpdateException ex)
+{
+    await transaction.RollbackAsync();
+    
+    var innerMsg = ex.InnerException?.Message ?? "no inner";
+    var innerInnerMsg = ex.InnerException?.InnerException?.Message ?? "no inner inner";
+    Console.WriteLine($"=== DbUpdateException ===");
+    Console.WriteLine($"Message: {ex.Message}");
+    Console.WriteLine($"Inner: {innerMsg}");
+    Console.WriteLine($"InnerInner: {innerInnerMsg}");
+    
+    return Conflict(new { 
+        message = "Không thể tạo booking vì trạng thái ghế vừa thay đổi. Vui lòng chọn lại.",
+        debug = innerMsg
+    });
+}
         }
 
         // [HttpPut("{id}/payment-status")]
@@ -614,7 +699,7 @@ namespace BaseCore.APIService.Controllers
         //     return Ok(new { booking.BookingID, booking.PaymentStatus });
         // }
         [HttpPut("{id}/booking-status")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
         public async Task<IActionResult> UpdateBookingStatus(int id, [FromBody] byte status)
         {
             var booking = await _context.Bookings.FindAsync(id);
@@ -641,7 +726,7 @@ namespace BaseCore.APIService.Controllers
             return Ok(new { booking.BookingID, booking.BookingStatus });
         }
         [HttpPut("{id}/confirm")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
         public async Task<IActionResult> Confirm(int id)
         {
             var booking = await _context.Bookings.FindAsync(id);
@@ -671,7 +756,68 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpPut("{id}/approve-cancel")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
+        // public async Task<IActionResult> ApproveCancel(int id, [FromBody] ApproveCancelBookingRequest? request)
+        // {
+        //     await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        //     var booking = await _context.Bookings
+        //         .Include(x => x.Trip)
+        //         .Include(x => x.TicketSeats)
+        //         .FirstOrDefaultAsync(x => x.BookingID == id);
+
+        //     if (booking == null)
+        //         return NotFound(new { message = "Khong tim thay booking" });
+
+        //     var currentStatus = booking.BookingStatus;
+        //     if (currentStatus != BookingStatusConstant.CancelRequested)
+        //         return BadRequest(new { message = "Chi co the duyet huy don co BookingStatus = CancelRequested" });
+
+        //     var now = DateTime.Now;
+        //     if (booking.Trip != null && IsTripDepartedOrCompleted(booking.Trip, now))
+        //         return BadRequest(new { message = "Chuyen xe da chay hoac da hoan thanh, khong the duyet huy." });
+
+        //     var refundRate = CalculateRefundRate(booking.Trip?.DepartureTime, now);
+        //     var isPaid = booking.BookingStatus == BookingStatusConstant.Confirmed;
+        //     var refundAmount = isPaid ? Math.Round(booking.TotalPrice * refundRate, 0) : 0m;
+
+        //     booking.BookingStatus = BookingStatusConstant.Cancelled;
+        //     booking.BookingStatus = isPaid ? BookingStatusConstant.Refunded : BookingStatusConstant.Cancelled;
+        //     booking.CancelledAt   = now;
+        //     booking.RefundAmount = refundAmount;
+
+        //     // var latestPayment = await _context.Payments
+        //     //     .Where(x => x.BookingID == booking.BookingID)
+        //     //     .OrderByDescending(x => x.CreatedAt)
+        //     //     .FirstOrDefaultAsync();
+        //     // if (latestPayment != null)
+        //     //     latestPayment.PaymentStatus = booking.PaymentStatus;
+
+        //     if (booking.Trip != null && booking.TotalSeats > 0 && booking.Trip.DepartureTime > now)
+        //         booking.Trip.AvailableSeats += booking.TotalSeats;
+
+        //     NotificationsController.AddNotification(
+        //         _context,
+        //         booking.UserID,
+        //         "Hủy vé được duyệt",
+        //         $"Yêu cầu hủy đơn #{booking.BookingID} đã được duyệt. Số tiền hoàn dự kiến: {refundAmount:N0} đ.",
+        //         4);
+
+        //     await _context.SaveChangesAsync();
+        //     await transaction.CommitAsync();
+
+        //     return Ok(new
+        //     {
+        //         bookingID = booking.BookingID,
+        //         bookingStatus = booking.BookingStatus,
+        //         paymentStatus = booking.BookingStatus,
+        //         booking.CancelledAt,
+        //         booking.RefundAmount,
+        //         refundRate,
+        //         seatsRestored = booking.TotalSeats,
+        //         message = "Da duyet huy don dat ve"
+        //     });
+        // }
         public async Task<IActionResult> ApproveCancel(int id, [FromBody] ApproveCancelBookingRequest? request)
         {
             await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -692,21 +838,23 @@ namespace BaseCore.APIService.Controllers
             if (booking.Trip != null && IsTripDepartedOrCompleted(booking.Trip, now))
                 return BadRequest(new { message = "Chuyen xe da chay hoac da hoan thanh, khong the duyet huy." });
 
-            var refundRate = CalculateRefundRate(booking.Trip?.DepartureTime, now);
-            var isPaid = booking.BookingStatus == BookingStatusConstant.Confirmed;
-            var refundAmount = isPaid ? Math.Round(booking.TotalPrice * refundRate, 0) : 0m;
+            // ✅ FIX: Đọc lịch sử từ DB để biết booking này trước đó đã Confirmed chưa
+            var wasConfirmed = await _context.BookingStatusHistory
+                .AnyAsync(h => h.BookingID == id && h.NewStatus == BookingStatusConstant.Confirmed);
 
-            booking.BookingStatus = BookingStatusConstant.Cancelled;
-            booking.BookingStatus = isPaid ? BookingStatusConstant.Refunded : BookingStatusConstant.Cancelled;
-            booking.CancelledAt   = now;
+            var refundRate   = CalculateRefundRate(booking.Trip?.DepartureTime, now);
+            var refundAmount = wasConfirmed
+                ? Math.Round(booking.TotalPrice * refundRate, 0)
+                : 0m;
+
+            // ✅ FIX: Chỉ gán 1 lần, đúng logic
+            booking.BookingStatus = wasConfirmed
+                ? BookingStatusConstant.Refunded   // đã xác nhận (đã thu tiền) → hoàn tiền
+                : BookingStatusConstant.Cancelled; // chưa xác nhận → hủy thẳng
+            booking.CancelledAt  = now;
             booking.RefundAmount = refundAmount;
 
-            var latestPayment = await _context.Payments
-                .Where(x => x.BookingID == booking.BookingID)
-                .OrderByDescending(x => x.CreatedAt)
-                .FirstOrDefaultAsync();
-            // if (latestPayment != null)
-            //     latestPayment.PaymentStatus = booking.PaymentStatus;
+            // ✅ FIX: Đã xoá 4 dòng _context.Payments — bảng không còn tồn tại
 
             if (booking.Trip != null && booking.TotalSeats > 0 && booking.Trip.DepartureTime > now)
                 booking.Trip.AvailableSeats += booking.TotalSeats;
@@ -723,19 +871,18 @@ namespace BaseCore.APIService.Controllers
 
             return Ok(new
             {
-                bookingID = booking.BookingID,
+                bookingID     = booking.BookingID,
                 bookingStatus = booking.BookingStatus,
-                paymentStatus = booking.BookingStatus,
                 booking.CancelledAt,
                 booking.RefundAmount,
                 refundRate,
+                wasConfirmed,
                 seatsRestored = booking.TotalSeats,
-                message = "Da duyet huy don dat ve"
+                message       = "Da duyet huy don dat ve"
             });
         }
-
         [HttpPut("{id}/reject-cancel")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
         public async Task<IActionResult> RejectCancel(int id, [FromBody] RejectCancelBookingRequest? request)
         {
             var booking = await _context.Bookings.FindAsync(id);
@@ -767,7 +914,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpPut("{id}/cancel")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
         public async Task<IActionResult> Cancel(int id)
         {
             var booking = await _context.Bookings
@@ -787,10 +934,10 @@ namespace BaseCore.APIService.Controllers
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
             booking.BookingStatus = BookingStatusConstant.Cancelled;
-            var latestPayment = await _context.Payments
-                .Where(x => x.BookingID == booking.BookingID)
-                .OrderByDescending(x => x.CreatedAt)
-                .FirstOrDefaultAsync();
+            // var latestPayment = await _context.Payments
+            //     .Where(x => x.BookingID == booking.BookingID)
+            //     .OrderByDescending(x => x.CreatedAt)
+            //     .FirstOrDefaultAsync();
             // if (latestPayment != null)
             //     latestPayment.PaymentStatus = PaymentCancelledStatus;
 
@@ -883,7 +1030,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Operator")]
         public async Task<IActionResult> Delete(int id)
         {
             var booking = await _context.Bookings.FindAsync(id);
@@ -967,6 +1114,57 @@ namespace BaseCore.APIService.Controllers
         private static string? NormalizeOptionalText(string? value)
         {
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+        [HttpGet("suggest")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> Suggest([FromQuery] string q, [FromQuery] int take = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(new List<object>());
+        
+            take = Math.Clamp(take, 1, 20);
+            q = q.Trim();
+        
+            // Lấy operatorId nếu là Operator
+            var operatorId = await GetCurrentOperatorId();
+        
+            // Query base — include Trip > Bus để filter operator
+            var query = _context.Bookings
+                .AsNoTracking()
+                .Include(x => x.Trip)
+                    .ThenInclude(x => x.Bus)
+                .AsQueryable();
+        
+            // Operator chỉ thấy booking thuộc nhà xe mình
+            if (operatorId.HasValue)
+                query = query.Where(x => x.Trip.Bus.OperatorID == operatorId.Value);
+        
+            // Tìm theo mã đơn (số) hoặc tên khách hàng
+            bool isNumeric = int.TryParse(q, out var bookingIdSearch);
+        
+            query = isNumeric
+                ? query.Where(x => x.BookingID == bookingIdSearch
+                                || x.CustomerName.Contains(q))
+                : query.Where(x => x.CustomerName.Contains(q)
+                                || x.CustomerPhone.Contains(q));
+        
+            var results = await query
+                .OrderByDescending(x => x.BookingDate)
+                .Take(take)
+                .Select(x => new
+                {
+                    x.BookingID,
+                    x.CustomerName,
+                    x.CustomerPhone,
+                    x.TotalPrice,
+                    x.BookingStatus,
+                    Route = x.Trip != null
+                        ? $"{x.Trip.DepartureLocation} → {x.Trip.ArrivalLocation}"
+                        : "Chưa rõ",
+                })
+                .ToListAsync();
+        
+            return Ok(results);
         }
     }
 

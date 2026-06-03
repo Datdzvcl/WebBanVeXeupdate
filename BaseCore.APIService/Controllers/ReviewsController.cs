@@ -20,7 +20,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetAll(int page = 1, int pageSize = 20, int? tripId = null, int? operatorId = null)
         {
             page = page <= 0 ? 1 : page;
@@ -43,7 +43,14 @@ namespace BaseCore.APIService.Controllers
                 .Include(x => x.User)
                 .Include(x => x.Booking).ThenInclude(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
                 .AsQueryable();
-
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (int.TryParse(userIdClaim, out var userId))
+            {
+                var currentUser = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.UserID == userId);
+                if (currentUser?.OperatorID != null)
+                    query = query.Where(x => x.Booking.Trip.Bus.OperatorID == currentUser.OperatorID);
+            }
             if (tripId.HasValue)
                 query = query.Where(x => x.Booking.TripID == tripId.Value);
 
@@ -95,6 +102,103 @@ namespace BaseCore.APIService.Controllers
                 pageSize,
                 totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
             });
+        }
+
+        [HttpGet("suggest-trips")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> SuggestTrips([FromQuery] string? q, [FromQuery] int take = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(new List<object>());
+
+            take = Math.Clamp(take, 1, 20);
+            q = q.Trim();
+            var operatorId = await GetCurrentOperatorId();
+            var isNumeric = int.TryParse(q, out var tripIdSearch);
+
+            var query = _context.Trips
+                .AsNoTracking()
+                .Include(x => x.Bus).ThenInclude(x => x.Operator)
+                .AsQueryable();
+
+            if (operatorId.HasValue)
+                query = query.Where(x => x.Bus != null && x.Bus.OperatorID == operatorId.Value);
+
+            query = isNumeric
+                ? query.Where(x =>
+                    x.TripID == tripIdSearch ||
+                    x.DepartureLocation.Contains(q) ||
+                    x.ArrivalLocation.Contains(q) ||
+                    (x.Bus != null && x.Bus.Operator != null && x.Bus.Operator.Name.Contains(q)))
+                : query.Where(x =>
+                    x.DepartureLocation.Contains(q) ||
+                    x.ArrivalLocation.Contains(q) ||
+                    (x.Bus != null && x.Bus.Operator != null && x.Bus.Operator.Name.Contains(q)));
+
+            var results = await query
+                .OrderByDescending(x => x.DepartureTime)
+                .Take(take)
+                .Select(x => new
+                {
+                    x.TripID,
+                    x.DepartureLocation,
+                    x.ArrivalLocation,
+                    x.DepartureTime,
+                    OperatorName = x.Bus == null || x.Bus.Operator == null ? null : x.Bus.Operator.Name,
+                    Route = $"{x.DepartureLocation} → {x.ArrivalLocation}",
+                    ReviewCount = _context.Reviews.Count(r => r.Booking != null && r.Booking.TripID == x.TripID)
+                })
+                .ToListAsync();
+
+            return Ok(results);
+        }
+
+        [HttpGet("suggest-operators")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> SuggestOperators([FromQuery] string? q, [FromQuery] int take = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(new List<object>());
+
+            take = Math.Clamp(take, 1, 20);
+            q = q.Trim();
+            var currentOperatorId = await GetCurrentOperatorId();
+            var isNumeric = int.TryParse(q, out var operatorIdSearch);
+
+            var query = _context.Operators
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (currentOperatorId.HasValue)
+                query = query.Where(x => x.OperatorID == currentOperatorId.Value);
+
+            query = isNumeric
+                ? query.Where(x =>
+                    x.OperatorID == operatorIdSearch ||
+                    x.Name.Contains(q))
+                : query.Where(x =>
+                    x.Name.Contains(q) ||
+                    x.ContactPhone.Contains(q) ||
+                    x.Email.Contains(q));
+
+            var results = await query
+                .OrderBy(x => x.Name)
+                .Take(take)
+                .Select(x => new
+                {
+                    x.OperatorID,
+                    x.Name,
+                    x.ContactPhone,
+                    x.Email,
+                    ReviewCount = _context.Reviews.Count(r =>
+                        r.Booking != null &&
+                        r.Booking.Trip != null &&
+                        r.Booking.Trip.Bus != null &&
+                        r.Booking.Trip.Bus.OperatorID == x.OperatorID)
+                })
+                .ToListAsync();
+
+            return Ok(results);
         }
 
         [HttpGet("trip/{tripId:int}")]
@@ -310,6 +414,22 @@ namespace BaseCore.APIService.Controllers
         {
             var claimValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
             return int.TryParse(claimValue, out var userId) ? userId : null;
+        }
+
+        private async Task<int?> GetCurrentOperatorId()
+        {
+            if (User.IsInRole("Admin"))
+                return null;
+
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return null;
+
+            return await _context.Users
+                .AsNoTracking()
+                .Where(x => x.UserID == currentUserId.Value)
+                .Select(x => x.OperatorID)
+                .FirstOrDefaultAsync();
         }
 
         private static bool CanReview(Booking booking)

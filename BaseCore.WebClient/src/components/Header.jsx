@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import { useAuth } from "../contexts/AuthContext";
-import { isAdminRole } from "../api";
+import { isAdminRole, isOperatorRole } from "../api";
 import { notificationApi } from "../services/notificationApi";
 
 export default function Header({ simple = false }) {
@@ -198,7 +198,13 @@ export default function Header({ simple = false }) {
                       <i className="fa-solid fa-lock" />
                       Đổi mật khẩu
                     </Link>
-                    {isAdminRole(user.role) && (
+                    {/* {isAdminRole(user.role) && (
+                      <Link to="/admin" onClick={closeMenus}>
+                        <i className="fa-solid fa-gauge-high" />
+                        Xem trang quản trị
+                      </Link>
+                    )} */}
+                    {(isAdminRole(user.role) || isOperatorRole(user.role)) && (
                       <Link to="/admin" onClick={closeMenus}>
                         <i className="fa-solid fa-gauge-high" />
                         Xem trang quản trị
