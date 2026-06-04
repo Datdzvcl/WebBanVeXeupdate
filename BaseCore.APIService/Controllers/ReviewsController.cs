@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using BaseCore.Entities;
 using BaseCore.Repository;
 using System.Security.Claims;
-
+using BaseCore.DTO;
+using BaseCore.Common;
 namespace BaseCore.APIService.Controllers
 {
     [Route("api/reviews")]
@@ -19,45 +20,77 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetAll(int page = 1, int pageSize = 20, int? tripId = null, int? operatorId = null)
         {
             page = page <= 0 ? 1 : page;
             pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
 
+            // var query = _context.Reviews
+            //     .AsNoTracking()
+            //     .Include(x => x.User)
+            //     .Include(x => x.Booking)
+            //     .Include(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
+            //     .AsQueryable();
+
+            // if (tripId.HasValue)
+            //     query = query.Where(x => x.TripID == tripId.Value);
+
+            // if (operatorId.HasValue)
+            //     query = query.Where(x => x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.OperatorID == operatorId.Value);
             var query = _context.Reviews
                 .AsNoTracking()
                 .Include(x => x.User)
-                .Include(x => x.Booking)
-                .Include(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
+                .Include(x => x.Booking).ThenInclude(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
                 .AsQueryable();
-
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (int.TryParse(userIdClaim, out var userId))
+            {
+                var currentUser = await _context.Users.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.UserID == userId);
+                if (currentUser?.OperatorID != null)
+                    query = query.Where(x => x.Booking.Trip.Bus.OperatorID == currentUser.OperatorID);
+            }
             if (tripId.HasValue)
-                query = query.Where(x => x.TripID == tripId.Value);
+                query = query.Where(x => x.Booking.TripID == tripId.Value);
 
             if (operatorId.HasValue)
-                query = query.Where(x => x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.OperatorID == operatorId.Value);
+                query = query.Where(x => x.Booking.Trip.Bus.OperatorID == operatorId.Value);
 
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(x => x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                // .Select(x => new
+                // {
+                //     x.ReviewID,
+                //     x.BookingID,
+                //     x.UserID,
+                //     // x.TripID,
+                //     x.Rating,
+                //     x.Comment,
+                //     x.CreatedAt,
+                //     userName = x.User == null ? null : x.User.FullName,
+                //     customerName = x.Booking == null ? null : x.Booking.CustomerName,
+                //     operatorName = x.Trip == null || x.Trip.Bus == null || x.Trip.Bus.Operator == null
+                //         ? null
+                //         : x.Trip.Bus.Operator.Name,
+                //     route = x.Trip == null ? null : $"{x.Trip.DepartureLocation} - {x.Trip.ArrivalLocation}"
+                // })
                 .Select(x => new
                 {
                     x.ReviewID,
                     x.BookingID,
                     x.UserID,
-                    x.TripID,
+                    TripID = x.Booking.TripID,
                     x.Rating,
                     x.Comment,
                     x.CreatedAt,
                     userName = x.User == null ? null : x.User.FullName,
                     customerName = x.Booking == null ? null : x.Booking.CustomerName,
-                    operatorName = x.Trip == null || x.Trip.Bus == null || x.Trip.Bus.Operator == null
-                        ? null
-                        : x.Trip.Bus.Operator.Name,
-                    route = x.Trip == null ? null : $"{x.Trip.DepartureLocation} - {x.Trip.ArrivalLocation}"
+                    operatorName = x.Booking.Trip.Bus.Operator == null ? null : x.Booking.Trip.Bus.Operator.Name,
+                    route = x.Booking.Trip == null ? null : $"{x.Booking.Trip.DepartureLocation} - {x.Booking.Trip.ArrivalLocation}"
                 })
                 .ToListAsync();
 
@@ -71,28 +104,142 @@ namespace BaseCore.APIService.Controllers
             });
         }
 
+        [HttpGet("suggest-trips")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> SuggestTrips([FromQuery] string? q, [FromQuery] int take = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(new List<object>());
+
+            take = Math.Clamp(take, 1, 20);
+            q = q.Trim();
+            var operatorId = await GetCurrentOperatorId();
+            var isNumeric = int.TryParse(q, out var tripIdSearch);
+
+            var query = _context.Trips
+                .AsNoTracking()
+                .Include(x => x.Bus).ThenInclude(x => x.Operator)
+                .AsQueryable();
+
+            if (operatorId.HasValue)
+                query = query.Where(x => x.Bus != null && x.Bus.OperatorID == operatorId.Value);
+
+            query = isNumeric
+                ? query.Where(x =>
+                    x.TripID == tripIdSearch ||
+                    x.DepartureLocation.Contains(q) ||
+                    x.ArrivalLocation.Contains(q) ||
+                    (x.Bus != null && x.Bus.Operator != null && x.Bus.Operator.Name.Contains(q)))
+                : query.Where(x =>
+                    x.DepartureLocation.Contains(q) ||
+                    x.ArrivalLocation.Contains(q) ||
+                    (x.Bus != null && x.Bus.Operator != null && x.Bus.Operator.Name.Contains(q)));
+
+            var results = await query
+                .OrderByDescending(x => x.DepartureTime)
+                .Take(take)
+                .Select(x => new
+                {
+                    x.TripID,
+                    x.DepartureLocation,
+                    x.ArrivalLocation,
+                    x.DepartureTime,
+                    OperatorName = x.Bus == null || x.Bus.Operator == null ? null : x.Bus.Operator.Name,
+                    Route = $"{x.DepartureLocation} → {x.ArrivalLocation}",
+                    ReviewCount = _context.Reviews.Count(r => r.Booking != null && r.Booking.TripID == x.TripID)
+                })
+                .ToListAsync();
+
+            return Ok(results);
+        }
+
+        [HttpGet("suggest-operators")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> SuggestOperators([FromQuery] string? q, [FromQuery] int take = 8)
+        {
+            if (string.IsNullOrWhiteSpace(q))
+                return Ok(new List<object>());
+
+            take = Math.Clamp(take, 1, 20);
+            q = q.Trim();
+            var currentOperatorId = await GetCurrentOperatorId();
+            var isNumeric = int.TryParse(q, out var operatorIdSearch);
+
+            var query = _context.Operators
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (currentOperatorId.HasValue)
+                query = query.Where(x => x.OperatorID == currentOperatorId.Value);
+
+            query = isNumeric
+                ? query.Where(x =>
+                    x.OperatorID == operatorIdSearch ||
+                    x.Name.Contains(q))
+                : query.Where(x =>
+                    x.Name.Contains(q) ||
+                    x.ContactPhone.Contains(q) ||
+                    x.Email.Contains(q));
+
+            var results = await query
+                .OrderBy(x => x.Name)
+                .Take(take)
+                .Select(x => new
+                {
+                    x.OperatorID,
+                    x.Name,
+                    x.ContactPhone,
+                    x.Email,
+                    ReviewCount = _context.Reviews.Count(r =>
+                        r.Booking != null &&
+                        r.Booking.Trip != null &&
+                        r.Booking.Trip.Bus != null &&
+                        r.Booking.Trip.Bus.OperatorID == x.OperatorID)
+                })
+                .ToListAsync();
+
+            return Ok(results);
+        }
+
         [HttpGet("trip/{tripId:int}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetByTrip(int tripId)
         {
+            // var reviews = await _context.Reviews
+            //     .AsNoTracking()
+            //     .Include(x => x.User)
+            //     .Where(x => x.TripID == tripId)
+            //     .OrderByDescending(x => x.CreatedAt)
+            //     .Select(x => new
+            //     {
+            //         x.ReviewID,
+            //         x.BookingID,
+            //         x.UserID,
+            //         x.TripID,
+            //         x.Rating,
+            //         x.Comment,
+            //         x.CreatedAt,
+            //         userName = x.User == null ? null : x.User.FullName
+            //     })
+            //     .ToListAsync();
             var reviews = await _context.Reviews
                 .AsNoTracking()
                 .Include(x => x.User)
-                .Where(x => x.TripID == tripId)
+                .Include(x => x.Booking)
+                .Where(x => x.Booking.TripID == tripId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new
                 {
                     x.ReviewID,
                     x.BookingID,
                     x.UserID,
-                    x.TripID,
+                    TripID = x.Booking.TripID,
                     x.Rating,
                     x.Comment,
                     x.CreatedAt,
                     userName = x.User == null ? null : x.User.FullName
                 })
                 .ToListAsync();
-
             return Ok(new
             {
                 items = reviews,
@@ -105,25 +252,42 @@ namespace BaseCore.APIService.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetByOperator(int operatorId)
         {
+            // var reviews = await _context.Reviews
+            //     .AsNoTracking()
+            //     .Include(x => x.User)
+            //     .Include(x => x.Trip).ThenInclude(x => x.Bus)
+            //     .Where(x => x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.OperatorID == operatorId)
+            //     .OrderByDescending(x => x.CreatedAt)
+            //     .Select(x => new
+            //     {
+            //         x.ReviewID,
+            //         x.BookingID,
+            //         x.UserID,
+            //         x.TripID,
+            //         x.Rating,
+            //         x.Comment,
+            //         x.CreatedAt,
+            //         userName = x.User == null ? null : x.User.FullName
+            //     })
+            //     .ToListAsync();
             var reviews = await _context.Reviews
                 .AsNoTracking()
                 .Include(x => x.User)
-                .Include(x => x.Trip).ThenInclude(x => x.Bus)
-                .Where(x => x.Trip != null && x.Trip.Bus != null && x.Trip.Bus.OperatorID == operatorId)
+                .Include(x => x.Booking).ThenInclude(x => x.Trip).ThenInclude(x => x.Bus)
+                .Where(x => x.Booking.Trip.Bus.OperatorID == operatorId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new
                 {
                     x.ReviewID,
                     x.BookingID,
                     x.UserID,
-                    x.TripID,
+                    TripID = x.Booking.TripID,
                     x.Rating,
                     x.Comment,
                     x.CreatedAt,
                     userName = x.User == null ? null : x.User.FullName
                 })
                 .ToListAsync();
-
             return Ok(new
             {
                 items = reviews,
@@ -186,7 +350,7 @@ namespace BaseCore.APIService.Controllers
             {
                 BookingID = booking.BookingID,
                 UserID = currentUserId.Value,
-                TripID = booking.TripID,
+                // TripID = booking.TripID,
                 Rating = request.Rating,
                 Comment = NormalizeComment(request.Comment),
                 CreatedAt = DateTime.Now
@@ -223,12 +387,12 @@ namespace BaseCore.APIService.Controllers
             review.Comment = NormalizeComment(request.Comment);
             await _context.SaveChangesAsync();
 
-            var updated = await _context.Reviews
-                .AsNoTracking()
-                .Include(x => x.User)
-                .Include(x => x.Booking)
-                .Include(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
-                .FirstAsync(x => x.ReviewID == id);
+           var updated = await _context.Reviews
+            .AsNoTracking()
+            .Include(x => x.User)
+            .Include(x => x.Booking).ThenInclude(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)
+            // .Include(x => x.Trip).ThenInclude(x => x.Bus).ThenInclude(x => x.Operator)  ← xóa dòng này
+            .FirstAsync(x => x.ReviewID == id);
 
             return Ok(ToReviewResponse(updated));
         }
@@ -252,18 +416,37 @@ namespace BaseCore.APIService.Controllers
             return int.TryParse(claimValue, out var userId) ? userId : null;
         }
 
+        private async Task<int?> GetCurrentOperatorId()
+        {
+            if (User.IsInRole("Admin"))
+                return null;
+
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return null;
+
+            return await _context.Users
+                .AsNoTracking()
+                .Where(x => x.UserID == currentUserId.Value)
+                .Select(x => x.OperatorID)
+                .FirstOrDefaultAsync();
+        }
+
         private static bool CanReview(Booking booking)
         {
             if (booking.Trip == null)
                 return false;
 
-            var bookingStatus = booking.BookingStatus ?? "PendingConfirm";
-            if (string.Equals(bookingStatus, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(bookingStatus, "CancelRequested", StringComparison.OrdinalIgnoreCase))
+            // var bookingStatus = booking.BookingStatus ;
+            // if (string.Equals(bookingStatus, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
+            //     string.Equals(bookingStatus, "CancelRequested", StringComparison.OrdinalIgnoreCase))
+            //     return false;
+            var bookingStatus = booking.BookingStatus;
+            if (bookingStatus == BookingStatusConstant.Cancelled ||
+                bookingStatus == BookingStatusConstant.CancelRequested)
                 return false;
-
-            return string.Equals(booking.Trip.Status, "Completed", StringComparison.OrdinalIgnoreCase) ||
-                   booking.Trip.ArrivalTime <= DateTime.Now;
+            return booking.Trip.Status == TripStatusConstant.Completed ||
+                booking.Trip.ArrivalTime <= DateTime.Now;
         }
 
         private static string? NormalizeComment(string? comment)
@@ -279,16 +462,15 @@ namespace BaseCore.APIService.Controllers
                 review.ReviewID,
                 review.BookingID,
                 review.UserID,
-                review.TripID,
+                TripID = review.Booking?.TripID,
                 review.Rating,
                 review.Comment,
                 review.CreatedAt,
                 userName = review.User == null ? null : review.User.FullName,
                 customerName = review.Booking == null ? null : review.Booking.CustomerName,
-                operatorName = review.Trip == null || review.Trip.Bus == null || review.Trip.Bus.Operator == null
-                    ? null
-                    : review.Trip.Bus.Operator.Name,
-                route = review.Trip == null ? null : $"{review.Trip.DepartureLocation} - {review.Trip.ArrivalLocation}"
+                operatorName = review.Booking?.Trip?.Bus?.Operator?.Name,
+                route = review.Booking?.Trip == null ? null 
+                    : $"{review.Booking.Trip.DepartureLocation} - {review.Booking.Trip.ArrivalLocation}"
             };
         }
     }

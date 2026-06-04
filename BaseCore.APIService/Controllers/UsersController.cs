@@ -61,7 +61,11 @@ namespace BaseCore.APIService.Controllers
             if (!string.IsNullOrWhiteSpace(role))
             {
                 var keyword = role.Trim();
-                query = query.Where(x => x.Role != null && x.Role == keyword);
+                // query = query.Where(x => x.Role != null && x.Role == keyword);
+                if (byte.TryParse(role.Trim(), out var roleValue))
+                {
+                    query = query.Where(x => x.Role == roleValue);
+                }
             }
 
             var totalCount = await query.CountAsync();
@@ -141,7 +145,7 @@ namespace BaseCore.APIService.Controllers
                 FullName = string.IsNullOrWhiteSpace(request.FullName) ? email : request.FullName.Trim(),
                 Email = email,
                 Phone = phone,
-                Role = role,
+                Role = RoleConstant.Customer,
                 PasswordHash = TokenHelper.CreatePasswordHash(request.Password),
                 CreatedAt = DateTime.Now
             };
@@ -194,7 +198,7 @@ namespace BaseCore.APIService.Controllers
                 if (role == null)
                     return BadRequest(new { message = "Role chỉ được là Admin, Customer hoặc Operator" });
 
-                user.Role = role;
+                user.Role = role.Value;
             }
 
             if (!string.IsNullOrWhiteSpace(request.Password))
@@ -226,10 +230,23 @@ namespace BaseCore.APIService.Controllers
             return Ok();
         }
 
-        private static string? NormalizeRole(string? role)
+        // private static string? NormalizeRole(string? role)
+        // {
+        //     var value = string.IsNullOrWhiteSpace(role) ? "Customer" : role.Trim();
+        //     return ValidRoles.Contains(value) ? ValidRoles.First(x => x.Equals(value, StringComparison.OrdinalIgnoreCase)) : null;
+        // }
+        private static byte? NormalizeRole(string? role)
         {
-            var value = string.IsNullOrWhiteSpace(role) ? "Customer" : role.Trim();
-            return ValidRoles.Contains(value) ? ValidRoles.First(x => x.Equals(value, StringComparison.OrdinalIgnoreCase)) : null;
+            if (string.IsNullOrWhiteSpace(role)) return RoleConstant.Customer;
+            
+            return role.Trim().ToLower() switch
+            {
+                "admin"    => RoleConstant.Admin,
+                "operator" => RoleConstant.Operator,
+                "customer" => RoleConstant.Customer,
+                "user"     => RoleConstant.User,
+                _          => null
+            };
         }
     }
 

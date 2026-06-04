@@ -40,7 +40,7 @@ namespace BaseCore.AuthService.Controllers
             if (user == null)
                 return Unauthorized(new { message = "Invalid email/phone or password" });
 
-            var role = user.Role ?? RoleConstant.Customer;
+            var role = user.Role ;
 
             var token = TokenHelper.GenerateToken(
                 _secretKey,
@@ -116,16 +116,27 @@ namespace BaseCore.AuthService.Controllers
             return Ok(ToUserResponse(user));
         }
 
+        // private static AuthUserResponse ToUserResponse(BaseCore.Entities.User user)
+        // {
+        //     return new AuthUserResponse
+        //     {
+        //         UserID = user.UserID,
+        //         FullName = user.FullName,
+        //         Email = user.Email,
+        //         Phone = user.Phone,
+        //         Role = user.Role ?? RoleConstant.Customer
+        //     };
         private static AuthUserResponse ToUserResponse(BaseCore.Entities.User user)
-        {
-            return new AuthUserResponse
             {
-                UserID = user.UserID,
-                FullName = user.FullName,
-                Email = user.Email,
-                Phone = user.Phone,
-                Role = user.Role ?? RoleConstant.Customer
-            };
+                return new AuthUserResponse
+                {
+                    UserID   = user.UserID,
+                    FullName = user.FullName,
+                    Email    = user.Email,
+                    Phone    = user.Phone,
+                    Role     = user.Role  // byte, gán thẳng
+                };
+            }
         }
     }
 
@@ -156,7 +167,7 @@ namespace BaseCore.AuthService.Controllers
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
+        public byte Role { get; set; } 
     }
 
     public class RegisterRequest
@@ -166,4 +177,3 @@ namespace BaseCore.AuthService.Controllers
         public string? FullName { get; set; }
         public string Phone { get; set; } = string.Empty;
     }
-}

@@ -1,6 +1,6 @@
 using BaseCore.Repository;
 using Microsoft.EntityFrameworkCore;
-
+using BaseCore.Common;
 namespace BaseCore.APIService.Services
 {
     /// <summary>
@@ -47,19 +47,113 @@ namespace BaseCore.APIService.Services
             }
         }
 
+        // private async Task CleanupAsync(CancellationToken ct)
+        // {
+        //     // Mỗi lần chạy tạo scope mới để lấy DbContext (vì DbContext là Scoped)
+        //     using var scope   = _scopeFactory.CreateScope();
+        //     var context       = scope.ServiceProvider.GetRequiredService<MySqlDbContext>();
+
+        //     var cutoff        = DateTime.Now - HoldDuration;
+
+        //     // Lấy tất cả booking Pending quá hạn
+        //     var expired = await context.Bookings
+        //         .Include(b => b.TicketSeats)
+        //         .Where(b =>
+        //             b.BookingStatus == BookingStatusConstant.Pending && 
+        //             b.BookingDate.HasValue &&
+        //             b.BookingDate.Value < cutoff)
+        //         .ToListAsync(ct);
+
+        //     if (!expired.Any())
+        //     {
+        //         _logger.LogDebug("Không có booking hết hạn.");
+        //         return;
+        //     }
+
+        //     _logger.LogInformation("Tìm thấy {Count} booking hết hạn, đang xóa...", expired.Count);
+
+        //     foreach (var booking in expired)
+        //     {
+        //         // Hoàn lại ghế cho chuyến xe
+        //         var trip = await context.Trips.FindAsync(new object[] { booking.TripID }, ct);
+        //         if (trip != null)
+        //             trip.AvailableSeats += booking.TotalSeats;
+
+        //         // Xóa TicketSeats (cascade nên có thể tự xóa, nhưng explicit cho chắc)
+        //         if (booking.TicketSeats != null && booking.TicketSeats.Any())
+        //             context.TicketSeats.RemoveRange(booking.TicketSeats);
+
+        //         context.Bookings.Remove(booking);
+
+        //         _logger.LogInformation(
+        //             "Đã xóa BookingID={Id}, TripID={TripId}, Ghế trả lại={Seats}",
+        //             booking.BookingID, booking.TripID, booking.TotalSeats);
+        //     }
+
+        //     await context.SaveChangesAsync(ct);
+        //     _logger.LogInformation("Hoàn tất dọn {Count} booking.", expired.Count);
+        // }
+        // private async Task CleanupAsync(CancellationToken ct)
+        // {
+        //     using var scope   = _scopeFactory.CreateScope();
+        //     var context       = scope.ServiceProvider.GetRequiredService<MySqlDbContext>();
+
+        //     var cutoff        = DateTime.Now - HoldDuration;
+
+        //     var expired = await context.Bookings
+        //         .Include(b => b.TicketSeats)
+        //         .Where(b =>
+        //             b.BookingStatus == BookingStatusConstant.Pending && 
+        //             b.BookingDate.HasValue &&
+        //             b.BookingDate.Value < cutoff)
+        //         .ToListAsync(ct);
+
+        //     if (!expired.Any())
+        //     {
+        //         _logger.LogDebug("Không có booking hết hạn.");
+        //         return;
+        //     }
+
+        //     _logger.LogInformation("Tìm thấy {Count} booking hết hạn, đang xóa...", expired.Count);
+
+        //     // Xóa Reviews liên quan trước
+        //     var expiredIds = expired.Select(b => b.BookingID).ToList();
+        //     var reviews = await context.Reviews
+        //         .Where(r => expiredIds.Contains(r.BookingID))
+        //         .ToListAsync(ct);
+        //     if (reviews.Any())
+        //         context.Reviews.RemoveRange(reviews);
+
+        //     foreach (var booking in expired)
+        //     {
+        //         var trip = await context.Trips.FindAsync(new object[] { booking.TripID }, ct);
+        //         if (trip != null)
+        //             trip.AvailableSeats += booking.TotalSeats;
+
+        //         if (booking.TicketSeats != null && booking.TicketSeats.Any())
+        //             context.TicketSeats.RemoveRange(booking.TicketSeats);
+
+        //         context.Bookings.Remove(booking);
+
+        //         _logger.LogInformation(
+        //             "Đã xóa BookingID={Id}, TripID={TripId}, Ghế trả lại={Seats}",
+        //             booking.BookingID, booking.TripID, booking.TotalSeats);
+        //     }
+
+        //     await context.SaveChangesAsync(ct);
+        //     _logger.LogInformation("Hoàn tất dọn {Count} booking.", expired.Count);
+        // }
         private async Task CleanupAsync(CancellationToken ct)
         {
-            // Mỗi lần chạy tạo scope mới để lấy DbContext (vì DbContext là Scoped)
             using var scope   = _scopeFactory.CreateScope();
             var context       = scope.ServiceProvider.GetRequiredService<MySqlDbContext>();
 
             var cutoff        = DateTime.Now - HoldDuration;
 
-            // Lấy tất cả booking Pending quá hạn
             var expired = await context.Bookings
                 .Include(b => b.TicketSeats)
                 .Where(b =>
-                    (b.PaymentStatus == "Pending" || b.PaymentStatus == null) &&
+                    b.BookingStatus == BookingStatusConstant.Pending && 
                     b.BookingDate.HasValue &&
                     b.BookingDate.Value < cutoff)
                 .ToListAsync(ct);
@@ -72,17 +166,33 @@ namespace BaseCore.APIService.Services
 
             _logger.LogInformation("Tìm thấy {Count} booking hết hạn, đang xóa...", expired.Count);
 
+            var expiredIds = expired.Select(b => b.BookingID).ToList();
+
+            // 1. Xóa Reviews trước
+            var reviews = await context.Reviews
+                .Where(r => expiredIds.Contains(r.BookingID))
+                .ToListAsync(ct);
+            if (reviews.Any())
+                context.Reviews.RemoveRange(reviews);
+
+            // 2. Null hóa BookingID trong SeatHolds
+            var seatHolds = await context.SeatHolds
+                .Where(s => s.BookingID.HasValue && expiredIds.Contains(s.BookingID.Value))
+                .ToListAsync(ct);
+            foreach (var sh in seatHolds)
+                sh.BookingID = null;
+
             foreach (var booking in expired)
             {
-                // Hoàn lại ghế cho chuyến xe
                 var trip = await context.Trips.FindAsync(new object[] { booking.TripID }, ct);
                 if (trip != null)
                     trip.AvailableSeats += booking.TotalSeats;
 
-                // Xóa TicketSeats (cascade nên có thể tự xóa, nhưng explicit cho chắc)
+                // 3. Xóa TicketSeats
                 if (booking.TicketSeats != null && booking.TicketSeats.Any())
                     context.TicketSeats.RemoveRange(booking.TicketSeats);
 
+                // 4. Xóa Booking
                 context.Bookings.Remove(booking);
 
                 _logger.LogInformation(

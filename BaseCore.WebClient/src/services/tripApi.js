@@ -21,6 +21,11 @@ export const tripApi = {
     return response.data;
   },
 
+  async locations(params) {
+    const response = await apiClient.get('/api/trips/locations', { params });
+    return response.data;
+  },
+
   async getBookings(id, params) {
     const response = await apiClient.get(`/api/trips/${id}/bookings`, { params });
     return response.data;

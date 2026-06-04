@@ -29,11 +29,11 @@ namespace BaseCore.Repository.EFCore
             {
                 keyword = keyword.ToLower();
 
-                query = query.Where(u =>
+               query = query.Where(u =>
                     u.FullName.ToLower().Contains(keyword) ||
                     u.Email.ToLower().Contains(keyword) ||
                     u.Phone.ToLower().Contains(keyword) ||
-                    (u.Role != null && u.Role.ToLower().Contains(keyword)));
+                    u.Role.ToString().Contains(keyword));
             }
 
             var totalCount = await query.CountAsync();

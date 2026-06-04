@@ -1,14 +1,83 @@
+// import { useEffect, useState } from 'react';
+// import { useLocation, useNavigate } from 'react-router-dom';
+// import AdminLayout from '../layouts/AdminLayout';
+// import Admin, { AdminBookingDetail, AdminTripDetail } from './Admin';
+
+// const adminPaths = {
+//   dashboard: '/admin/dashboard',
+//   buses: '/admin/buses',
+//   trips: '/admin/trips',
+//   operators: '/admin/operators',
+//   users: '/admin/users',
+//   orders: '/admin/bookings',
+//   promotions: '/admin/promotions',
+//   payments: '/admin/payments',
+//   reviews: '/admin/reviews',
+//   settings: '/admin/settings',
+// };
+
+// const pathToTab = Object.entries(adminPaths).reduce((result, [tab, path]) => {
+//   result[path] = tab;
+//   return result;
+// }, {});
+
+// export default function AdminPage() {
+//   const [active, setActive] = useState('dashboard');
+//   const location = useLocation();
+//   const navigate = useNavigate();
+//   const tripDetailMatch = location.pathname.match(/^\/admin\/trips\/(\d+)$/);
+//   const tripDetailId = tripDetailMatch?.[1] || null;
+//   const bookingDetailMatch = location.pathname.match(/^\/admin\/bookings\/(\d+)$/);
+//   const bookingDetailId = bookingDetailMatch?.[1] || null;
+
+//   useEffect(() => {
+//     if (location.pathname === '/admin') {
+//       navigate('/admin/dashboard', { replace: true });
+//       return;
+//     }
+
+//     if (location.pathname.startsWith('/admin/trips/')) {
+//       setActive('trips');
+//       return;
+//     }
+
+//     if (location.pathname.startsWith('/admin/bookings/')) {
+//       setActive('orders');
+//       return;
+//     }
+
+//     setActive(pathToTab[location.pathname] || 'dashboard');
+//   }, [location.pathname, navigate]);
+
+//   const handleActiveChange = (tab) => {
+//     setActive(tab);
+//     navigate(adminPaths[tab] || '/admin/dashboard');
+//   };
+
+//   return (
+//     <AdminLayout active={active} onActiveChange={handleActiveChange}>
+//       {tripDetailId ? (
+//         <AdminTripDetail tripId={tripDetailId} />
+//       ) : bookingDetailId ? (
+//         <AdminBookingDetail bookingId={bookingDetailId} />
+//       ) : (
+//         <Admin active={active} />
+//       )}
+//     </AdminLayout>
+//   );
+// }
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../layouts/AdminLayout';
 import Admin, { AdminBookingDetail, AdminTripDetail } from './Admin';
+import { useAuth } from '../contexts/AuthContext';  // ← thêm
 
 const adminPaths = {
   dashboard: '/admin/dashboard',
   buses: '/admin/buses',
   trips: '/admin/trips',
-  operators: '/admin/operators',
-  users: '/admin/users',
+  operators: '/admin/operators',   // chỉ admin
+  users: '/admin/users',           // chỉ admin
   orders: '/admin/bookings',
   promotions: '/admin/promotions',
   payments: '/admin/payments',
@@ -21,33 +90,63 @@ const pathToTab = Object.entries(adminPaths).reduce((result, [tab, path]) => {
   return result;
 }, {});
 
+// ─── Tabs admin thấy đủ ───────────────────────────────────────────────────────
+const ADMIN_TABS = [
+  ['dashboard',   'Tổng quan',    'fa-chart-line'],
+  ['trips',       'Chuyến xe',    'fa-route'],
+  ['orders',      'Đơn hàng',     'fa-file-invoice'],
+  ['promotions',  'Khuyến mãi',   'fa-tags'],
+  ['payments',    'Thanh toán',   'fa-credit-card'],
+  ['reviews',     'Đánh giá',     'fa-star'],
+  ['buses',       'Xe',           'fa-bus'],
+  ['operators',   'Nhà xe',       'fa-building'],   // ← chỉ admin
+  ['users',       'Người dùng',   'fa-users'],      // ← chỉ admin
+  ['settings',    'Cài đặt',      'fa-gear'],
+];
+
+// ─── Tabs operator thấy (bỏ operators + users) ───────────────────────────────
+const OPERATOR_TABS = ADMIN_TABS.filter(
+  ([key]) => key !== 'operators' && key !== 'users'
+);
+
 export default function AdminPage() {
   const [active, setActive] = useState('dashboard');
-  const location = useLocation();
-  const navigate = useNavigate();
-  const tripDetailMatch = location.pathname.match(/^\/admin\/trips\/(\d+)$/);
-  const tripDetailId = tripDetailMatch?.[1] || null;
+  const location  = useLocation();
+  const navigate  = useNavigate();
+  const { user }  = useAuth();                              // ← lấy role
+
+  const isOperator = Number(user?.role ?? 0) === 1;        // role 1 = Operator
+  const tabs = isOperator ? OPERATOR_TABS : ADMIN_TABS;    // ← tabs theo role
+
+  const tripDetailMatch   = location.pathname.match(/^\/admin\/trips\/(\d+)$/);
+  const tripDetailId      = tripDetailMatch?.[1] || null;
   const bookingDetailMatch = location.pathname.match(/^\/admin\/bookings\/(\d+)$/);
-  const bookingDetailId = bookingDetailMatch?.[1] || null;
+  const bookingDetailId   = bookingDetailMatch?.[1] || null;
 
   useEffect(() => {
     if (location.pathname === '/admin') {
       navigate('/admin/dashboard', { replace: true });
       return;
     }
-
     if (location.pathname.startsWith('/admin/trips/')) {
       setActive('trips');
       return;
     }
-
     if (location.pathname.startsWith('/admin/bookings/')) {
       setActive('orders');
       return;
     }
 
-    setActive(pathToTab[location.pathname] || 'dashboard');
-  }, [location.pathname, navigate]);
+    const tab = pathToTab[location.pathname] || 'dashboard';
+
+    // Operator cố vào trang admin-only → redirect về dashboard
+    if (isOperator && (tab === 'operators' || tab === 'users')) {
+      navigate('/admin/dashboard', { replace: true });
+      return;
+    }
+
+    setActive(tab);
+  }, [location.pathname, navigate, isOperator]);
 
   const handleActiveChange = (tab) => {
     setActive(tab);
@@ -55,13 +154,18 @@ export default function AdminPage() {
   };
 
   return (
-    <AdminLayout active={active} onActiveChange={handleActiveChange}>
+    <AdminLayout
+      active={active}
+      onActiveChange={handleActiveChange}
+      tabs={tabs}          // ← truyền tabs đã lọc xuống layout
+      isOperator={isOperator}
+    >
       {tripDetailId ? (
         <AdminTripDetail tripId={tripDetailId} />
       ) : bookingDetailId ? (
         <AdminBookingDetail bookingId={bookingDetailId} />
       ) : (
-        <Admin active={active} />
+        <Admin active={active} isOperator={isOperator} />  // ← truyền isOperator
       )}
     </AdminLayout>
   );

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+// import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
 import { promotionApi } from '../services/promotionApi';
+import { paymentApi } from '../services/paymentApi';
 
 const PENDING_BOOKING_KEY = 'pendingBooking';
 const HOLD_STORAGE_KEY = 'currentSeatHold';
@@ -171,7 +173,7 @@ export default function BookingPayment() {
   const [previewPromotions, setPreviewPromotions] = useState([]);
   const [showAllPromotions, setShowAllPromotions] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
-
+  const submittingRef = useRef(false); 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -250,58 +252,138 @@ export default function BookingPayment() {
     } finally {
       setPromotionLoading(false);
     }
+    // const submittingRef = useRef(false); 
   };
 
-  const submit = async () => {
-    if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
-      alert('Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.');
-      navigate('/search-results');
-      return;
-    }
+  // const submit = async () => {
+  //    if (submittingRef.current) return;  // ← thêm
+  //     submittingRef.current = true; 
+  //   if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
+  //     alert('Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.');
+  //     navigate('/search-results');
+  //     return;
+  //   }
 
-    if (remainingMs <= 0) {
-      alert('Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.');
-      navigate(`/trips/${pendingBooking.tripId}/seats`);
-      return;
-    }
+  //   if (remainingMs <= 0) {
+  //     alert('Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.');
+  //     navigate(`/trips/${pendingBooking.tripId}/seats`);
+  //     return;
+  //   }
 
-    setSubmitting(true);
+  //   setSubmitting(true);
+  //   try {
+  //     const responses = [];
+  //     for (let index = 0; index < bookingsToPay.length; index += 1) {
+  //       const booking = bookingsToPay[index];
+  //       const code = index === 0 && promotionResult ? promotionCode : '';
+  //       const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod, code));
+  //       responses.push(response);
+  //     }
+
+  //     const bookingIds = responses
+  //       .map((response) => pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']))
+  //       .filter(Boolean);
+  //     const bookingId = bookingIds[0];
+  //     localStorage.setItem(SUCCESS_BOOKINGS_KEY, JSON.stringify(bookingIds));
+  //     localStorage.removeItem(PENDING_BOOKING_KEY);
+  //     localStorage.removeItem(ROUND_TRIP_KEY);
+  //     localStorage.removeItem(HOLD_STORAGE_KEY);
+  //     localStorage.removeItem(PAYMENT_EXPIRES_KEY);
+  //     window.dispatchEvent(new Event('holdSeatUpdated'));
+
+  //     navigate(`/booking/success/${bookingId}`, { replace: true });
+  //   } catch (err) {
+  //     const message = err.message || 'Không thể tạo booking.';
+  //     const lowerMessage = message.toLowerCase();
+  //     if (lowerMessage.includes('hết thời gian giữ') || lowerMessage.includes('het thoi gian')) {
+  //       alert('Ghế đã hết thời gian giữ, vui lòng chọn lại ghế.');
+  //       navigate(`/trips/${pendingBooking.tripId}/seats`);
+  //       return;
+  //     }
+
+  //     alert(message);
+  //   } finally {
+  //     submittingRef.current = false;
+  //     setSubmitting(false);
+  //   }
+  // };
+const submit = async () => {
+  if (submittingRef.current) return;
+  submittingRef.current = true;
+
+  if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
+    alert('Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.');
+    submittingRef.current = false; // ← thêm
+    navigate('/search-results');
+    return;
+  }
+
+  if (remainingMs <= 0) {
+    alert('Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.');
+    submittingRef.current = false; // ← thêm
+    navigate(`/trips/${pendingBooking.tripId}/seats`);
+    return;
+  }
+
+  // setSubmitting(true);
+  // try {
+  //   const responses = [];
+  //   for (let index = 0; index < bookingsToPay.length; index += 1) {
+  //     const booking = bookingsToPay[index];
+  //     const code = index === 0 && promotionResult ? promotionCode : '';
+  //     const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod, code));
+  //     responses.push(response);
+  //   }
+  setSubmitting(true);
     try {
       const responses = [];
+
       for (let index = 0; index < bookingsToPay.length; index += 1) {
         const booking = bookingsToPay[index];
         const code = index === 0 && promotionResult ? promotionCode : '';
-        const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod, code));
+
+        const response = await bookingApi.create(
+          buildBookingRequest(booking, paymentMethod, code)
+        );
+
         responses.push(response);
+
+        // Nếu chuyển khoản thì tự xác nhận thanh toán
+        if (paymentMethod === 'BankTransfer'||   paymentMethod === 'EWallet') {
+          await paymentApi.simulate({
+            bookingID: response.bookingID || response.BookingID,
+            paymentMethod: 'BankTransfer',
+          });
+        }
       }
 
-      const bookingIds = responses
-        .map((response) => pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']))
-        .filter(Boolean);
-      const bookingId = bookingIds[0];
-      localStorage.setItem(SUCCESS_BOOKINGS_KEY, JSON.stringify(bookingIds));
-      localStorage.removeItem(PENDING_BOOKING_KEY);
-      localStorage.removeItem(ROUND_TRIP_KEY);
-      localStorage.removeItem(HOLD_STORAGE_KEY);
-      localStorage.removeItem(PAYMENT_EXPIRES_KEY);
-      window.dispatchEvent(new Event('holdSeatUpdated'));
+    const bookingIds = responses
+      .map((response) => pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']))
+      .filter(Boolean);
+    const bookingId = bookingIds[0];
+    localStorage.setItem(SUCCESS_BOOKINGS_KEY, JSON.stringify(bookingIds));
+    localStorage.removeItem(PENDING_BOOKING_KEY);
+    localStorage.removeItem(ROUND_TRIP_KEY);
+    localStorage.removeItem(HOLD_STORAGE_KEY);
+    localStorage.removeItem(PAYMENT_EXPIRES_KEY);
+    window.dispatchEvent(new Event('holdSeatUpdated'));
+    navigate(`/booking/success/${bookingId}`, { replace: true });
 
-      navigate(`/booking/success/${bookingId}`, { replace: true });
-    } catch (err) {
-      const message = err.message || 'Không thể tạo booking.';
-      const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('hết thời gian giữ') || lowerMessage.includes('het thoi gian')) {
-        alert('Ghế đã hết thời gian giữ, vui lòng chọn lại ghế.');
-        navigate(`/trips/${pendingBooking.tripId}/seats`);
-        return;
-      }
-
-      alert(message);
-    } finally {
-      setSubmitting(false);
+  } catch (err) {
+    const message = err.message || 'Không thể tạo booking.';
+    const lowerMessage = message.toLowerCase();
+    if (lowerMessage.includes('hết thời gian giữ') || lowerMessage.includes('het thoi gian')) {
+      alert('Ghế đã hết thời gian giữ, vui lòng chọn lại ghế.');
+      navigate(`/trips/${pendingBooking.tripId}/seats`);
+      return;
     }
-  };
+    alert(message);
 
+  } finally {
+    submittingRef.current = false;
+    setSubmitting(false);
+  }
+};
   if (!pendingBooking?.tripId) {
     return (
       <UserLayout>

@@ -290,7 +290,9 @@ function DatePickerField({ label, value, min, onChange, icon, emptyText }) {
 export default function Home() {
   const navigate = useNavigate();
   const today = useMemo(() => getToday(), []);
-  const [locations, setLocations] = useState([]);
+  // const [locations, setLocations] = useState([]);
+  const [departureOptions, setDepartureOptions] = useState([]);
+  const [arrivalOptions, setArrivalOptions] = useState([]);
   const [publicPromotions, setPublicPromotions] = useState([]);
   const [routeIndex, setRouteIndex] = useState(0);
   const [promotionIndex, setPromotionIndex] = useState(0);
@@ -304,13 +306,13 @@ export default function Home() {
     returnDate: "",
   });
 
-  const locationOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        locations.map((item) => String(item || "").trim()).filter(Boolean),
-      ),
-    ).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [locations]);
+  // const locationOptions = useMemo(() => {
+  //   return Array.from(
+  //     new Set(
+  //       locations.map((item) => String(item || "").trim()).filter(Boolean),
+  //     ),
+  //   ).sort((a, b) => a.localeCompare(b, "vi"));
+  // }, [locations]);
   const visibleRoutes = useMemo(
     () => getVisibleItems(popularRoutes, routeIndex),
     [routeIndex],
@@ -320,12 +322,24 @@ export default function Home() {
     [publicPromotions, promotionIndex],
   );
 
+  // useEffect(() => {
+  //   fetch(`${API_BASE}/api/trips/locations`)
+  //     .then((response) => (response.ok ? response.json() : []))
+  //     .then((data) => setLocations(Array.isArray(data) ? data : []))
+  //     .catch(() => setLocations([]));
+  // }, []);
   useEffect(() => {
-    fetch(`${API_BASE}/api/trips/locations`)
-      .then((response) => (response.ok ? response.json() : []))
-      .then((data) => setLocations(Array.isArray(data) ? data : []))
-      .catch(() => setLocations([]));
-  }, []);
+  fetch(`${API_BASE}/api/trips/locations`)
+    .then((response) => response.json())
+    .then((data) => {
+      setDepartureOptions(data.departures || []);
+      setArrivalOptions(data.arrivals || []);
+    })
+    .catch(() => {
+      setDepartureOptions([]);
+      setArrivalOptions([]);
+    });
+}, []);
 
   useEffect(() => {
     promotionApi
@@ -437,16 +451,24 @@ export default function Home() {
             onSubmit={submit}
           >
             <div className="home-search-widget">
-              <LocationPicker
-                label="Nơi xuất phát"
+              {/* <LocationPicker  */}
+                {/* label="Nơi xuất phát"
                 value={form.from}
                 onChange={(value) => updateForm("from", value)}
                 options={locationOptions}
                 icon="fa-circle-dot"
                 accentClass="from"
                 placeholder="Chọn điểm đi"
+              /> */}
+              <LocationPicker
+                label="Nơi xuất phát"
+                value={form.from}
+                onChange={(value) => updateForm("from", value)}
+                options={departureOptions}
+                icon="fa-circle-dot"
+                accentClass="from"
+                placeholder="Chọn điểm đi"
               />
-
               <button
                 type="button"
                 className="home-swap-button"
@@ -456,7 +478,7 @@ export default function Home() {
                 <i className="fa-solid fa-right-left" />
               </button>
 
-              <LocationPicker
+              {/* <LocationPicker
                 label="Nơi đến"
                 value={form.to}
                 onChange={(value) => updateForm("to", value)}
@@ -464,8 +486,16 @@ export default function Home() {
                 icon="fa-location-dot"
                 accentClass="to"
                 placeholder="Chọn điểm đến"
+              /> */}
+              <LocationPicker
+                label="Nơi đến"
+                value={form.to}
+                onChange={(value) => updateForm("to", value)}
+                options={arrivalOptions}
+                icon="fa-location-dot"
+                accentClass="to"
+                placeholder="Chọn điểm đến"
               />
-
               <DatePickerField
                 label="Ngày đi"
                 value={form.departureDate}

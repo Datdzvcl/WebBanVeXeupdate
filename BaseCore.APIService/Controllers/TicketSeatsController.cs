@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using BaseCore.Entities;
 using BaseCore.Repository;
-
+using Microsoft.AspNetCore.Authorization;
 namespace BaseCore.APIService.Controllers
 {
     [Route("api/[controller]")]
@@ -34,6 +34,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpGet("booking/{bookingId}")]
+        [Authorize]
         public async Task<IActionResult> GetByBooking(int bookingId)
         {
             var seats = await _context.TicketSeats
@@ -51,6 +52,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Create(List<TicketSeat> seats)
         {
             if (seats == null || seats.Count == 0)
@@ -87,6 +89,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Delete(int id)
         {
             var seat = await _context.TicketSeats.FindAsync(id);
@@ -101,6 +104,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpDelete("booking/{bookingId}")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> DeleteByBooking(int bookingId)
         {
             var seats = await _context.TicketSeats

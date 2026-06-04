@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿// import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
@@ -102,7 +103,8 @@ const EMPTY_TRIP = {
   arrivalTime: "",
   price: "",
   availableSeats: "",
-  status: "Scheduled",
+  // status: "Scheduled",
+   status: 0
 };
 const EMPTY_BUS = {
   busID: null,
@@ -143,7 +145,8 @@ const EMPTY_PROMOTION = {
   userID: "",
 };
 
-export default function Admin({ active = "dashboard" }) {
+// export default function Admin({ active = "dashboard" }) {
+export default function Admin({ active = 'dashboard', isOperator = false }) {
   const [stats, setStats] = useState({});
   const [trips, setTrips] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -158,30 +161,88 @@ export default function Admin({ active = "dashboard" }) {
 
   // const load = async () => {
   //   setLoading(true);
-  const load = async (silent = false) => {
+  // const load = async (silent = false) => {
+  //   if (!silent) setLoading(true);
+  //   try {
+  //     // const [s, rawTrips, rawBookings, rawBuses, rawOperators, rawTicketSeats, rawTransactions, rawUsers, rawRevenue] = await Promise.all([
+  //     //   apiFetch("/api/admin/statistics").catch(() => ({})),
+  //     //   apiFetch("/api/admin/trips").catch(() => []),
+  //     //   apiFetch("/api/admin/bookings").catch(() => []),
+  //     //   apiFetch("/api/admin/buses").catch(() => []),
+  //     //   apiFetch("/api/admin/operators").catch(() => []),
+  //     //   apiFetch("/api/admin/ticket-seats").catch(() => []),
+  //     //   apiFetch("/api/admin/transactions").catch(() => []),
+  //     //   apiFetch("/api/admin/users").catch(() => []),
+  //     //   apiFetch("/api/admin/revenue-stats").catch(() => []),
+  //     //   apiFetch("/api/admin/upcoming-trips").catch(() => []),
+  //     // ]);
+  //     const [
+  //       s,
+  //       rawTrips,
+  //       rawBookings,
+  //       rawBuses,
+  //       rawOperators,
+  //       rawTicketSeats,
+  //       rawTransactions,
+  //       rawUsers,
+  //       rawRevenue,
+  //       rawUpcoming,
+  //     ] = await Promise.all([
+  //       apiFetch("/api/dashboard/stats").catch(() => ({})),
+  //       apiFetch("/api/admin/trips").catch(() => []),
+  //       apiFetch("/api/admin/bookings").catch(() => []),
+  //       apiFetch("/api/admin/buses").catch(() => []),
+  //       apiFetch("/api/admin/operators").catch(() => []),
+  //       apiFetch("/api/admin/ticket-seats").catch(() => []),
+  //       apiFetch("/api/admin/transactions").catch(() => []),
+  //       apiFetch("/api/admin/users").catch(() => []),
+  //       apiFetch("/api/admin/revenue-stats").catch(() => []),
+  //       apiFetch("/api/admin/upcoming-trips").catch(() => []),
+  //     ]);
+  //     const normalizedTrips = Array.isArray(rawTrips)
+  //       ? rawTrips.map(normalizeTrip)
+  //       : [];
+  //     const safeBuses = Array.isArray(rawBuses) ? rawBuses : [];
+  //     const safeOperators = Array.isArray(rawOperators) ? rawOperators : [];
+  //     setStats(s || {});
+  //     setBuses(safeBuses);
+  //     setOperators(safeOperators);
+  //     setTrips(enrichTrips(normalizedTrips, safeBuses, safeOperators));
+  //     setBookings(Array.isArray(rawBookings) ? rawBookings : []);
+  //     setTicketSeats(Array.isArray(rawTicketSeats) ? rawTicketSeats : []);
+  //     setTransactions(Array.isArray(rawTransactions) ? rawTransactions : []);
+  //     setUsers(Array.isArray(rawUsers) ? rawUsers : []);
+  //     setRevenueStats(Array.isArray(rawRevenue) ? rawRevenue : []);
+  //     setUpcomingTrips(
+  //       Array.isArray(rawUpcoming)
+  //         ? enrichTrips(
+  //             rawUpcoming.map(normalizeTrip),
+  //             safeBuses,
+  //             safeOperators,
+  //           )
+  //         : [],
+  //     );
+  //   } catch (e) {
+  //     alert(e.message || "Không tải được dữ liệu admin.");
+  //     // } finally {
+  //     //   setLoading(false);
+  //     // }
+  //   } finally {
+  //     if (!silent) setLoading(false);
+  //   }
+  // };
+const load = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // const [s, rawTrips, rawBookings, rawBuses, rawOperators, rawTicketSeats, rawTransactions, rawUsers, rawRevenue] = await Promise.all([
-      //   apiFetch("/api/admin/statistics").catch(() => ({})),
-      //   apiFetch("/api/admin/trips").catch(() => []),
-      //   apiFetch("/api/admin/bookings").catch(() => []),
-      //   apiFetch("/api/admin/buses").catch(() => []),
-      //   apiFetch("/api/admin/operators").catch(() => []),
-      //   apiFetch("/api/admin/ticket-seats").catch(() => []),
-      //   apiFetch("/api/admin/transactions").catch(() => []),
-      //   apiFetch("/api/admin/users").catch(() => []),
-      //   apiFetch("/api/admin/revenue-stats").catch(() => []),
-      //   apiFetch("/api/admin/upcoming-trips").catch(() => []),
-      // ]);
       const [
         s,
         rawTrips,
         rawBookings,
         rawBuses,
-        rawOperators,
+        rawOperators,   // operator sẽ nhận [] vì BE trả 403
         rawTicketSeats,
         rawTransactions,
-        rawUsers,
+        rawUsers,       // operator sẽ nhận [] vì BE trả 403
         rawRevenue,
         rawUpcoming,
       ] = await Promise.all([
@@ -189,46 +250,44 @@ export default function Admin({ active = "dashboard" }) {
         apiFetch("/api/admin/trips").catch(() => []),
         apiFetch("/api/admin/bookings").catch(() => []),
         apiFetch("/api/admin/buses").catch(() => []),
-        apiFetch("/api/admin/operators").catch(() => []),
+        // ↓ operator không gọi /api/admin/operators (locked Admin-only)
+        isOperator
+          ? Promise.resolve([])
+          : apiFetch("/api/admin/operators").catch(() => []),
         apiFetch("/api/admin/ticket-seats").catch(() => []),
         apiFetch("/api/admin/transactions").catch(() => []),
-        apiFetch("/api/admin/users").catch(() => []),
+        // ↓ operator không gọi /api/admin/users (locked Admin-only)
+        isOperator
+          ? Promise.resolve([])
+          : apiFetch("/api/admin/users").catch(() => []),
         apiFetch("/api/admin/revenue-stats").catch(() => []),
         apiFetch("/api/admin/upcoming-trips").catch(() => []),
       ]);
-      const normalizedTrips = Array.isArray(rawTrips)
-        ? rawTrips.map(normalizeTrip)
-        : [];
-      const safeBuses = Array.isArray(rawBuses) ? rawBuses : [];
-      const safeOperators = Array.isArray(rawOperators) ? rawOperators : [];
+ 
+      const normalizedTrips = Array.isArray(rawTrips) ? rawTrips.map(normalizeTrip) : [];
+      const safeBuses       = Array.isArray(rawBuses)     ? rawBuses     : [];
+      const safeOperators   = Array.isArray(rawOperators) ? rawOperators : [];
+ 
       setStats(s || {});
       setBuses(safeBuses);
       setOperators(safeOperators);
       setTrips(enrichTrips(normalizedTrips, safeBuses, safeOperators));
-      setBookings(Array.isArray(rawBookings) ? rawBookings : []);
+      setBookings(Array.isArray(rawBookings)     ? rawBookings     : []);
       setTicketSeats(Array.isArray(rawTicketSeats) ? rawTicketSeats : []);
       setTransactions(Array.isArray(rawTransactions) ? rawTransactions : []);
       setUsers(Array.isArray(rawUsers) ? rawUsers : []);
       setRevenueStats(Array.isArray(rawRevenue) ? rawRevenue : []);
       setUpcomingTrips(
         Array.isArray(rawUpcoming)
-          ? enrichTrips(
-              rawUpcoming.map(normalizeTrip),
-              safeBuses,
-              safeOperators,
-            )
-          : [],
+          ? enrichTrips(rawUpcoming.map(normalizeTrip), safeBuses, safeOperators)
+          : []
       );
     } catch (e) {
       alert(e.message || "Không tải được dữ liệu admin.");
-      // } finally {
-      //   setLoading(false);
-      // }
     } finally {
       if (!silent) setLoading(false);
     }
   };
-
   useEffect(() => {
     load();
   }, []);
@@ -256,6 +315,7 @@ export default function Admin({ active = "dashboard" }) {
           users={users}
           revenueStats={revenueStats}
           onRefresh={() => load(true)}
+          isOperator={isOperator}
         />
       )}
     </>
@@ -275,8 +335,9 @@ function AdminContent({
   users,
   revenueStats,
   onRefresh,
+  isOperator,   // ← thêm prop này
 }) {
-  if (active === "dashboard")
+  if (active === 'dashboard')
     return (
       <AdminDashboard
         stats={stats}
@@ -288,32 +349,50 @@ function AdminContent({
         buses={buses}
         operators={operators}
         users={users}
+        isOperator={isOperator}   // ← truyền xuống
       />
     );
-  if (active === "trips")
-    return (
-      <TripsManager
-        trips={trips}
-        buses={buses}
-        operators={operators}
-        onRefresh={onRefresh}
-      />
-    );
-  if (active === "orders") return <BookingsManager />;
-  if (active === "promotions") return <PromotionsManager />;
-  if (active === "payments") return <PaymentsManager />;
-  if (active === "reviews") return <ReviewsManager />;
-  // if (active === "tickets") return <TicketsManager ticketSeats={ticketSeats} trips={trips} operators={operators} />;  // ← thêm props
-  if (active === "buses")
-    return (
-      <BusesManager buses={buses} operators={operators} onRefresh={onRefresh} />
-    );
-  if (active === "users")
+//   if (active === "trips")
+//     return (
+//       <TripsManager
+//         trips={trips}
+//         buses={buses}
+//         operators={operators}
+//         onRefresh={onRefresh}
+//       />
+//     );
+//   if (active === "orders") return <BookingsManager />;
+//   if (active === "promotions") return <PromotionsManager />;
+//   if (active === "payments") return <PaymentsManager />;
+//   if (active === "reviews") return <ReviewsManager />;
+//   // if (active === "tickets") return <TicketsManager ticketSeats={ticketSeats} trips={trips} operators={operators} />;  // ← thêm props
+//   if (active === "buses")
+//     return (
+//       <BusesManager buses={buses} operators={operators} onRefresh={onRefresh} />
+//     );
+//   if (active === "users")
+//     return <UsersManager users={users} onRefresh={onRefresh} />;
+//   if (active === "settings") return <AdminSettings />;
+//   return <OperatorsManager operators={operators} onRefresh={onRefresh} />;
+// }
+if (isOperator && active === 'operators')
+    return <div className="admin-card">Bạn không có quyền truy cập trang này.</div>;
+  if (isOperator && active === 'users')
+    return <div className="admin-card">Bạn không có quyền truy cập trang này.</div>;
+ 
+  if (active === 'trips')
+    return <TripsManager trips={trips} buses={buses} operators={operators} onRefresh={onRefresh} isOperator={isOperator} />;
+  if (active === 'orders')   return <BookingsManager />;
+  if (active === 'promotions') return <PromotionsManager />;
+  if (active === 'payments') return <PaymentsManager isOperator={isOperator} />;
+  if (active === 'reviews')  return <ReviewsManager />;
+  if (active === 'buses')
+    return <BusesManager buses={buses} operators={operators} onRefresh={onRefresh} isOperator={isOperator} />;
+  if (active === 'users')
     return <UsersManager users={users} onRefresh={onRefresh} />;
-  if (active === "settings") return <AdminSettings />;
+  if (active === 'settings') return <AdminSettings />;
   return <OperatorsManager operators={operators} onRefresh={onRefresh} />;
 }
-
 function AdminSettings() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -1020,7 +1099,7 @@ function UsersManager({ onRefresh }) {
 }
 
 // ==================== TRIPS MANAGER ====================
-function TripsManager({ buses, operators, onRefresh }) {
+function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({
@@ -1046,7 +1125,12 @@ function TripsManager({ buses, operators, onRefresh }) {
     setLoading(true);
     try {
       const data = await tripApi.adminList(
-        cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
+        cleanParams({
+          ...filters,
+          operatorId: isOperator ? "" : filters.operatorId,
+          page,
+          pageSize: ADMIN_CRUD_PAGE_SIZE,
+        }),
       );
       const paged = normalizePagedResponse(data, page);
       setRows(paged.items.map(normalizeTrip));
@@ -1070,6 +1154,7 @@ function TripsManager({ buses, operators, onRefresh }) {
     filters.departureDate,
     filters.operatorId,
     filters.status,
+    isOperator,
   ]);
 
   const updateFilter = (field, value) => {
@@ -1090,7 +1175,9 @@ function TripsManager({ buses, operators, onRefresh }) {
         arrivalTime: form.arrivalTime,
         price: Number(form.price || 0),
         availableSeats: Number(form.availableSeats || 0),
-        status: form.status || "Scheduled",
+        // status: form.status || "Scheduled",
+        // status: Number(form.status ?? 0),
+         status: Number(form.status || 0),
       };
       if (
         !payload.busID ||
@@ -1130,7 +1217,8 @@ function TripsManager({ buses, operators, onRefresh }) {
       arrivalTime: toDateTimeLocal(item.arrivalTime),
       price: item.price || "",
       availableSeats: item.availableSeats || "",
-      status: item.status || "Scheduled",
+      // status: item.status || "Scheduled",
+      status: item.status ?? 0,
     });
     setShowForm(true);
   };
@@ -1178,36 +1266,64 @@ function TripsManager({ buses, operators, onRefresh }) {
                 return (
                   <option key={busId} value={busId}>
                     Xe #{busId} - {pick(b, ["licensePlate", "LicensePlate"])} (
-                    {pick(b, ["busType", "BusType"])}) -{" "}
-                    {pick(
-                      b,
-                      ["operatorName", "OperatorName"],
-                      findOperatorName(
-                        operators,
-                        pick(b, ["operatorID", "OperatorID"]),
-                      ),
-                    )}
+                    {pick(b, ["busType", "BusType"])})
+                    {!isOperator &&
+                      ` - ${pick(
+                        b,
+                        ["operatorName", "OperatorName"],
+                        findOperatorName(
+                          operators,
+                          pick(b, ["operatorID", "OperatorID"]),
+                        ),
+                      )}`}
                   </option>
                 );
               })}
             </select>
-            <input
+            <TripLocationInput
+              type="departure"
               value={form.departureLocation}
-              onChange={(e) =>
-                setForm({ ...form, departureLocation: e.target.value })
-              }
+              onChange={(value) => setForm({ ...form, departureLocation: value })}
               placeholder="Điểm đi"
+              icon="fa-location-dot"
               required
             />
-            <input
+            <TripLocationInput
+              type="arrival"
               value={form.arrivalLocation}
-              onChange={(e) =>
-                setForm({ ...form, arrivalLocation: e.target.value })
-              }
+              onChange={(value) => setForm({ ...form, arrivalLocation: value })}
               placeholder="Điểm đến"
+              icon="fa-map-location-dot"
               required
             />
-            <input
+            <label className={`admin-date-input ${form.departureTime ? "has-value" : ""}`}>
+              <span>Giờ đi</span>
+              <strong>{formatDateTimeLabel(form.departureTime)}</strong>
+              <i className="fa-regular fa-calendar-days" />
+              <input
+                type="datetime-local"
+                value={form.departureTime}
+                onChange={(e) =>
+                  setForm({ ...form, departureTime: e.target.value })
+                }
+                required
+              />
+            </label>
+            <label className={`admin-date-input ${form.arrivalTime ? "has-value" : ""}`}>
+              <span>Giờ đến</span>
+              <strong>{formatDateTimeLabel(form.arrivalTime)}</strong>
+              <i className="fa-regular fa-calendar-days" />
+              <input
+                type="datetime-local"
+                value={form.arrivalTime}
+                min={form.departureTime || undefined}
+                onChange={(e) =>
+                  setForm({ ...form, arrivalTime: e.target.value })
+                }
+                required
+              />
+            </label>
+            {/* <input
               type="datetime-local"
               value={form.departureTime}
               onChange={(e) =>
@@ -1222,7 +1338,7 @@ function TripsManager({ buses, operators, onRefresh }) {
                 setForm({ ...form, arrivalTime: e.target.value })
               }
               required
-            />
+            /> */}
             <input
               type="number"
               min="0"
@@ -1255,36 +1371,48 @@ function TripsManager({ buses, operators, onRefresh }) {
           </form>
         </AdminFormModal>
       )}
-      <div className="admin-filter-grid">
-        <input
+      <div className="admin-filter-grid trips-filter-grid">
+        <TripLocationInput
+          type="departure"
           value={filters.departureLocation}
-          onChange={(e) => updateFilter("departureLocation", e.target.value)}
+          onChange={(value) => updateFilter("departureLocation", value)}
           placeholder="Điểm xuất phát"
+          icon="fa-location-dot"
         />
-        <input
+        <TripLocationInput
+          type="arrival"
           value={filters.arrivalLocation}
-          onChange={(e) => updateFilter("arrivalLocation", e.target.value)}
+          onChange={(value) => updateFilter("arrivalLocation", value)}
           placeholder="Điểm đến"
+          icon="fa-map-location-dot"
         />
-        <input
-          type="date"
-          value={filters.departureDate}
-          onChange={(e) => updateFilter("departureDate", e.target.value)}
-        />
-        <select
-          value={filters.operatorId}
-          onChange={(e) => updateFilter("operatorId", e.target.value)}
-        >
-          <option value="">Tất cả nhà xe</option>
-          {operators.map((o) => {
-            const id = pick(o, ["operatorID", "OperatorID"]);
-            return (
-              <option key={id} value={id}>
-                {pick(o, ["name", "Name"])}
-              </option>
-            );
-          })}
-        </select>
+        <label className={`payment-date-field ${filters.departureDate ? "has-value" : ""}`}>
+          <span>Ngày đi</span>
+          <strong>{formatDateLabel(filters.departureDate)}</strong>
+          <i className="fa-regular fa-calendar-days" />
+          <input
+            type="date"
+            value={filters.departureDate}
+            onChange={(e) => updateFilter("departureDate", e.target.value)}
+            aria-label="Ngày đi"
+          />
+        </label>
+        {!isOperator && (
+          <select
+            value={filters.operatorId}
+            onChange={(e) => updateFilter("operatorId", e.target.value)}
+          >
+            <option value="">Tất cả nhà xe</option>
+            {operators.map((o) => {
+              const id = pick(o, ["operatorID", "OperatorID"]);
+              return (
+                <option key={id} value={id}>
+                  {pick(o, ["name", "Name"])}
+                </option>
+              );
+            })}
+          </select>
+        )}
         <select
           value={filters.status}
           onChange={(e) => updateFilter("status", e.target.value)}
@@ -1313,6 +1441,123 @@ function TripsManager({ buses, operators, onRefresh }) {
         onPageChange={setPage}
       />
     </section>
+  );
+}
+
+function TripLocationInput({
+  type,
+  value,
+  onChange,
+  placeholder,
+  icon = "fa-location-dot",
+  required = false,
+}) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const wrapRef = useRef(null);
+  const debounceRef = useRef(null);
+
+  const loadLocations = async (query = value) => {
+    setLoading(true);
+    try {
+      const data = await tripApi.locations({
+        type,
+        q: query || "",
+        take: 60,
+      });
+      setSuggestions(Array.isArray(data) ? data : []);
+      setOpen(true);
+    } catch {
+      setSuggestions([]);
+      setOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!open) return;
+
+    debounceRef.current = setTimeout(() => {
+      loadLocations(value);
+    }, value ? 250 : 0);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [value, type, open]);
+
+  const selectLocation = (location) => {
+    onChange(location);
+    setOpen(false);
+  };
+
+  return (
+    <div className="trip-location-wrap" ref={wrapRef}>
+      <div className="payment-suggest-input-wrap">
+        <i className={`fa-solid ${icon} payment-suggest-icon`} />
+        <input
+          type="text"
+          className="payment-suggest-input"
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => loadLocations(value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          required={required}
+        />
+        {loading && <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />}
+        {value && (
+          <button
+            type="button"
+            className="payment-suggest-clear"
+            onClick={() => {
+              onChange("");
+              setOpen(true);
+              loadLocations("");
+            }}
+          >
+            <i className="fa-solid fa-xmark" />
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <ul className="payment-suggest-dropdown trip-location-dropdown">
+          {suggestions.map((item) => (
+            <li
+              key={item}
+              className="payment-suggest-item trip-location-item"
+              onMouseDown={() => selectLocation(item)}
+            >
+              <span className="suggest-id">
+                <i className="fa-solid fa-location-dot" />
+              </span>
+              <span className="suggest-name">{item}</span>
+            </li>
+          ))}
+          {!loading && suggestions.length === 0 && (
+            <li className="payment-suggest-empty">
+              Không có trong dữ liệu, có thể nhập tỉnh mới
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -1384,18 +1629,18 @@ export function AdminTripDetail({ tripId }) {
     { label: "Tất cả", bookingStatus: "", paymentStatus: "" },
     {
       label: "Đợi xác nhận",
-      bookingStatus: "PendingConfirm",
+      bookingStatus: 0,
       paymentStatus: "",
     },
-    { label: "Đã xác nhận", bookingStatus: "Confirmed", paymentStatus: "" },
+    { label: "Đã xác nhận", bookingStatus: 1, paymentStatus: "" },
     {
       label: "Yêu cầu hủy",
-      bookingStatus: "CancelRequested",
+      bookingStatus: 5,
       paymentStatus: "",
     },
-    { label: "Đã hủy", bookingStatus: "Cancelled", paymentStatus: "" },
-    { label: "Đã thanh toán", bookingStatus: "", paymentStatus: "Paid" },
-    { label: "Chưa thanh toán", bookingStatus: "", paymentStatus: "Pending" },
+    { label: "Đã hủy", bookingStatus:2 , paymentStatus: "" },
+    // { label: "Đã thanh toán", bookingStatus: 1, paymentStatus: "" },
+    // { label: "Chưa thanh toán", bookingStatus: 0, paymentStatus: "" },
   ];
 
   return (
@@ -1571,7 +1816,7 @@ export function AdminTripDetail({ tripId }) {
                     <td>
                       {formatVND(pick(item, ["totalPrice", "TotalPrice"], 0))}
                     </td>
-                    <td>
+                    {/* <td>
                       <span className="badge">
                         {labelPaymentStatus(
                           pick(
@@ -1581,7 +1826,36 @@ export function AdminTripDetail({ tripId }) {
                           ),
                         )}
                       </span>
-                    </td>
+                    </td> */}
+                    {/* <td>
+                    <span className="badge">
+                      {Number(
+                        pick(item, ["bookingStatus", "BookingStatus"], 0)
+                      ) === 1
+                        ? "Đã thanh toán"
+                        : "Chưa thanh toán"}
+                    </span>
+                  </td> */}
+                  <td>
+                    {(() => {
+                      const bs = Number(pick(item, ["bookingStatus", "BookingStatus"], 0));
+                      const map = {
+                        0: { label: 'Chưa thanh toán', bg: '#fef9c3', color: '#854d0e' },
+                        1: { label: '✓ Đã xác nhận',  bg: '#dcfce7', color: '#166534' },
+                        2: { label: 'Đã hủy',         bg: '#fee2e2', color: '#991b1b' },
+                        3: { label: '✓ Hoàn thành',   bg: '#dbeafe', color: '#1e40af' },
+                        4: { label: 'Đã hoàn tiền',   bg: '#ede9fe', color: '#6b21a8' },
+                        5: { label: 'Yêu cầu hủy',   bg: '#fce7f3', color: '#9d174d' },
+                        6: { label: 'Từ chối hủy',   bg: '#f3f4f6', color: '#374151' },
+                      };
+                      const cfg = map[bs] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+                      return (
+                        <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
                     <td>
                       <span className="badge">
                         {labelBookingStatus(
@@ -1621,27 +1895,644 @@ export function AdminTripDetail({ tripId }) {
 }
 
 // ==================== BOOKINGS MANAGER ====================
+// function BookingsManager() {
+//   const navigate = useNavigate();
+//   const [rows, setRows] = useState([]);
+//   const [meta, setMeta] = useState({
+//     totalCount: 0,
+//     page: 1,
+//     pageSize: ADMIN_CRUD_PAGE_SIZE,
+//     totalPages: 1,
+//   });
+//   const [filters, setFilters] = useState({
+//     bookingId: "",
+//     customerName: "",
+//     customerPhone: "",
+//     paymentStatus: "",
+//     bookingStatus: "",
+//     bookingDate: "",
+//   });
+//   const [page, setPage] = useState(1);
+//   const [loading, setLoading] = useState(false);
+//   const [notice, setNotice] = useState(null);
+
+//   const loadBookings = async () => {
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       const data = await bookingApi.adminList(
+//         cleanParams({
+//           bookingId: filters.bookingId,
+//           customerName: filters.customerName,
+//           customerPhone: filters.customerPhone,
+//           paymentStatus: filters.paymentStatus,
+//           bookingStatus: filters.bookingStatus,
+//           fromDate: filters.bookingDate,
+//           toDate: filters.bookingDate,
+//           page,
+//           pageSize: ADMIN_CRUD_PAGE_SIZE,
+//         }),
+//       );
+//       const paged = normalizePagedResponse(data, page);
+//       setRows(paged.items);
+//       setMeta(paged);
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không tải được danh sách đơn đặt vé.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     loadBookings();
+//   }, [
+//     page,
+//     filters.bookingId,
+//     filters.customerName,
+//     filters.customerPhone,
+//     filters.paymentStatus,
+//     filters.bookingStatus,
+//     filters.bookingDate,
+//   ]);
+
+//   const updateFilter = (field, value) => {
+//     setFilters((current) => ({ ...current, [field]: value }));
+//     setPage(1);
+//   };
+
+//   return (
+//     <section className="admin-card table-card">
+//       <div className="admin-section-head">
+//         <h3>Quản lý đơn đặt vé</h3>
+//         <span className="admin-muted">{meta.totalCount || 0} đơn</span>
+//       </div>
+//       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+//       <div className="admin-filter-grid">
+//         <input
+//           type="number"
+//           min="1"
+//           value={filters.bookingId}
+//           onChange={(e) => updateFilter("bookingId", e.target.value)}
+//           placeholder="Mã đơn"
+//         />
+//         <input
+//           value={filters.customerName}
+//           onChange={(e) => updateFilter("customerName", e.target.value)}
+//           placeholder="Tên khách"
+//         />
+//         <input
+//           value={filters.customerPhone}
+//           onChange={(e) => updateFilter("customerPhone", e.target.value)}
+//           placeholder="Số điện thoại"
+//         />
+//         <select
+//           value={filters.paymentStatus}
+//           onChange={(e) => updateFilter("paymentStatus", e.target.value)}
+//         >
+//           <option value="">Tất cả thanh toán</option>
+//           <option value="Paid">Đã thanh toán</option>
+//           <option value="Pending">Chưa thanh toán</option>
+//           <option value="Refunded">Đã hoàn tiền</option>
+//           <option value="Cancelled">Đã hủy</option>
+//         </select>
+//         <select
+//           value={filters.bookingStatus}
+//           onChange={(e) => updateFilter("bookingStatus", e.target.value)}
+//         >
+//           <option value="">Tất cả trạng thái đơn</option>
+//           <option value="PendingConfirm">Đợi xác nhận</option>
+//           <option value="Confirmed">Đã xác nhận</option>
+//           <option value="CancelRequested">Yêu cầu hủy</option>
+//           <option value="CancelRejected">Từ chối hủy</option>
+//           <option value="Cancelled">Đã hủy</option>
+//         </select>
+//         <input
+//           type="date"
+//           value={filters.bookingDate}
+//           onChange={(e) => updateFilter("bookingDate", e.target.value)}
+//         />
+//       </div>
+//       {loading && (
+//         <div className="admin-loading">Đang tải danh sách đơn...</div>
+//       )}
+//       <div className="table-wrap">
+//         <table>
+//           <thead>
+//             <tr>
+//               <th>Mã đơn</th>
+//               <th>Khách hàng</th>
+//               <th>Số điện thoại</th>
+//               <th>Tuyến đường</th>
+//               <th>Nhà xe</th>
+//               <th>Số ghế</th>
+//               <th>Tổng tiền</th>
+//               <th>Thanh toán</th>
+//               <th>Trạng thái đơn</th>
+//               <th>Thao tác</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {rows.map((item) => {
+//               const id = pick(item, [
+//                 "bookingID",
+//                 "BookingID",
+//                 "bookingId",
+//                 "id",
+//               ]);
+//               const departure = pick(
+//                 item,
+//                 ["departureLocation", "DepartureLocation"],
+//                 "",
+//               );
+//               const arrival = pick(
+//                 item,
+//                 ["arrivalLocation", "ArrivalLocation"],
+//                 "",
+//               );
+//               return (
+//                 <tr key={id}>
+//                   <td>{id}</td>
+//                   <td>
+//                     <b>
+//                       {pick(item, ["customerName", "CustomerName"], "Chưa rõ")}
+//                     </b>
+//                   </td>
+//                   <td>
+//                     {pick(item, ["customerPhone", "CustomerPhone"], "Chưa rõ")}
+//                   </td>
+//                   <td>
+//                     {departure || arrival
+//                       ? `${departure} → ${arrival}`
+//                       : "Chưa rõ tuyến"}
+//                   </td>
+//                   <td>
+//                     {pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}
+//                   </td>
+//                   <td>{pick(item, ["totalSeats", "TotalSeats"], 0)}</td>
+//                   <td>
+//                     {formatVND(pick(item, ["totalPrice", "TotalPrice"], 0))}
+//                   </td>
+//                   {/* <td>
+//                     <span className="badge">
+//                       {labelPaymentStatus(
+//                         pick(
+//                           item,
+//                           pick(item, ["bookingStatus", "BookingStatus"], 0)
+//                         ),
+//                       )}
+//                     </span>
+//                   </td> */}
+//                   <td>
+//                   <span className="badge">
+//                     {labelPaymentStatus(
+//                       pick(item, ["bookingStatus", "BookingStatus"], 0)
+//                     )}
+//                   </span>
+//                 </td>
+//                   <td>
+//                     <span className="badge">
+//                       {labelBookingStatus(
+//                         pick(
+//                           item,
+//                           ["bookingStatus", "BookingStatus"],
+//                           "PendingConfirm",
+//                         ),
+//                       )}
+//                     </span>
+//                   </td>
+//                   <td className="admin-actions">
+//                     <button
+//                       className="btn btn-outline"
+//                       type="button"
+//                       onClick={() => navigate(`/admin/bookings/${id}`)}
+//                     >
+//                       Xem chi tiết
+//                     </button>
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+//             {!loading && rows.length === 0 && (
+//               <tr>
+//                 <td colSpan="10" className="empty-cell">
+//                   Không có đơn đặt vé phù hợp.
+//                 </td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+//       <AdminPagination
+//         page={meta.page}
+//         totalPages={meta.totalPages}
+//         totalCount={meta.totalCount}
+//         onPageChange={setPage}
+//       />
+//     </section>
+//   );
+// }
+// function BookingsManager() {
+//   const navigate = useNavigate();
+//   const [rows, setRows] = useState([]);
+//   const [meta, setMeta] = useState({
+//     totalCount: 0, page: 1, pageSize: ADMIN_CRUD_PAGE_SIZE, totalPages: 1,
+//   });
+//   const [filters, setFilters] = useState({
+//     bookingId: '', customerName: '', customerPhone: '',
+//     paymentStatus: '', bookingStatus: '', bookingDate: '',
+//   });
+//   const [page, setPage] = useState(1);
+//   const [loading, setLoading] = useState(false);
+//   const [actionLoading, setActionLoading] = useState(null); // id đang xử lý
+//   const [notice, setNotice] = useState(null);
+ 
+//   // ── Load danh sách ──────────────────────────────────────────
+//   const loadBookings = async () => {
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       const data = await bookingApi.adminList(
+//         cleanParams({
+//           bookingId: filters.bookingId,
+//           customerName: filters.customerName,
+//           customerPhone: filters.customerPhone,
+//           bookingStatus: filters.bookingStatus,
+//           fromDate: filters.bookingDate,
+//           toDate: filters.bookingDate,
+//           page,
+//           pageSize: ADMIN_CRUD_PAGE_SIZE,
+//         }),
+//       );
+//       const paged = normalizePagedResponse(data, page);
+//       setRows(paged.items);
+//       setMeta(paged);
+//     } catch (e) {
+//       setNotice({ type: 'error', text: e.message || 'Không tải được danh sách đơn đặt vé.' });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+ 
+//   useEffect(() => {
+//     loadBookings();
+//   }, [
+//     page,
+//     filters.bookingId, filters.customerName, filters.customerPhone,
+//     filters.paymentStatus, filters.bookingStatus, filters.bookingDate,
+//   ]);
+ 
+//   const updateFilter = (field, value) => {
+//     setFilters((f) => ({ ...f, [field]: value }));
+//     setPage(1);
+//   };
+ 
+//   // ── Actions ─────────────────────────────────────────────────
+//   const runAction = async (id, action, successText) => {
+//     setActionLoading(id);
+//     setNotice(null);
+//     try {
+//       await action();
+//       setNotice({ type: 'success', text: successText });
+//       await loadBookings();
+//     } catch (e) {
+//       setNotice({ type: 'error', text: e.message || 'Thao tác thất bại.' });
+//     } finally {
+//       setActionLoading(null);
+//     }
+//   };
+ 
+//   // Xác nhận đơn tiền mặt (Cash + Pending)
+//   const handleConfirmCash = (id) => {
+//     if (!confirm(`Xác nhận đã thu tiền mặt và xác nhận đơn #${id}?`)) return;
+//     runAction(id, () => bookingApi.confirm(id), `Đã xác nhận đơn #${id}.`);
+//   };
+ 
+//   // Duyệt hủy
+//   const handleApproveCancel = (id) => {
+//     if (!confirm(`Duyệt hủy đơn #${id}?`)) return;
+//     runAction(id, () => bookingApi.approveCancel(id, {}), `Đã duyệt hủy đơn #${id}.`);
+//   };
+ 
+//   // Từ chối hủy
+//   const handleRejectCancel = (id) => {
+//     const reason = window.prompt('Lý do từ chối hủy:', 'Không đủ điều kiện hủy theo chính sách.');
+//     if (reason === null) return;
+//     runAction(id, () => bookingApi.rejectCancel(id, { rejectReason: reason }), `Đã từ chối hủy đơn #${id}.`);
+//   };
+ 
+//   // ── Badge helpers ────────────────────────────────────────────
+//   const bookingStatusBadge = (status) => {
+//     const map = {
+//       0: { label: 'Chờ xác nhận',  bg: '#fef9c3', color: '#854d0e' },
+//       1: { label: 'Đã xác nhận',   bg: '#dcfce7', color: '#166534' },
+//       2: { label: 'Đã hủy',        bg: '#fee2e2', color: '#991b1b' },
+//       3: { label: 'Hoàn thành',    bg: '#dbeafe', color: '#1e40af' },
+//       4: { label: 'Đã hoàn tiền',  bg: '#ede9fe', color: '#6b21a8' },
+//       5: { label: 'Yêu cầu hủy',  bg: '#fce7f3', color: '#9d174d' },
+//       6: { label: 'Từ chối hủy',  bg: '#f3f4f6', color: '#374151' },
+//     };
+//     const s = Number(status);
+//     const cfg = map[s] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+//     return (
+//       <span
+//         className="badge"
+//         style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}
+//       >
+//         {cfg.label}
+//       </span>
+//     );
+//   };
+ 
+//   const paymentBadge = (bookingStatus, paymentMethod) => {
+//     const bs = Number(bookingStatus);
+//     const isCash = String(paymentMethod || '').toLowerCase() === 'cash';
+ 
+//     // Thanh toán online thì đã thanh toán ngay khi confirmed
+//     if (bs === 1 || bs === 3) {
+//       return (
+//         <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+//           ✓ Đã thanh toán
+//         </span>
+//       );
+//     }
+//     if (bs === 4) {
+//       return (
+//         <span className="badge" style={{ background: '#ede9fe', color: '#6b21a8', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+//           Đã hoàn tiền
+//         </span>
+//       );
+//     }
+//     if (bs === 2) {
+//       return (
+//         <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+//           Đã hủy
+//         </span>
+//       );
+//     }
+//     // bs === 0 hoặc 5, 6
+//     if (isCash) {
+//       return (
+//         <span className="badge" style={{ background: '#fef3c7', color: '#92400e', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+//           💵 Chờ thu tiền
+//         </span>
+//       );
+//     }
+//     return (
+//       <span className="badge" style={{ background: '#fef9c3', color: '#854d0e', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+//         Chờ thanh toán
+//       </span>
+//     );
+//   };
+ 
+//   // ── Render ───────────────────────────────────────────────────
+//   return (
+//     <section className="admin-card table-card">
+//       {/* Header */}
+//       <div className="admin-section-head">
+//         <h3>Quản lý đơn đặt vé</h3>
+//         <span className="admin-muted">{meta.totalCount || 0} đơn</span>
+//       </div>
+ 
+//       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+ 
+//       {/* Filter */}
+//       <div className="admin-filter-grid">
+//         <input
+//           type="number" min="1"
+//           value={filters.bookingId}
+//           onChange={(e) => updateFilter('bookingId', e.target.value)}
+//           placeholder="Mã đơn"
+//         />
+//         <input
+//           value={filters.customerName}
+//           onChange={(e) => updateFilter('customerName', e.target.value)}
+//           placeholder="Tên khách"
+//         />
+//         <input
+//           value={filters.customerPhone}
+//           onChange={(e) => updateFilter('customerPhone', e.target.value)}
+//           placeholder="Số điện thoại"
+//         />
+//         {/* Filter theo bookingStatus — dùng số */}
+//         <select
+//           value={filters.bookingStatus}
+//           onChange={(e) => updateFilter('bookingStatus', e.target.value)}
+//         >
+//           <option value="">Tất cả trạng thái đơn</option>
+//           <option value="0">Chờ xác nhận</option>
+//           <option value="1">Đã xác nhận</option>
+//           <option value="2">Đã hủy</option>
+//           <option value="3">Hoàn thành</option>
+//           <option value="4">Đã hoàn tiền</option>
+//           <option value="5">Yêu cầu hủy</option>
+//           <option value="6">Từ chối hủy</option>
+//         </select>
+//         <input
+//           type="date"
+//           value={filters.bookingDate}
+//           onChange={(e) => updateFilter('bookingDate', e.target.value)}
+//         />
+//       </div>
+ 
+//       {loading && <div className="admin-loading">Đang tải danh sách đơn...</div>}
+ 
+//       {/* Table */}
+//       <div className="table-wrap">
+//         <table>
+//           <thead>
+//             <tr>
+//               <th>Mã đơn</th>
+//               <th>Khách hàng</th>
+//               <th>Số điện thoại</th>
+//               <th>Tuyến đường</th>
+//               <th>Nhà xe</th>
+//               <th>Số ghế</th>
+//               <th>Tổng tiền</th>
+//               <th>Thanh toán</th>
+//               <th>Trạng thái đơn</th>
+//               <th>Thao tác</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {rows.map((item) => {
+//               const id = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
+//               const bs = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+//               const pm = pick(item, ['paymentMethod', 'PaymentMethod'], '');
+//               const isCash = String(pm).toLowerCase() === 'cash';
+//               const departure = pick(item, ['departureLocation', 'DepartureLocation'], '');
+//               const arrival   = pick(item, ['arrivalLocation',   'ArrivalLocation'],   '');
+//               const isProcessing = actionLoading === id;
+ 
+//               return (
+//                 <tr key={id} style={{ opacity: isProcessing ? 0.6 : 1 }}>
+//                   <td><b>#{id}</b></td>
+//                   <td>
+//                     <b>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</b>
+//                   </td>
+//                   <td>{pick(item, ['customerPhone', 'CustomerPhone'], 'Chưa rõ')}</td>
+//                   <td>
+//                     {departure || arrival
+//                       ? `${departure} → ${arrival}`
+//                       : 'Chưa rõ tuyến'}
+//                   </td>
+//                   <td>{pick(item, ['operatorName', 'OperatorName'], 'Chưa rõ')}</td>
+//                   <td>{pick(item, ['totalSeats', 'TotalSeats'], 0)}</td>
+//                   <td>{formatVND(pick(item, ['totalPrice', 'TotalPrice'], 0))}</td>
+ 
+//                   {/* Cột Thanh toán */}
+//                   <td>{paymentBadge(bs, pm)}</td>
+ 
+//                   {/* Cột Trạng thái đơn */}
+//                   <td>{bookingStatusBadge(bs)}</td>
+ 
+//                   {/* Cột Thao tác */}
+//                   <td className="admin-actions" style={{ minWidth: 220 }}>
+//                     {/* ① Cash + Pending → nút xác nhận thu tiền */}
+//                     {isCash && bs === 0 && (
+//                       <button
+//                         className="btn btn-primary"
+//                         disabled={isProcessing}
+//                         onClick={() => handleConfirmCash(id)}
+//                         title="Xác nhận đã thu tiền mặt và xác nhận đơn"
+//                       >
+//                         💵 Thu tiền & Xác nhận
+//                       </button>
+//                     )}
+ 
+//                     {/* ② Yêu cầu hủy → Duyệt / Từ chối */}
+//                     {bs === 5 && (
+//                       <>
+//                         <button
+//                           className="btn btn-danger"
+//                           disabled={isProcessing}
+//                           onClick={() => handleApproveCancel(id)}
+//                           title="Duyệt yêu cầu hủy vé"
+//                         >
+//                           ✓ Duyệt hủy
+//                         </button>
+//                         <button
+//                           className="btn btn-outline"
+//                           disabled={isProcessing}
+//                           onClick={() => handleRejectCancel(id)}
+//                           title="Từ chối yêu cầu hủy vé"
+//                         >
+//                           ✕ Từ chối
+//                         </button>
+//                       </>
+//                     )}
+ 
+//                     {/* ③ Xem chi tiết — luôn hiển thị */}
+//                     <button
+//                       className="btn btn-outline"
+//                       disabled={isProcessing}
+//                       onClick={() => navigate(`/admin/bookings/${id}`)}
+//                     >
+//                       Xem chi tiết
+//                     </button>
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+ 
+//             {!loading && rows.length === 0 && (
+//               <tr>
+//                 <td colSpan="10" className="empty-cell">
+//                   Không có đơn đặt vé phù hợp.
+//                 </td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+ 
+//       <AdminPagination
+//         page={meta.page}
+//         totalPages={meta.totalPages}
+//         totalCount={meta.totalCount}
+//         onPageChange={setPage}
+//       />
+//     </section>
+//   );
+// }
 function BookingsManager() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({
-    totalCount: 0,
-    page: 1,
-    pageSize: ADMIN_CRUD_PAGE_SIZE,
-    totalPages: 1,
+    totalCount: 0, page: 1, pageSize: ADMIN_CRUD_PAGE_SIZE, totalPages: 1,
   });
   const [filters, setFilters] = useState({
-    bookingId: "",
-    customerName: "",
-    customerPhone: "",
-    paymentStatus: "",
-    bookingStatus: "",
-    bookingDate: "",
+    bookingId: '', customerName: '', customerPhone: '',
+    bookingStatus: '', bookingDate: '',
   });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
   const [notice, setNotice] = useState(null);
 
+  // ── Autocomplete state ──────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestRef = useRef(null);
+  const debounceRef = useRef(null);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handler = (e) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target))
+        setShowSuggest(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Debounce gợi ý khi gõ
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!searchQuery.trim()) {
+      setSuggestions([]);
+      setShowSuggest(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSuggestLoading(true);
+      try {
+        const data = await bookingApi.suggest(searchQuery.trim());
+        setSuggestions(Array.isArray(data) ? data : []);
+        setShowSuggest(true);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestLoading(false);
+      }
+    }, 300);
+  }, [searchQuery]);
+
+  // Chọn gợi ý → filter theo bookingId
+  const selectSuggestion = (item) => {
+    const id = pick(item, ['bookingID', 'BookingID']);
+    const name = pick(item, ['customerName', 'CustomerName'], '');
+    setSearchQuery(`#${id} - ${name}`);
+    setFilters((f) => ({ ...f, bookingId: String(id), customerName: '', customerPhone: '' }));
+    setPage(1);
+    setShowSuggest(false);
+    setSuggestions([]);
+  };
+
+  // Xoá search
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSuggestions([]);
+    setShowSuggest(false);
+    setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
+    setPage(1);
+  };
+
+  // ── Load danh sách ──────────────────────────────────────────
   const loadBookings = async () => {
     setLoading(true);
     setNotice(null);
@@ -1651,7 +2542,6 @@ function BookingsManager() {
           bookingId: filters.bookingId,
           customerName: filters.customerName,
           customerPhone: filters.customerPhone,
-          paymentStatus: filters.paymentStatus,
           bookingStatus: filters.bookingStatus,
           fromDate: filters.bookingDate,
           toDate: filters.bookingDate,
@@ -1663,10 +2553,7 @@ function BookingsManager() {
       setRows(paged.items);
       setMeta(paged);
     } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không tải được danh sách đơn đặt vé.",
-      });
+      setNotice({ type: 'error', text: e.message || 'Không tải được danh sách đơn đặt vé.' });
     } finally {
       setLoading(false);
     }
@@ -1674,76 +2561,204 @@ function BookingsManager() {
 
   useEffect(() => {
     loadBookings();
-  }, [
-    page,
-    filters.bookingId,
-    filters.customerName,
-    filters.customerPhone,
-    filters.paymentStatus,
-    filters.bookingStatus,
-    filters.bookingDate,
-  ]);
+  }, [page, filters.bookingId, filters.customerName, filters.customerPhone,
+      filters.bookingStatus, filters.bookingDate]);
 
   const updateFilter = (field, value) => {
-    setFilters((current) => ({ ...current, [field]: value }));
+    setFilters((f) => ({ ...f, [field]: value }));
     setPage(1);
   };
 
+  // ── Actions ─────────────────────────────────────────────────
+  const runAction = async (id, action, successText) => {
+    setActionLoading(id);
+    setNotice(null);
+    try {
+      await action();
+      setNotice({ type: 'success', text: successText });
+      await loadBookings();
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message || 'Thao tác thất bại.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmCash = (id) => {
+    if (!confirm(`Xác nhận đã thu tiền mặt và xác nhận đơn #${id}?`)) return;
+    runAction(id, () => bookingApi.confirm(id), `Đã xác nhận đơn #${id}.`);
+  };
+
+  const handleApproveCancel = (id) => {
+    if (!confirm(`Duyệt hủy đơn #${id}?`)) return;
+    runAction(id, () => bookingApi.approveCancel(id, {}), `Đã duyệt hủy đơn #${id}.`);
+  };
+
+  const handleRejectCancel = (id) => {
+    const reason = window.prompt('Lý do từ chối hủy:', 'Không đủ điều kiện hủy theo chính sách.');
+    if (reason === null) return;
+    runAction(id, () => bookingApi.rejectCancel(id, { rejectReason: reason }), `Đã từ chối hủy đơn #${id}.`);
+  };
+
+  // ── Badge helpers ────────────────────────────────────────────
+  const bookingStatusBadge = (status) => {
+    const map = {
+      0: { label: 'Chờ xác nhận',  bg: '#fef9c3', color: '#854d0e' },
+      1: { label: 'Đã xác nhận',   bg: '#dcfce7', color: '#166534' },
+      2: { label: 'Đã hủy',        bg: '#fee2e2', color: '#991b1b' },
+      3: { label: 'Hoàn thành',    bg: '#dbeafe', color: '#1e40af' },
+      4: { label: 'Đã hoàn tiền',  bg: '#ede9fe', color: '#6b21a8' },
+      5: { label: 'Yêu cầu hủy',  bg: '#fce7f3', color: '#9d174d' },
+      6: { label: 'Từ chối hủy',  bg: '#f3f4f6', color: '#374151' },
+    };
+    const s = Number(status);
+    const cfg = map[s] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+    return (
+      <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+        {cfg.label}
+      </span>
+    );
+  };
+
+  const paymentBadge = (bookingStatus, paymentMethod) => {
+    const bs = Number(bookingStatus);
+    const isCash = String(paymentMethod || '').toLowerCase() === 'cash';
+    if (bs === 1 || bs === 3) return <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>✓ Đã thanh toán</span>;
+    if (bs === 4) return <span className="badge" style={{ background: '#ede9fe', color: '#6b21a8', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>Đã hoàn tiền</span>;
+    if (bs === 2) return <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>Đã hủy</span>;
+    if (isCash) return <span className="badge" style={{ background: '#fef3c7', color: '#92400e', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>💵 Chờ thu tiền</span>;
+    return <span className="badge" style={{ background: '#fef9c3', color: '#854d0e', fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>Chờ thanh toán</span>;
+  };
+
+  // ── Render ───────────────────────────────────────────────────
   return (
     <section className="admin-card table-card">
       <div className="admin-section-head">
         <h3>Quản lý đơn đặt vé</h3>
         <span className="admin-muted">{meta.totalCount || 0} đơn</span>
       </div>
+
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
-      <div className="admin-filter-grid">
-        <input
-          type="number"
-          min="1"
-          value={filters.bookingId}
-          onChange={(e) => updateFilter("bookingId", e.target.value)}
-          placeholder="Mã đơn"
-        />
-        <input
-          value={filters.customerName}
-          onChange={(e) => updateFilter("customerName", e.target.value)}
-          placeholder="Tên khách"
-        />
-        <input
-          value={filters.customerPhone}
-          onChange={(e) => updateFilter("customerPhone", e.target.value)}
-          placeholder="Số điện thoại"
-        />
-        <select
-          value={filters.paymentStatus}
-          onChange={(e) => updateFilter("paymentStatus", e.target.value)}
-        >
-          <option value="">Tất cả thanh toán</option>
-          <option value="Paid">Đã thanh toán</option>
-          <option value="Pending">Chưa thanh toán</option>
-          <option value="Refunded">Đã hoàn tiền</option>
-          <option value="Cancelled">Đã hủy</option>
-        </select>
-        <select
-          value={filters.bookingStatus}
-          onChange={(e) => updateFilter("bookingStatus", e.target.value)}
-        >
-          <option value="">Tất cả trạng thái đơn</option>
-          <option value="PendingConfirm">Đợi xác nhận</option>
-          <option value="Confirmed">Đã xác nhận</option>
-          <option value="CancelRequested">Yêu cầu hủy</option>
-          <option value="CancelRejected">Từ chối hủy</option>
-          <option value="Cancelled">Đã hủy</option>
-        </select>
-        <input
-          type="date"
-          value={filters.bookingDate}
-          onChange={(e) => updateFilter("bookingDate", e.target.value)}
-        />
+
+      {/* ── Bộ lọc ── */}
+      <div className="payment-filter-grid" style={{ marginBottom: 12 }}>
+
+        {/* Autocomplete search */}
+        <div className="payment-suggest-wrap" ref={suggestRef} style={{ gridColumn: 'span 2' }}>
+          <div className="payment-suggest-input-wrap">
+            <i className="fa-solid fa-magnifying-glass payment-suggest-icon" />
+            <input
+              type="text"
+              className="payment-suggest-input"
+              placeholder="Tìm mã đơn, tên khách, số điện thoại..."
+              value={searchQuery}
+              // onChange={(e) => {
+              //   const v = e.target.value;
+              //   setSearchQuery(v);
+              //   // Nếu xoá hết text thì reset filter
+              //   if (!v) {
+              //     setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
+              //     setPage(1);
+              //   }
+              // }}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
+              autoComplete="off"
+            />
+            {suggestLoading && <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />}
+            {searchQuery && (
+              <button type="button" className="payment-suggest-clear" onClick={clearSearch}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
+
+          {/* Dropdown gợi ý */}
+          {showSuggest && suggestions.length > 0 && (
+            <ul className="payment-suggest-dropdown">
+              {suggestions.map((item) => {
+                const id     = pick(item, ['bookingID', 'BookingID']);
+                const name   = pick(item, ['customerName', 'CustomerName'], '');
+                const route  = pick(item, ['route', 'Route'], '');
+                const amount = pick(item, ['totalPrice', 'TotalPrice'], 0);
+                const bs     = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+                const statusMap = { 0:'Chờ xác nhận', 1:'Đã xác nhận', 2:'Đã hủy', 3:'Hoàn thành', 4:'Đã hoàn tiền', 5:'Yêu cầu hủy', 6:'Từ chối hủy' };
+                return (
+                  <li key={id} className="payment-suggest-item" onMouseDown={() => selectSuggestion(item)}>
+                    <span className="suggest-id">#{id}</span>
+                    <span className="suggest-name">{name}</span>
+                    {route && <span className="suggest-route">{route}</span>}
+                    <span className="suggest-amount">{formatVND(amount)}</span>
+                    <span className="suggest-route" style={{ fontSize: 11 }}>{statusMap[bs] ?? ''}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {/* {showSuggest && !suggestLoading && suggestions.length === 0 && searchQuery && ( */}
+          {showSuggest && !suggestLoading && suggestions.length === 0 && bookingQuery && (
+            <ul className="payment-suggest-dropdown">
+              <li className="payment-suggest-empty">Không tìm thấy đơn nào</li>
+            </ul>
+          )}
+        </div>
+
+        {/* Filter trạng thái */}
+        <label className="payment-filter-field payment-status-field">
+          <span>Trạng thái đơn</span>
+          <div className="payment-filter-select-wrap">
+            <i className="fa-solid fa-circle-check" />
+            <select
+              value={filters.bookingStatus}
+              onChange={(e) => updateFilter('bookingStatus', e.target.value)}
+              className="payment-filter-select"
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="0">Chờ xác nhận</option>
+              <option value="1">Đã xác nhận</option>
+              <option value="2">Đã hủy</option>
+              <option value="3">Hoàn thành</option>
+              <option value="4">Đã hoàn tiền</option>
+              <option value="5">Yêu cầu hủy</option>
+              <option value="6">Từ chối hủy</option>
+            </select>
+            <i className="fa-solid fa-chevron-down payment-select-chevron" />
+          </div>
+        </label>
+
+        {/* Filter ngày */}
+        <label className={`payment-date-field ${filters.bookingDate ? 'has-value' : ''}`}>
+          <span>Ngày đặt</span>
+          <strong>{formatDateLabel(filters.bookingDate)}</strong>
+          <i className="fa-regular fa-calendar-days" />
+          <input
+            type="date"
+            value={filters.bookingDate}
+            onChange={(e) => updateFilter('bookingDate', e.target.value)}
+            aria-label="Ngày đặt"
+          />
+        </label>
+
+        {/* Nút xoá lọc */}
+        <div className="payment-filter-actions">
+          <button
+            className="btn btn-outline"
+            type="button"
+            onClick={() => {
+              setFilters({ bookingId: '', customerName: '', customerPhone: '', bookingStatus: '', bookingDate: '' });
+              setSearchQuery('');
+              setSuggestions([]);
+              setPage(1);
+            }}
+          >
+            Xóa lọc
+          </button>
+        </div>
       </div>
-      {loading && (
-        <div className="admin-loading">Đang tải danh sách đơn...</div>
-      )}
+
+      {loading && <div className="admin-loading">Đang tải danh sách đơn...</div>}
+
+      {/* Table */}
       <div className="table-wrap">
         <table>
           <thead>
@@ -1762,73 +2777,42 @@ function BookingsManager() {
           </thead>
           <tbody>
             {rows.map((item) => {
-              const id = pick(item, [
-                "bookingID",
-                "BookingID",
-                "bookingId",
-                "id",
-              ]);
-              const departure = pick(
-                item,
-                ["departureLocation", "DepartureLocation"],
-                "",
-              );
-              const arrival = pick(
-                item,
-                ["arrivalLocation", "ArrivalLocation"],
-                "",
-              );
+              const id = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
+              const bs = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+              const pm = pick(item, ['paymentMethod', 'PaymentMethod'], '');
+              const isCash = String(pm).toLowerCase() === 'cash';
+              const departure = pick(item, ['departureLocation', 'DepartureLocation'], '');
+              const arrival   = pick(item, ['arrivalLocation',   'ArrivalLocation'],   '');
+              const isProcessing = actionLoading === id;
+
               return (
-                <tr key={id}>
-                  <td>{id}</td>
-                  <td>
-                    <b>
-                      {pick(item, ["customerName", "CustomerName"], "Chưa rõ")}
-                    </b>
-                  </td>
-                  <td>
-                    {pick(item, ["customerPhone", "CustomerPhone"], "Chưa rõ")}
-                  </td>
-                  <td>
-                    {departure || arrival
-                      ? `${departure} → ${arrival}`
-                      : "Chưa rõ tuyến"}
-                  </td>
-                  <td>
-                    {pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}
-                  </td>
-                  <td>{pick(item, ["totalSeats", "TotalSeats"], 0)}</td>
-                  <td>
-                    {formatVND(pick(item, ["totalPrice", "TotalPrice"], 0))}
-                  </td>
-                  <td>
-                    <span className="badge">
-                      {labelPaymentStatus(
-                        pick(
-                          item,
-                          ["paymentStatus", "PaymentStatus"],
-                          "Pending",
-                        ),
-                      )}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="badge">
-                      {labelBookingStatus(
-                        pick(
-                          item,
-                          ["bookingStatus", "BookingStatus"],
-                          "PendingConfirm",
-                        ),
-                      )}
-                    </span>
-                  </td>
-                  <td className="admin-actions">
-                    <button
-                      className="btn btn-outline"
-                      type="button"
-                      onClick={() => navigate(`/admin/bookings/${id}`)}
-                    >
+                <tr key={id} style={{ opacity: isProcessing ? 0.6 : 1 }}>
+                  <td><b>#{id}</b></td>
+                  <td><b>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</b></td>
+                  <td>{pick(item, ['customerPhone', 'CustomerPhone'], 'Chưa rõ')}</td>
+                  <td>{departure || arrival ? `${departure} → ${arrival}` : 'Chưa rõ tuyến'}</td>
+                  <td>{pick(item, ['operatorName', 'OperatorName'], 'Chưa rõ')}</td>
+                  <td>{pick(item, ['totalSeats', 'TotalSeats'], 0)}</td>
+                  <td>{formatVND(pick(item, ['totalPrice', 'TotalPrice'], 0))}</td>
+                  <td>{paymentBadge(bs, pm)}</td>
+                  <td>{bookingStatusBadge(bs)}</td>
+                  <td className="admin-actions" style={{ minWidth: 220 }}>
+                    {isCash && bs === 0 && (
+                      <button className="btn btn-primary" disabled={isProcessing} onClick={() => handleConfirmCash(id)}>
+                        💵 Thu tiền & Xác nhận
+                      </button>
+                    )}
+                    {bs === 5 && (
+                      <>
+                        <button className="btn btn-danger" disabled={isProcessing} onClick={() => handleApproveCancel(id)}>
+                          ✓ Duyệt hủy
+                        </button>
+                        <button className="btn btn-outline" disabled={isProcessing} onClick={() => handleRejectCancel(id)}>
+                          ✕ Từ chối
+                        </button>
+                      </>
+                    )}
+                    <button className="btn btn-outline" disabled={isProcessing} onClick={() => navigate(`/admin/bookings/${id}`)}>
                       Xem chi tiết
                     </button>
                   </td>
@@ -1837,14 +2821,13 @@ function BookingsManager() {
             })}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan="10" className="empty-cell">
-                  Không có đơn đặt vé phù hợp.
-                </td>
+                <td colSpan="10" className="empty-cell">Không có đơn đặt vé phù hợp.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
       <AdminPagination
         page={meta.page}
         totalPages={meta.totalPages}
@@ -1854,7 +2837,6 @@ function BookingsManager() {
     </section>
   );
 }
-
 export function AdminBookingDetail({ bookingId }) {
   const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
@@ -1906,16 +2888,18 @@ export function AdminBookingDetail({ bookingId }) {
       </>
     );
 
-  const status = pick(
-    booking,
-    ["bookingStatus", "BookingStatus"],
-    "PendingConfirm",
-  );
-  const paymentStatus = pick(
-    booking,
-    ["paymentStatus", "PaymentStatus"],
-    "Pending",
-  );
+  // const status = pick(
+  //   booking,
+  //   ["bookingStatus", "BookingStatus"],
+  //   "PendingConfirm",
+  // );
+  // const paymentStatus = pick(
+  //   booking,
+  //   ["paymentStatus", "PaymentStatus"],
+  //   "Pending",
+  // );
+  const status = pick(booking, ["bookingStatus", "BookingStatus"], 0);
+  const bs = Number(status);
   const seatLabels = pick(booking, ["seatLabels", "SeatLabels"], []);
   const qrCodes = pick(booking, ["qrCodes", "QrCodes", "QRCodes"], []);
   const ticketSeats = pick(booking, ["ticketSeats", "TicketSeats"], []);
@@ -1977,8 +2961,22 @@ export function AdminBookingDetail({ bookingId }) {
             <p>VéXeAZ - Quản lý đơn đặt vé</p>
           </div>
           <div>
-            <span className="badge">{labelPaymentStatus(paymentStatus)}</span>
-            <span className="badge">{labelBookingStatus(status)}</span>
+            {/* <span className="badge">{labelPaymentStatus(paymentStatus)}</span>
+            <span className="badge">{labelBookingStatus(status)}</span> */}
+            <span className="badge" style={{
+              background: bs === 1 || bs === 3 ? '#dcfce7' :
+                          bs === 4 ? '#ede9fe' :
+                          bs === 2 ? '#fee2e2' : '#fef9c3',
+              color: bs === 1 || bs === 3 ? '#166534' :
+                    bs === 4 ? '#6b21a8' :
+                    bs === 2 ? '#991b1b' : '#854d0e',
+              fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12
+            }}>
+              {bs === 1 || bs === 3 ? '✓ Đã thanh toán' :
+              bs === 4 ? 'Đã hoàn tiền' :
+              bs === 2 ? 'Đã hủy' : 'Chưa thanh toán'}
+            </span>
+<span className="badge">{labelBookingStatus(bs)}</span>
           </div>
         </div>
 
@@ -2075,10 +3073,20 @@ export function AdminBookingDetail({ bookingId }) {
               )}
             </b>
           </div>
-          <div>
+          {/* <div>
             <span>Thanh toán</span>
             <b>
               <span className="badge">{labelPaymentStatus(paymentStatus)}</span>
+            </b>
+          </div> */}
+          <div>
+            <span>Thanh toán</span>
+            <b>
+              <span className="badge">
+                {bs === 1 || bs === 3 ? '✓ Đã thanh toán' :
+                bs === 4 ? 'Đã hoàn tiền' :
+                bs === 2 ? 'Đã hủy' : 'Chưa thanh toán'}
+              </span>
             </b>
           </div>
           <div>
@@ -2118,7 +3126,7 @@ export function AdminBookingDetail({ bookingId }) {
       </div>
 
       <div className="admin-booking-actions no-print">
-        {status === "PendingConfirm" && (
+        {bs === 0 && (
           <button
             className="btn btn-primary"
             disabled={actionLoading}
@@ -2132,7 +3140,7 @@ export function AdminBookingDetail({ bookingId }) {
             Xác nhận đơn
           </button>
         )}
-        {status === "CancelRequested" && (
+        {bs === 5 && (
           <>
             <button
               className="btn btn-danger"
@@ -2171,85 +3179,430 @@ export function AdminBookingDetail({ bookingId }) {
 }
 
 // ==================== PAYMENTS ====================
-function PaymentsManager() {
-  const [rows, setRows] = useState([]);
-  const [filters, setFilters] = useState({
-    paymentStatus: "",
-    bookingId: "",
-    fromDate: "",
-    toDate: "",
-    page: 1,
-    pageSize: 20,
-  });
-  const [paging, setPaging] = useState({
-    totalCount: 0,
-    page: 1,
-    pageSize: 20,
-    totalPages: 1,
-  });
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState(null);
+// function PaymentsManager() {
+//   const [rows, setRows] = useState([]);
+//   const [filters, setFilters] = useState({
+//     paymentStatus: "",
+//     bookingId: "",
+//     fromDate: "",
+//     toDate: "",
+//     page: 1,
+//     pageSize: 20,
+//   });
+//   const [paging, setPaging] = useState({
+//     totalCount: 0,
+//     page: 1,
+//     pageSize: 20,
+//     totalPages: 1,
+//   });
+//   const [loading, setLoading] = useState(false);
+//   const [notice, setNotice] = useState(null);
 
+//   const loadPayments = async (nextFilters = filters) => {
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       const data = await paymentApi.list(cleanParams(nextFilters));
+//       const normalized = normalizePagedResponse(
+//         data,
+//         nextFilters.page,
+//         nextFilters.pageSize,
+//       );
+//       setRows(normalized.items);
+//       setPaging(normalized);
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không tải được lịch sử thanh toán.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     loadPayments();
+//   }, []);
+
+//   const updateFilter = (field, value) => {
+//     setFilters((current) => ({ ...current, [field]: value, page: 1 }));
+//   };
+
+//   const applyFilters = (event) => {
+//     event.preventDefault();
+//     const nextFilters = { ...filters, page: 1 };
+//     setFilters(nextFilters);
+//     loadPayments(nextFilters);
+//   };
+
+//   const changePage = (page) => {
+//     const nextFilters = { ...filters, page };
+//     setFilters(nextFilters);
+//     loadPayments(nextFilters);
+//   };
+
+//   const confirmPayment = async (id) => {
+//     if (!window.confirm("Xác nhận giao dịch này đã thanh toán?")) return;
+//     setLoading(true);
+//     try {
+//       await paymentApi.confirm(id);
+//       await loadPayments(filters);
+//       setNotice({ type: "success", text: "Đã xác nhận thanh toán." });
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không xác nhận được thanh toán.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <section className="admin-card table-card">
+//       <div className="admin-section-head">
+//         <div>
+//           <p className="eyebrow">Thanh toán</p>
+//           <h3>Lịch sử giao dịch</h3>
+//         </div>
+//         <button
+//           className="btn btn-outline"
+//           type="button"
+//           onClick={() => loadPayments(filters)}
+//           disabled={loading}
+//         >
+//           Làm mới
+//         </button>
+//       </div>
+
+//       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+
+//       <form className="admin-filter-grid" onSubmit={applyFilters}>
+//         <input
+//           type="number"
+//           value={filters.bookingId}
+//           onChange={(e) => updateFilter("bookingId", e.target.value)}
+//           placeholder="Mã đơn"
+//         />
+//         <select
+//           value={filters.paymentStatus}
+//           onChange={(e) => updateFilter("paymentStatus", e.target.value)}
+//         >
+//           <option value="">Tất cả trạng thái</option>
+//           <option value="Pending">Chờ xác nhận</option>
+//           <option value="Paid">Đã thanh toán</option>
+//           <option value="Cancelled">Đã hủy</option>
+//           <option value="Refunded">Đã hoàn tiền</option>
+//         </select>
+//         <input
+//           type="date"
+//           value={filters.fromDate}
+//           onChange={(e) => updateFilter("fromDate", e.target.value)}
+//         />
+//         <input
+//           type="date"
+//           value={filters.toDate}
+//           onChange={(e) => updateFilter("toDate", e.target.value)}
+//         />
+//         <button className="btn btn-primary" type="submit" disabled={loading}>
+//           Lọc
+//         </button>
+//       </form>
+
+//       {loading && <div className="admin-loading">Đang tải giao dịch...</div>}
+
+//       <div className="table-wrap">
+//         <table>
+//           <thead>
+//             <tr>
+//               <th>Mã GD</th>
+//               <th>Đơn</th>
+//               <th>Khách hàng</th>
+//               <th>Tuyến</th>
+//               <th>Số tiền</th>
+//               <th>Phương thức</th>
+//               <th>Trạng thái</th>
+//               <th>Mã giao dịch</th>
+//               <th>Ngày tạo</th>
+//               <th>Thao tác</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {rows.map((item) => {
+//               const id = pick(item, ["paymentID", "PaymentID"]);
+//               const status = pick(item, ["paymentStatus", "PaymentStatus"], "");
+//               return (
+//                 <tr key={id}>
+//                   <td>#{id}</td>
+//                   <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+//                   <td>
+//                     <strong>
+//                       {pick(item, ["customerName", "CustomerName"], "Chưa rõ")}
+//                     </strong>
+//                     <br />
+//                     <small>
+//                       {pick(item, ["customerPhone", "CustomerPhone"], "")}
+//                     </small>
+//                   </td>
+//                   <td>
+//                     {pick(item, ["route", "Route"], "Chưa rõ tuyến")}
+//                     <br />
+//                     <small>
+//                       {formatDateTime(
+//                         pick(item, ["departureTime", "DepartureTime"]),
+//                       )}
+//                     </small>
+//                   </td>
+//                   <td>{formatVND(pick(item, ["amount", "Amount"], 0))}</td>
+//                   <td>
+//                     {labelPaymentMethod(
+//                       pick(item, ["paymentMethod", "PaymentMethod"], ""),
+//                     )}
+//                   </td>
+//                   <td>
+//                     <span className="badge">{labelPaymentStatus(status)}</span>
+//                   </td>
+//                   <td>
+//                     {pick(item, ["transactionCode", "TransactionCode"], "--")}
+//                   </td>
+//                   <td>
+//                     {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
+//                   </td>
+//                   <td className="admin-actions">
+//                     {String(status).toLowerCase() === "pending" && (
+//                       <button
+//                         className="btn btn-primary"
+//                         type="button"
+//                         onClick={() => confirmPayment(id)}
+//                         disabled={loading}
+//                       >
+//                         Xác nhận
+//                       </button>
+//                     )}
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+//             {!loading && rows.length === 0 && (
+//               <tr>
+//                 <td colSpan="10" className="empty-cell">
+//                   Chưa có giao dịch thanh toán.
+//                 </td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+
+//       <Pagination
+//         page={paging.page}
+//         totalPages={paging.totalPages}
+//         onPageChange={changePage}
+//       />
+//     </section>
+//   );
+// }
+function PaymentsManager({ isOperator = false }) {
+  const [rows, setRows]       = useState([]);
+  const [filters, setFilters] = useState({
+    paymentStatus: '',
+    bookingId: '',
+    fromDate: '',
+    toDate: '',
+    page: 1,
+    pageSize: 20,
+  });
+  const [paging, setPaging]   = useState({ totalCount: 0, page: 1, pageSize: 20, totalPages: 1 });
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice]   = useState(null);
+ 
+  // ── Autocomplete state ──────────────────────────────────────
+  const [bookingQuery, setBookingQuery]     = useState('');   // text đang gõ
+  const [suggestions, setSuggestions]       = useState([]);   // danh sách gợi ý
+  const [showSuggest, setShowSuggest]       = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestRef = useRef(null);
+  const debounceRef = useRef(null);
+ 
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handler = (e) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target)) {
+        setShowSuggest(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+ 
+  // Debounce gọi API suggest khi gõ
+  // useEffect(() => {
+  //   clearTimeout(debounceRef.current);
+  //   if (!bookingQuery.trim()) {
+  //     setSuggestions([]);
+  //     setShowSuggest(false);
+  //     return;
+  //   }
+  //   debounceRef.current = setTimeout(async () => {
+  //     setSuggestLoading(true);
+  //     try {
+  //       const data = await bookingApi.suggest(bookingQuery.trim());
+  //       setSuggestions(Array.isArray(data) ? data : []);
+  //       setShowSuggest(true);
+  //     } catch {
+  //       setSuggestions([]);
+  //     } finally {
+  //       setSuggestLoading(false);
+  //     }
+  //   }, 300); // debounce 300ms
+  // }, [bookingQuery]);
+ // Debounce gợi ý + tự apply filter ngay khi gõ
+// useEffect(() => {
+//   clearTimeout(debounceRef.current);
+
+//   if (!searchQuery.trim()) {
+//     setSuggestions([]);
+//     setShowSuggest(false);
+//     // Xóa hết filter khi user xóa text
+//     setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
+//     setPage(1);
+//     return;
+//   }
+
+//   debounceRef.current = setTimeout(async () => {
+//     const q = searchQuery.trim();
+
+//     // Parse loại input để apply đúng filter vào adminList
+//     const isIdSearch   = /^#?\d+$/.test(q);          // "47" hoặc "#47"
+//     const isPhoneSearch = /^[0-9+\-\s]{7,}$/.test(q); // "0944455667"
+
+//     if (isIdSearch) {
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: q.replace('#', ''),
+//         customerName: '',
+//         customerPhone: '',
+//       }));
+//     } else if (isPhoneSearch) {
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: '',
+//         customerName: '',
+//         customerPhone: q,
+//       }));
+//     } else {
+//       // Tên khách hàng
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: '',
+//         customerName: q,
+//         customerPhone: '',
+//       }));
+//     }
+//     setPage(1);
+
+//     // Vẫn gọi suggest để hiện dropdown gợi ý bên dưới
+//     setSuggestLoading(true);
+//     try {
+//       const data = await bookingApi.suggest(q);
+//       setSuggestions(Array.isArray(data) ? data : []);
+//       setShowSuggest(true);
+//     } catch {
+//       setSuggestions([]);
+//     } finally {
+//       setSuggestLoading(false);
+//     }
+//   }, 350);
+// }, [searchQuery]);
+// Debounce gọi API suggest khi gõ
+useEffect(() => {
+  clearTimeout(debounceRef.current);
+  if (!bookingQuery.trim()) {
+    setSuggestions([]);
+    setShowSuggest(false);
+    return;
+  }
+  debounceRef.current = setTimeout(async () => {
+    setSuggestLoading(true);
+    try {
+      const data = await bookingApi.suggest(bookingQuery.trim());
+      setSuggestions(Array.isArray(data) ? data : []);
+      setShowSuggest(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggestLoading(false);
+    }
+  }, 300);
+}, [bookingQuery]);
+  // Chọn 1 gợi ý → điền vào filter
+  const selectSuggestion = (item) => {
+    const id = pick(item, ['bookingID', 'BookingID']);
+    setBookingQuery(String(id));
+    setFilters((f) => ({ ...f, bookingId: String(id), page: 1 }));
+    setShowSuggest(false);
+    setSuggestions([]);
+  };
+ 
+  // ── Load payments ───────────────────────────────────────────
   const loadPayments = async (nextFilters = filters) => {
     setLoading(true);
     setNotice(null);
     try {
       const data = await paymentApi.list(cleanParams(nextFilters));
-      const normalized = normalizePagedResponse(
-        data,
-        nextFilters.page,
-        nextFilters.pageSize,
-      );
+      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
       setRows(normalized.items);
       setPaging(normalized);
     } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không tải được lịch sử thanh toán.",
-      });
+      setNotice({ type: 'error', text: e.message || 'Không tải được lịch sử thanh toán.' });
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadPayments();
-  }, []);
-
-  const updateFilter = (field, value) => {
-    setFilters((current) => ({ ...current, [field]: value, page: 1 }));
+ 
+  useEffect(() => { loadPayments(); }, []);
+ 
+  const applyFilters = (e) => {
+    e.preventDefault();
+    const next = { ...filters, bookingId: bookingQuery || filters.bookingId, page: 1 };
+    setFilters(next);
+    loadPayments(next);
   };
-
-  const applyFilters = (event) => {
-    event.preventDefault();
-    const nextFilters = { ...filters, page: 1 };
-    setFilters(nextFilters);
-    loadPayments(nextFilters);
-  };
-
+ 
   const changePage = (page) => {
-    const nextFilters = { ...filters, page };
-    setFilters(nextFilters);
-    loadPayments(nextFilters);
+    const next = { ...filters, page };
+    setFilters(next);
+    loadPayments(next);
   };
-
+ 
+  // const confirmPayment = async (id) => {
+  //   if (!window.confirm('Xác nhận giao dịch này đã thanh toán?')) return;
+  //   setLoading(true);
+  //   try {
+  //     await paymentApi.confirm(id);
+  //     await loadPayments(filters);
+  //     setNotice({ type: 'success', text: 'Đã xác nhận thanh toán.' });
+  //   } catch (e) {
+  //     setNotice({ type: 'error', text: e.message || 'Không xác nhận được thanh toán.' });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const confirmPayment = async (id) => {
-    if (!window.confirm("Xác nhận giao dịch này đã thanh toán?")) return;
-    setLoading(true);
-    try {
-      await paymentApi.confirm(id);
-      await loadPayments(filters);
-      setNotice({ type: "success", text: "Đã xác nhận thanh toán." });
-    } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không xác nhận được thanh toán.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  if (!window.confirm('Xác nhận giao dịch này?')) return;
+  setLoading(true);
+  try {
+    await bookingApi.confirm(id);  // ← đổi từ paymentApi.confirm sang bookingApi.confirm
+    await loadPayments(filters);
+    setNotice({ type: 'success', text: 'Đã xác nhận.' });
+  } catch (e) {
+    setNotice({ type: 'error', text: e.message || 'Không xác nhận được.' });
+  } finally {
+    setLoading(false);
+  }
+};
+ 
+  // ── Render ───────────────────────────────────────────────────
   return (
     <section className="admin-card table-card">
       <div className="admin-section-head">
@@ -2266,43 +3619,153 @@ function PaymentsManager() {
           Làm mới
         </button>
       </div>
-
+ 
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
-
-      <form className="admin-filter-grid" onSubmit={applyFilters}>
-        <input
-          type="number"
-          value={filters.bookingId}
-          onChange={(e) => updateFilter("bookingId", e.target.value)}
-          placeholder="Mã đơn"
-        />
-        <select
-          value={filters.paymentStatus}
-          onChange={(e) => updateFilter("paymentStatus", e.target.value)}
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="Pending">Chờ xác nhận</option>
-          <option value="Paid">Đã thanh toán</option>
-          <option value="Cancelled">Đã hủy</option>
-          <option value="Refunded">Đã hoàn tiền</option>
-        </select>
-        <input
-          type="date"
-          value={filters.fromDate}
-          onChange={(e) => updateFilter("fromDate", e.target.value)}
-        />
-        <input
-          type="date"
-          value={filters.toDate}
-          onChange={(e) => updateFilter("toDate", e.target.value)}
-        />
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          Lọc
-        </button>
+ 
+      {/* ── Bộ lọc ── */}
+      <form className="payment-filter-grid" onSubmit={applyFilters}>
+ 
+        {/* Autocomplete mã đơn */}
+        <div className="payment-suggest-wrap" ref={suggestRef}>
+          <div className="payment-suggest-input-wrap">
+            <i className="fa-solid fa-magnifying-glass payment-suggest-icon" />
+            <input
+              type="text"
+              className="payment-suggest-input"
+              placeholder="Tìm mã đơn hoặc tên khách..."
+              value={bookingQuery}
+              onChange={(e) => {
+                setBookingQuery(e.target.value);
+                if (!e.target.value) {
+                  setFilters((f) => ({ ...f, bookingId: '', page: 1 }));
+                }
+              }}
+              onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
+              autoComplete="off"
+            />
+            {suggestLoading && (
+              <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
+            )}
+            {bookingQuery && (
+              <button
+                type="button"
+                className="payment-suggest-clear"
+                onClick={() => {
+                  setBookingQuery('');
+                  setSuggestions([]);
+                  setShowSuggest(false);
+                  setFilters((f) => ({ ...f, bookingId: '', page: 1 }));
+                }}
+              >
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
+ 
+          {/* Dropdown gợi ý */}
+          {showSuggest && suggestions.length > 0 && (
+            <ul className="payment-suggest-dropdown">
+              {suggestions.map((item) => {
+                const id   = pick(item, ['bookingID', 'BookingID']);
+                const name = pick(item, ['customerName', 'CustomerName'], '');
+                const route = pick(item, ['route', 'Route'], '');
+                const amount = pick(item, ['totalPrice', 'TotalPrice'], 0);
+                return (
+                  <li
+                    key={id}
+                    className="payment-suggest-item"
+                    onMouseDown={() => selectSuggestion(item)}
+                  >
+                    <span className="suggest-id">#{id}</span>
+                    <span className="suggest-name">{name}</span>
+                    {route && <span className="suggest-route">{route}</span>}
+                    <span className="suggest-amount">{formatVND(amount)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+ 
+          {showSuggest && !suggestLoading && suggestions.length === 0 && bookingQuery && (
+            <ul className="payment-suggest-dropdown">
+              <li className="payment-suggest-empty">Không tìm thấy đơn nào</li>
+            </ul>
+          )}
+        </div>
+ 
+        {/* Trạng thái */}
+        <label className="payment-filter-field payment-status-field">
+          <span>Trạng thái</span>
+          <div className="payment-filter-select-wrap">
+            <i className="fa-solid fa-circle-check" />
+            <select
+              value={filters.paymentStatus}
+              onChange={(e) => setFilters((f) => ({ ...f, paymentStatus: e.target.value }))}
+              className="payment-filter-select"
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="Pending">Chờ xác nhận</option>
+              <option value="Paid">Đã thanh toán</option>
+              <option value="Cancelled">Đã hủy</option>
+              <option value="Refunded">Đã hoàn tiền</option>
+            </select>
+            <i className="fa-solid fa-chevron-down payment-select-chevron" />
+          </div>
+        </label>
+ 
+        {/* Range date picker */}
+        <div className="payment-date-range">
+          <label className={`payment-date-field ${filters.fromDate ? 'has-value' : ''}`}>
+            <span>Từ ngày</span>
+            <strong>{formatDateLabel(filters.fromDate)}</strong>
+            <i className="fa-regular fa-calendar-days" />
+            <input
+              type="date"
+              value={filters.fromDate}
+              max={filters.toDate || undefined}
+              onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+              aria-label="Từ ngày"
+            />
+          </label>
+          <span className="payment-date-sep">→</span>
+          <label className={`payment-date-field ${filters.toDate ? 'has-value' : ''}`}>
+            <span>Đến ngày</span>
+            <strong>{formatDateLabel(filters.toDate)}</strong>
+            <i className="fa-regular fa-calendar-days" />
+            <input
+              type="date"
+              value={filters.toDate}
+              min={filters.fromDate || undefined}
+              onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+              aria-label="Đến ngày"
+            />
+          </label>
+        </div>
+ 
+        {/* Nút lọc + xóa lọc */}
+        <div className="payment-filter-actions">
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            <i className="fa-solid fa-filter" /> Lọc
+          </button>
+          <button
+            className="btn btn-outline"
+            type="button"
+            onClick={() => {
+              const reset = { paymentStatus: '', bookingId: '', fromDate: '', toDate: '', page: 1, pageSize: 20 };
+              setFilters(reset);
+              setBookingQuery('');
+              setSuggestions([]);
+              loadPayments(reset);
+            }}
+          >
+            Xóa lọc
+          </button>
+        </div>
       </form>
-
+ 
       {loading && <div className="admin-loading">Đang tải giao dịch...</div>}
-
+ 
+      {/* ── Bảng ── */}
       <div className="table-wrap">
         <table>
           <thead>
@@ -2314,54 +3777,44 @@ function PaymentsManager() {
               <th>Số tiền</th>
               <th>Phương thức</th>
               <th>Trạng thái</th>
-              <th>Mã giao dịch</th>
+              {/* <th>Mã giao dịch</th> */}
               <th>Ngày tạo</th>
-              <th>Thao tác</th>
+              {/* Chỉ hiện cột Thao tác nếu là admin, hoặc operator với đơn tiền mặt */}
+              {/* <th>Thao tác</th> */}
             </tr>
           </thead>
           <tbody>
-            {rows.map((item) => {
-              const id = pick(item, ["paymentID", "PaymentID"]);
-              const status = pick(item, ["paymentStatus", "PaymentStatus"], "");
+            {/* {rows.map((item) => {
+              const id     = pick(item, ['paymentID', 'PaymentID']);
+              const status = pick(item, ['paymentStatus', 'PaymentStatus'], '');
+              const method = String(pick(item, ['paymentMethod', 'PaymentMethod'], '')).toLowerCase();
+              // Operator chỉ được xác nhận đơn tiền mặt (cash)
+              const canConfirm = String(status).toLowerCase() === 'pending' &&
+                (!isOperator || method === 'cash');
+ 
               return (
                 <tr key={id}>
                   <td>#{id}</td>
-                  <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+                  <td>#{pick(item, ['bookingID', 'BookingID'])}</td>
                   <td>
-                    <strong>
-                      {pick(item, ["customerName", "CustomerName"], "Chưa rõ")}
-                    </strong>
+                    <strong>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</strong>
                     <br />
-                    <small>
-                      {pick(item, ["customerPhone", "CustomerPhone"], "")}
-                    </small>
+                    <small>{pick(item, ['customerPhone', 'CustomerPhone'], '')}</small>
                   </td>
                   <td>
-                    {pick(item, ["route", "Route"], "Chưa rõ tuyến")}
+                    {pick(item, ['route', 'Route'], 'Chưa rõ tuyến')}
                     <br />
-                    <small>
-                      {formatDateTime(
-                        pick(item, ["departureTime", "DepartureTime"]),
-                      )}
-                    </small>
+                    <small>{formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</small>
                   </td>
-                  <td>{formatVND(pick(item, ["amount", "Amount"], 0))}</td>
-                  <td>
-                    {labelPaymentMethod(
-                      pick(item, ["paymentMethod", "PaymentMethod"], ""),
-                    )}
-                  </td>
+                  <td>{formatVND(pick(item, ['amount', 'Amount'], 0))}</td>
+                  <td>{labelPaymentMethod(pick(item, ['paymentMethod', 'PaymentMethod'], ''))}</td>
                   <td>
                     <span className="badge">{labelPaymentStatus(status)}</span>
                   </td>
-                  <td>
-                    {pick(item, ["transactionCode", "TransactionCode"], "--")}
-                  </td>
-                  <td>
-                    {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
-                  </td>
+                  <td>{pick(item, ['transactionCode', 'TransactionCode'], '--')}</td>
+                  <td>{formatDateTime(pick(item, ['createdAt', 'CreatedAt']))}</td>
                   <td className="admin-actions">
-                    {String(status).toLowerCase() === "pending" && (
+                    {canConfirm && (
                       <button
                         className="btn btn-primary"
                         type="button"
@@ -2371,30 +3824,96 @@ function PaymentsManager() {
                         Xác nhận
                       </button>
                     )}
+                    {!canConfirm && <span className="admin-muted">—</span>}
                   </td>
                 </tr>
               );
-            })}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan="10" className="empty-cell">
-                  Chưa có giao dịch thanh toán.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            })} */}
+            {rows.map((item) => {
+        const id     = pick(item, ['bookingID', 'BookingID']);
+        const bs     = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+        const method = String(pick(item, ['paymentMethod', 'PaymentMethod'], '')).toLowerCase();
 
-      <Pagination
-        page={paging.page}
-        totalPages={paging.totalPages}
-        onPageChange={changePage}
-      />
-    </section>
-  );
-}
+        // Xác nhận được khi bs = 0 (Pending) và là cash (hoặc admin)
+        const canConfirm = bs === 0 && (!isOperator || method === 'cash');
 
+        // Badge trạng thái dựa trên bookingStatus
+        const statusBadge = () => {
+          const map = {
+            0: { label: 'Chờ xác nhận',  bg: '#fef9c3', color: '#854d0e' },
+            1: { label: '✓ Đã xác nhận', bg: '#dcfce7', color: '#166534' },
+            2: { label: 'Đã hủy',        bg: '#fee2e2', color: '#991b1b' },
+            3: { label: 'Hoàn thành',    bg: '#dbeafe', color: '#1e40af' },
+            4: { label: 'Đã hoàn tiền',  bg: '#ede9fe', color: '#6b21a8' },
+            5: { label: 'Yêu cầu hủy',  bg: '#fce7f3', color: '#9d174d' },
+            6: { label: 'Từ chối hủy',  bg: '#f3f4f6', color: '#374151' },
+          };
+          const cfg = map[bs] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+          return (
+            <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+              {cfg.label}
+            </span>
+          );
+        };
+
+        return (
+          <tr key={id}>
+            <td>#{id}</td>
+            <td>#{id}</td>
+            <td>
+              <strong>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</strong>
+              <br />
+              <small>{pick(item, ['customerPhone', 'CustomerPhone'], '')}</small>
+            </td>
+            <td>
+              {pick(item, ['route', 'Route'], 'Chưa rõ tuyến')}
+              <br />
+              <small>{formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</small>
+            </td>
+            <td>{formatVND(pick(item, ['totalPrice', 'TotalPrice'], 0))}</td>
+            <td>{labelPaymentMethod(pick(item, ['paymentMethod', 'PaymentMethod'], ''))}</td>
+            <td>{statusBadge()}</td>
+            {/* <td>--</td>
+            <td>{formatDateTime(pick(item, ['bookingDate', 'BookingDate']))}</td>
+            <td className="admin-actions">
+              {canConfirm && (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => confirmPayment(id)}
+                  disabled={loading}
+                >
+                  Xác nhận
+                </button>
+              )}
+              {!canConfirm && <span className="admin-muted">—</span>}
+            </td> */}
+            <td>
+            <a
+              href={`/admin/bookings/${id}`}
+              className="btn btn-outline"
+              style={{ fontSize: 13, padding: '4px 10px' }}
+            >
+              <i className="fa-solid fa-eye" /> Xem đơn
+            </a>
+          </td>
+            
+          </tr>
+        );
+      })}
+                  {!loading && rows.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="empty-cell">Chưa có giao dịch thanh toán.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+      
+            <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+          </section>
+        );
+      }
 // ==================== REVIEWS ====================
 function ReviewsManager() {
   const [rows, setRows] = useState([]);
@@ -2412,6 +3931,18 @@ function ReviewsManager() {
   });
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [tripQuery, setTripQuery] = useState("");
+  const [operatorQuery, setOperatorQuery] = useState("");
+  const [tripSuggestions, setTripSuggestions] = useState([]);
+  const [operatorSuggestions, setOperatorSuggestions] = useState([]);
+  const [showTripSuggest, setShowTripSuggest] = useState(false);
+  const [showOperatorSuggest, setShowOperatorSuggest] = useState(false);
+  const [tripSuggestLoading, setTripSuggestLoading] = useState(false);
+  const [operatorSuggestLoading, setOperatorSuggestLoading] = useState(false);
+  const tripSuggestRef = useRef(null);
+  const operatorSuggestRef = useRef(null);
+  const tripDebounceRef = useRef(null);
+  const operatorDebounceRef = useRef(null);
 
   const loadReviews = async (nextFilters = filters) => {
     setLoading(true);
@@ -2439,15 +3970,112 @@ function ReviewsManager() {
     loadReviews();
   }, []);
 
+  useEffect(() => {
+    const handler = (event) => {
+      if (tripSuggestRef.current && !tripSuggestRef.current.contains(event.target)) {
+        setShowTripSuggest(false);
+      }
+      if (operatorSuggestRef.current && !operatorSuggestRef.current.contains(event.target)) {
+        setShowOperatorSuggest(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(tripDebounceRef.current);
+    if (!tripQuery.trim()) {
+      setTripSuggestions([]);
+      setShowTripSuggest(false);
+      return;
+    }
+
+    tripDebounceRef.current = setTimeout(async () => {
+      setTripSuggestLoading(true);
+      try {
+        const data = await reviewApi.suggestTrips(tripQuery.trim());
+        setTripSuggestions(Array.isArray(data) ? data : []);
+        setShowTripSuggest(true);
+      } catch {
+        setTripSuggestions([]);
+      } finally {
+        setTripSuggestLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(tripDebounceRef.current);
+  }, [tripQuery]);
+
+  useEffect(() => {
+    clearTimeout(operatorDebounceRef.current);
+    if (!operatorQuery.trim()) {
+      setOperatorSuggestions([]);
+      setShowOperatorSuggest(false);
+      return;
+    }
+
+    operatorDebounceRef.current = setTimeout(async () => {
+      setOperatorSuggestLoading(true);
+      try {
+        const data = await reviewApi.suggestOperators(operatorQuery.trim());
+        setOperatorSuggestions(Array.isArray(data) ? data : []);
+        setShowOperatorSuggest(true);
+      } catch {
+        setOperatorSuggestions([]);
+      } finally {
+        setOperatorSuggestLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(operatorDebounceRef.current);
+  }, [operatorQuery]);
+
   const updateFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value, page: 1 }));
   };
 
   const applyFilters = (event) => {
     event.preventDefault();
-    const nextFilters = { ...filters, page: 1 };
+    const nextFilters = {
+      ...filters,
+      tripId: filters.tripId || (Number.isInteger(Number(tripQuery)) ? tripQuery : ""),
+      operatorId:
+        filters.operatorId || (Number.isInteger(Number(operatorQuery)) ? operatorQuery : ""),
+      page: 1,
+    };
     setFilters(nextFilters);
     loadReviews(nextFilters);
+  };
+
+  const selectTripSuggestion = (item) => {
+    const tripId = pick(item, ["tripID", "TripID"]);
+    const route = pick(item, ["route", "Route"], "");
+    const operatorName = pick(item, ["operatorName", "OperatorName"], "");
+    setTripQuery(`#${tripId}${route ? ` - ${route}` : ""}${operatorName ? ` (${operatorName})` : ""}`);
+    setFilters((current) => ({ ...current, tripId: String(tripId), page: 1 }));
+    setShowTripSuggest(false);
+    setTripSuggestions([]);
+  };
+
+  const selectOperatorSuggestion = (item) => {
+    const operatorId = pick(item, ["operatorID", "OperatorID"]);
+    const name = pick(item, ["name", "Name"], "");
+    setOperatorQuery(`#${operatorId}${name ? ` - ${name}` : ""}`);
+    setFilters((current) => ({ ...current, operatorId: String(operatorId), page: 1 }));
+    setShowOperatorSuggest(false);
+    setOperatorSuggestions([]);
+  };
+
+  const clearReviewFilters = () => {
+    const reset = { tripId: "", operatorId: "", page: 1, pageSize: 20 };
+    setFilters(reset);
+    setTripQuery("");
+    setOperatorQuery("");
+    setTripSuggestions([]);
+    setOperatorSuggestions([]);
+    loadReviews(reset);
   };
 
   const changePage = (page) => {
@@ -2492,22 +4120,143 @@ function ReviewsManager() {
 
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
 
-      <form className="admin-filter-grid" onSubmit={applyFilters}>
-        <input
-          type="number"
-          value={filters.tripId}
-          onChange={(e) => updateFilter("tripId", e.target.value)}
-          placeholder="Mã chuyến"
-        />
-        <input
-          type="number"
-          value={filters.operatorId}
-          onChange={(e) => updateFilter("operatorId", e.target.value)}
-          placeholder="Mã nhà xe"
-        />
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          Lọc
-        </button>
+      <form className="review-filter-grid" onSubmit={applyFilters}>
+        <div className="review-suggest-wrap" ref={tripSuggestRef}>
+          <div className="payment-suggest-input-wrap">
+            <i className="fa-solid fa-route payment-suggest-icon" />
+            <input
+              type="text"
+              className="payment-suggest-input"
+              value={tripQuery}
+              onChange={(e) => {
+                const value = e.target.value;
+                setTripQuery(value);
+                updateFilter("tripId", "");
+              }}
+              onFocus={() => tripSuggestions.length > 0 && setShowTripSuggest(true)}
+              placeholder="Tìm mã chuyến hoặc tuyến..."
+              autoComplete="off"
+            />
+            {tripSuggestLoading && (
+              <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
+            )}
+            {tripQuery && (
+              <button
+                type="button"
+                className="payment-suggest-clear"
+                onClick={() => {
+                  setTripQuery("");
+                  setTripSuggestions([]);
+                  updateFilter("tripId", "");
+                }}
+              >
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
+
+          {showTripSuggest && tripSuggestions.length > 0 && (
+            <ul className="payment-suggest-dropdown">
+              {tripSuggestions.map((item) => {
+                const tripId = pick(item, ["tripID", "TripID"]);
+                const route = pick(item, ["route", "Route"], "Chưa rõ tuyến");
+                const operatorName = pick(item, ["operatorName", "OperatorName"], "");
+                const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
+                return (
+                  <li
+                    key={tripId}
+                    className="payment-suggest-item review-suggest-item"
+                    onMouseDown={() => selectTripSuggestion(item)}
+                  >
+                    <span className="suggest-id">#{tripId}</span>
+                    <span className="suggest-name">{route}</span>
+                    {operatorName && <span className="suggest-route">{operatorName}</span>}
+                    <span className="suggest-amount">{reviewCount} đánh giá</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {showTripSuggest && !tripSuggestLoading && tripSuggestions.length === 0 && tripQuery && (
+            <ul className="payment-suggest-dropdown">
+              <li className="payment-suggest-empty">Không tìm thấy chuyến có đánh giá</li>
+            </ul>
+          )}
+        </div>
+
+        <div className="review-suggest-wrap" ref={operatorSuggestRef}>
+          <div className="payment-suggest-input-wrap">
+            <i className="fa-solid fa-bus payment-suggest-icon" />
+            <input
+              type="text"
+              className="payment-suggest-input"
+              value={operatorQuery}
+              onChange={(e) => {
+                const value = e.target.value;
+                setOperatorQuery(value);
+                updateFilter("operatorId", "");
+              }}
+              onFocus={() => operatorSuggestions.length > 0 && setShowOperatorSuggest(true)}
+              placeholder="Tìm mã nhà xe hoặc tên nhà xe..."
+              autoComplete="off"
+            />
+            {operatorSuggestLoading && (
+              <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
+            )}
+            {operatorQuery && (
+              <button
+                type="button"
+                className="payment-suggest-clear"
+                onClick={() => {
+                  setOperatorQuery("");
+                  setOperatorSuggestions([]);
+                  updateFilter("operatorId", "");
+                }}
+              >
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
+
+          {showOperatorSuggest && operatorSuggestions.length > 0 && (
+            <ul className="payment-suggest-dropdown">
+              {operatorSuggestions.map((item) => {
+                const operatorId = pick(item, ["operatorID", "OperatorID"]);
+                const name = pick(item, ["name", "Name"], "Chưa rõ nhà xe");
+                const phone = pick(item, ["contactPhone", "ContactPhone"], "");
+                const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
+                return (
+                  <li
+                    key={operatorId}
+                    className="payment-suggest-item review-suggest-item"
+                    onMouseDown={() => selectOperatorSuggestion(item)}
+                  >
+                    <span className="suggest-id">#{operatorId}</span>
+                    <span className="suggest-name">{name}</span>
+                    {phone && <span className="suggest-route">{phone}</span>}
+                    <span className="suggest-amount">{reviewCount} đánh giá</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {showOperatorSuggest && !operatorSuggestLoading && operatorSuggestions.length === 0 && operatorQuery && (
+            <ul className="payment-suggest-dropdown">
+              <li className="payment-suggest-empty">Không tìm thấy nhà xe có đánh giá</li>
+            </ul>
+          )}
+        </div>
+
+        <div className="review-filter-actions">
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            <i className="fa-solid fa-filter" /> Lọc
+          </button>
+          <button className="btn btn-outline" type="button" onClick={clearReviewFilters}>
+            Xóa lọc
+          </button>
+        </div>
       </form>
 
       {loading && <div className="admin-loading">Đang tải đánh giá...</div>}
@@ -3060,8 +4809,28 @@ function TransactionsManager({ transactions }) {
                       pick(item, ["paymentMethod", "PaymentMethod"], "Chưa rõ"),
                     )}
                   </td>
-                  <td>
+                  {/* <td>
                     <span className="badge">{getPaymentStatus(item)}</span>
+                  </td> */}
+                  <td>
+                    {(() => {
+                      const bs = Number(pick(item, ["bookingStatus", "BookingStatus"], 0));
+                      const map = {
+                        0: { label: 'Chờ thanh toán',  bg: '#fef9c3', color: '#854d0e' },
+                        1: { label: '✓ Đã thanh toán', bg: '#dcfce7', color: '#166534' },
+                        2: { label: 'Đã hủy',          bg: '#fee2e2', color: '#991b1b' },
+                        3: { label: '✓ Đã thanh toán', bg: '#dcfce7', color: '#166534' },
+                        4: { label: 'Đã hoàn tiền',    bg: '#ede9fe', color: '#6b21a8' },
+                        5: { label: 'Chờ thanh toán',  bg: '#fef9c3', color: '#854d0e' },
+                        6: { label: 'Chờ thanh toán',  bg: '#fef9c3', color: '#854d0e' },
+                      };
+                      const cfg = map[bs] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+                      return (
+                        <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td>{pick(item, ["totalSeats", "TotalSeats"], 0)}</td>
                   <td>
@@ -3082,7 +4851,7 @@ function TransactionsManager({ transactions }) {
 }
 
 // ==================== BUSES ====================
-function BusesManager({ operators: initialOperators = [], onRefresh }) {
+function BusesManager({ operators: initialOperators = [], onRefresh, isOperator = false }) {
   const [rows, setRows] = useState([]);
   const [operators, setOperators] = useState(initialOperators);
   const [meta, setMeta] = useState({
@@ -3095,7 +4864,6 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useState({
     licensePlate: "",
-    busType: "",
     operatorId: "",
   });
   const [page, setPage] = useState(1);
@@ -3106,7 +4874,12 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
     setLoading(true);
     try {
       const data = await busApi.list(
-        cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
+        cleanParams({
+          licensePlate: filters.licensePlate,
+          operatorId: isOperator ? "" : filters.operatorId,
+          page,
+          pageSize: ADMIN_CRUD_PAGE_SIZE,
+        }),
       );
       const paged = normalizePagedResponse(data, page);
       setRows(paged.items);
@@ -3123,10 +4896,11 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
 
   useEffect(() => {
     loadBuses();
-  }, [page, filters.licensePlate, filters.busType, filters.operatorId]);
+  }, [page, filters.licensePlate, filters.operatorId, isOperator]);
 
   useEffect(() => {
     const loadOperators = async () => {
+      if (isOperator) return;
       if (initialOperators.length > 0) {
         setOperators(initialOperators);
         return;
@@ -3139,7 +4913,7 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
       }
     };
     loadOperators();
-  }, [initialOperators]);
+  }, [initialOperators, isOperator]);
 
   const updateFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -3152,13 +4926,12 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
     try {
       const payload = {
         busID: form.busID || 0,
-        operatorID: Number(form.operatorID),
+        operatorID: Number(form.operatorID || 0),
         licensePlate: form.licensePlate.trim(),
         capacity: Number(form.capacity || 0),
         busType: form.busType.trim(),
       };
       if (
-        !payload.operatorID ||
         !payload.licensePlate ||
         !payload.capacity ||
         !payload.busType
@@ -3224,21 +4997,23 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
           onClose={() => cancelForm(setShowForm, setForm, EMPTY_BUS)}
         >
           <form className="admin-form-grid" onSubmit={submit}>
-            <select
-              value={form.operatorID}
-              onChange={(e) => setForm({ ...form, operatorID: e.target.value })}
-              required
-            >
-              <option value="">Chọn nhà xe</option>
-              {operators.map((o) => (
-                <option
-                  key={pick(o, ["operatorID", "OperatorID"])}
-                  value={pick(o, ["operatorID", "OperatorID"])}
-                >
-                  {pick(o, ["name", "Name"])}
-                </option>
-              ))}
-            </select>
+            {!isOperator && (
+              <select
+                value={form.operatorID}
+                onChange={(e) => setForm({ ...form, operatorID: e.target.value })}
+                required
+              >
+                <option value="">Chọn nhà xe</option>
+                {operators.map((o) => (
+                  <option
+                    key={pick(o, ["operatorID", "OperatorID"])}
+                    value={pick(o, ["operatorID", "OperatorID"])}
+                  >
+                    {pick(o, ["name", "Name"])}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               value={form.licensePlate}
               onChange={(e) =>
@@ -3276,31 +5051,28 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
           </form>
         </AdminFormModal>
       )}
-      <div className="admin-filter-grid">
+      <div className="admin-filter-grid bus-filter-grid">
         <input
           value={filters.licensePlate}
           onChange={(e) => updateFilter("licensePlate", e.target.value)}
           placeholder="Tìm biển số"
         />
-        <input
-          value={filters.busType}
-          onChange={(e) => updateFilter("busType", e.target.value)}
-          placeholder="Tìm loại xe"
-        />
-        <select
-          value={filters.operatorId}
-          onChange={(e) => updateFilter("operatorId", e.target.value)}
-        >
-          <option value="">Tất cả nhà xe</option>
-          {operators.map((o) => {
-            const id = pick(o, ["operatorID", "OperatorID"]);
-            return (
-              <option key={id} value={id}>
-                {pick(o, ["name", "Name"])}
-              </option>
-            );
-          })}
-        </select>
+        {!isOperator && (
+          <select
+            value={filters.operatorId}
+            onChange={(e) => updateFilter("operatorId", e.target.value)}
+          >
+            <option value="">Tất cả nhà xe</option>
+            {operators.map((o) => {
+              const id = pick(o, ["operatorID", "OperatorID"]);
+              return (
+                <option key={id} value={id}>
+                  {pick(o, ["name", "Name"])}
+                </option>
+              );
+            })}
+          </select>
+        )}
       </div>
       {loading && <div className="admin-loading">Đang tải dữ liệu...</div>}
       <div className="table-wrap">
@@ -3308,7 +5080,7 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Nhà xe</th>
+              {!isOperator && <th>Nhà xe</th>}
               <th>Biển số</th>
               <th>Loại xe</th>
               <th>Sức chứa</th>
@@ -3321,13 +5093,15 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
               return (
                 <tr key={id}>
                   <td>{id}</td>
-                  <td>
-                    {pick(item, ["operatorName", "OperatorName"]) ||
-                      findOperatorName(
-                        operators,
-                        pick(item, ["operatorID", "OperatorID"]),
-                      )}
-                  </td>
+                  {!isOperator && (
+                    <td>
+                      {pick(item, ["operatorName", "OperatorName"]) ||
+                        findOperatorName(
+                          operators,
+                          pick(item, ["operatorID", "OperatorID"]),
+                        )}
+                    </td>
+                  )}
                   <td>{pick(item, ["licensePlate", "LicensePlate"])}</td>
                   <td>{pick(item, ["busType", "BusType"])}</td>
                   <td>{pick(item, ["capacity", "Capacity"])}</td>
@@ -3350,7 +5124,7 @@ function BusesManager({ operators: initialOperators = [], onRefresh }) {
             })}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan="6" className="empty-cell">
+                <td colSpan={isOperator ? 5 : 6} className="empty-cell">
                   Không có xe phù hợp.
                 </td>
               </tr>
@@ -3853,15 +5627,37 @@ function findTripRoute(trips, tripId) {
     ? `${found.departureLocation} → ${found.arrivalLocation}`
     : "Chưa rõ tuyến";
 }
-function getPaymentStatus(item) {
-  return pick(
-    item,
-    ["paymentStatus", "PaymentStatus", "status", "Status"],
-    "Pending",
-  );
-}
+// function getPaymentStatus(item) {
+//   return pick(
+//     item,
+//     ["paymentStatus", "PaymentStatus", "status", "Status"],
+//     "Pending",
+//   );
+// }
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("vi-VN") : "";
+}
+function formatDateLabel(value) {
+  if (!value) return "Chọn ngày";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Chọn ngày";
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+function formatDateTimeLabel(value) {
+  if (!value) return "Chọn ngày giờ";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chọn ngày giờ";
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 function toDateTimeLocal(value) {
   if (!value) return "";

@@ -17,13 +17,23 @@ namespace BaseCore.APIService.Controllers
         {
             _context = context;
         }
-
+        private async Task<int?> GetCurrentOperatorId()
+        {
+            if (!User.IsInRole("Operator")) return null;
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId)) return null;
+            var user = await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserID == userId);
+            return user?.OperatorID;
+        }
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetAll()
         {
+            var currentUserId = GetCurrentUserId();
             var items = await _context.Promotions
                 .AsNoTracking()
+                .Where(x => x.UserID == currentUserId)
                 .OrderByDescending(x => x.PromotionID)
                 .Select(x => new
                 {
@@ -81,7 +91,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpGet("{id:int}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetById(int id)
         {
             var promotion = await _context.Promotions.AsNoTracking().FirstOrDefaultAsync(x => x.PromotionID == id);
@@ -89,7 +99,7 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Create([FromBody] PromotionRequest request)
         {
             var code = NormalizeCode(request.Code);
@@ -100,6 +110,7 @@ namespace BaseCore.APIService.Controllers
                 return Conflict(new { message = "Ma giam gia da ton tai" });
 
             var promotion = new Promotion();
+            promotion.UserID = GetCurrentUserId();
             ApplyRequest(promotion, request, code);
 
             _context.Promotions.Add(promotion);
@@ -109,10 +120,13 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Update(int id, [FromBody] PromotionRequest request)
         {
+            var currentUserId = GetCurrentUserId();
             var promotion = await _context.Promotions.FindAsync(id);
+             if (promotion.UserID != currentUserId)
+                return Forbid();
             if (promotion == null)
                 return NotFound();
 
@@ -131,10 +145,13 @@ namespace BaseCore.APIService.Controllers
         }
 
         [HttpDelete("{id:int}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Disable(int id)
         {
             var promotion = await _context.Promotions.FindAsync(id);
+            var currentUserId = GetCurrentUserId();
+            if (promotion.UserID != currentUserId)
+                return Forbid();
             if (promotion == null)
                 return NotFound();
 

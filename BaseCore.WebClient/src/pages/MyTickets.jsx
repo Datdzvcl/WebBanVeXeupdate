@@ -83,19 +83,39 @@ export default function MyTickets() {
 
           <div className="my-ticket-list">
             {bookings.map((item) => {
-              const bookingId = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
-              const paymentStatus = pick(item, ['paymentStatus', 'PaymentStatus'], '--');
-              const bookingStatus = pick(item, ['bookingStatus', 'BookingStatus'], '--');
-              const seatLabels = pick(item, ['seatLabels', 'SeatLabels'], []);
+              // const bookingId = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
+              // const paymentStatus = pick(item, ['paymentStatus', 'PaymentStatus'], '--');
+              // const bookingStatus = pick(item, ['bookingStatus', 'BookingStatus'], '--');
+              // const seatLabels = pick(item, ['seatLabels', 'SeatLabels'], []);
+              // const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
+              // const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
+              // const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
+              // const hasReview = Boolean(pick(item, ['hasReview', 'HasReview'], false));
+              // const arrivalTime = pick(item, ['arrivalTime', 'ArrivalTime']);
+              // const canReview = !hasReview &&
+              //   !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
+              //   arrivalTime &&
+              //   new Date(arrivalTime) <= new Date();
+              const bookingId    = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
+              const bookingStatus = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+              const seatLabels   = pick(item, ['seatLabels', 'SeatLabels'], []);
               const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
               const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
-              const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
-              const hasReview = Boolean(pick(item, ['hasReview', 'HasReview'], false));
-              const arrivalTime = pick(item, ['arrivalTime', 'ArrivalTime']);
-              const canReview = !hasReview &&
-                !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
-                arrivalTime &&
-                new Date(arrivalTime) <= new Date();
+              const hasReview    = Boolean(pick(item, ['hasReview', 'HasReview'], false));
+              const arrivalTime  = pick(item, ['arrivalTime', 'ArrivalTime']);
+
+              // Dùng số theo enum: 2=Cancelled, 5=CancelRequested, 6=CancelRejected
+              const canRequestCancel = bookingStatus !== 2
+                                    && bookingStatus !== 4 
+                                    && bookingStatus !== 5
+                                    && bookingStatus !== 6;
+
+              const canReview = !hasReview
+                // && bookingStatus !== 2   // Cancelled
+                // && bookingStatus !== 5   // CancelRequested
+                && bookingStatus === 3
+                && arrivalTime
+                && new Date(arrivalTime) <= new Date();
 
               return (
                 <article className="my-ticket-card" key={bookingId}>
@@ -113,7 +133,8 @@ export default function MyTickets() {
                   </div>
 
                   <div className="my-ticket-side">
-                    <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span>
+                    {/* <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span> */}
+                    {/* <span className={statusClass(bookingStatus)}>{labelPaymentStatus(bookingStatus)}</span> */}
                     <span className={statusClass(bookingStatus)}>{labelBookingStatus(bookingStatus)}</span>
                     {cancelReason && <small>Lý do hủy: {cancelReason}</small>}
                     {refundAmount !== null && refundAmount !== undefined && <small>Hoàn tiền: {formatVND(refundAmount)}</small>}
@@ -123,14 +144,30 @@ export default function MyTickets() {
                     ) : canReview ? (
                       <Link className="btn btn-primary" to={`/my-tickets/${bookingId}`}>Đánh giá</Link>
                     ) : null}
-                    <button
+                    {/* <button
                       type="button"
                       className="btn btn-danger"
                       disabled={!canRequestCancel || actionId === bookingId}
                       onClick={() => requestCancel(bookingId)}
                     >
-                      {bookingStatus === 'CancelRequested' ? 'Đã yêu cầu hủy' : 'Yêu cầu hủy vé'}
-                    </button>
+                      {bookingStatus === 5 ? 'Đã yêu cầu hủy' : 'Yêu cầu hủy vé'}
+                    </button> */}
+                    {canRequestCancel && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={actionId === bookingId}
+                        onClick={() => requestCancel(bookingId)}
+                      >
+                        Yêu cầu hủy vé
+                      </button>
+                    )}
+                    {bookingStatus === 5 && (
+                      <span className="ticket-status status-pending">Đang chờ duyệt hủy</span>
+                    )}
+                    {bookingStatus === 6 && (
+                      <span className="ticket-status status-cancelled">Từ chối hủy</span>
+                    )}
                   </div>
                 </article>
               );
