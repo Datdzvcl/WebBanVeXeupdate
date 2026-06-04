@@ -111,8 +111,9 @@ export default function MyTickets() {
                                     && bookingStatus !== 6;
 
               const canReview = !hasReview
-                && bookingStatus !== 2   // Cancelled
-                && bookingStatus !== 5   // CancelRequested
+                // && bookingStatus !== 2   // Cancelled
+                // && bookingStatus !== 5   // CancelRequested
+                && bookingStatus === 3
                 && arrivalTime
                 && new Date(arrivalTime) <= new Date();
 

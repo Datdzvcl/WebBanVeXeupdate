@@ -54,8 +54,11 @@ namespace BaseCore.APIService.Controllers
                 .Where(x =>
                     x.Booking != null &&
                     x.Booking.TripID == tripId &&
-                    (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled) &&
-                    (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled))
+                    // (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled) &&
+                    // (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled))
+                    x.Booking.BookingStatus != BookingStatusConstant.Cancelled &&
+                x.Booking.BookingStatus != BookingStatusConstant.Refunded &&      // ← thêm
+                x.Booking.BookingStatus != BookingStatusConstant.CancelRequested)
                 .Select(x => x.SeatLabel)
                 .ToListAsync();
 
@@ -159,8 +162,11 @@ namespace BaseCore.APIService.Controllers
                     .Where(x =>
                     x.Booking != null &&
                     x.Booking.TripID == request.TripId &&
-                    (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled) &&
-                    (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled))
+                    // (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled) &&
+                    // (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled))
+                     x.Booking.BookingStatus != BookingStatusConstant.Cancelled &&
+                     x.Booking.BookingStatus != BookingStatusConstant.Refunded &&
+                     x.Booking.BookingStatus != BookingStatusConstant.CancelRequested)
                     .Select(x => x.SeatLabel)
                     .ToListAsync();
 

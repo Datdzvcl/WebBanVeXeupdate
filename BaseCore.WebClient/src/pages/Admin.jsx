@@ -1827,7 +1827,7 @@ export function AdminTripDetail({ tripId }) {
                         )}
                       </span>
                     </td> */}
-                    <td>
+                    {/* <td>
                     <span className="badge">
                       {Number(
                         pick(item, ["bookingStatus", "BookingStatus"], 0)
@@ -1835,6 +1835,26 @@ export function AdminTripDetail({ tripId }) {
                         ? "Đã thanh toán"
                         : "Chưa thanh toán"}
                     </span>
+                  </td> */}
+                  <td>
+                    {(() => {
+                      const bs = Number(pick(item, ["bookingStatus", "BookingStatus"], 0));
+                      const map = {
+                        0: { label: 'Chưa thanh toán', bg: '#fef9c3', color: '#854d0e' },
+                        1: { label: '✓ Đã xác nhận',  bg: '#dcfce7', color: '#166534' },
+                        2: { label: 'Đã hủy',         bg: '#fee2e2', color: '#991b1b' },
+                        3: { label: '✓ Hoàn thành',   bg: '#dbeafe', color: '#1e40af' },
+                        4: { label: 'Đã hoàn tiền',   bg: '#ede9fe', color: '#6b21a8' },
+                        5: { label: 'Yêu cầu hủy',   bg: '#fce7f3', color: '#9d174d' },
+                        6: { label: 'Từ chối hủy',   bg: '#f3f4f6', color: '#374151' },
+                      };
+                      const cfg = map[bs] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+                      return (
+                        <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                     <td>
                       <span className="badge">
@@ -2632,15 +2652,16 @@ function BookingsManager() {
               className="payment-suggest-input"
               placeholder="Tìm mã đơn, tên khách, số điện thoại..."
               value={searchQuery}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSearchQuery(v);
-                // Nếu xoá hết text thì reset filter
-                if (!v) {
-                  setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
-                  setPage(1);
-                }
-              }}
+              // onChange={(e) => {
+              //   const v = e.target.value;
+              //   setSearchQuery(v);
+              //   // Nếu xoá hết text thì reset filter
+              //   if (!v) {
+              //     setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
+              //     setPage(1);
+              //   }
+              // }}
+              onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
               autoComplete="off"
             />
@@ -2674,7 +2695,8 @@ function BookingsManager() {
               })}
             </ul>
           )}
-          {showSuggest && !suggestLoading && suggestions.length === 0 && searchQuery && (
+          {/* {showSuggest && !suggestLoading && suggestions.length === 0 && searchQuery && ( */}
+          {showSuggest && !suggestLoading && suggestions.length === 0 && bookingQuery && (
             <ul className="payment-suggest-dropdown">
               <li className="payment-suggest-empty">Không tìm thấy đơn nào</li>
             </ul>
@@ -3414,27 +3436,105 @@ function PaymentsManager({ isOperator = false }) {
   }, []);
  
   // Debounce gọi API suggest khi gõ
-  useEffect(() => {
-    clearTimeout(debounceRef.current);
-    if (!bookingQuery.trim()) {
+  // useEffect(() => {
+  //   clearTimeout(debounceRef.current);
+  //   if (!bookingQuery.trim()) {
+  //     setSuggestions([]);
+  //     setShowSuggest(false);
+  //     return;
+  //   }
+  //   debounceRef.current = setTimeout(async () => {
+  //     setSuggestLoading(true);
+  //     try {
+  //       const data = await bookingApi.suggest(bookingQuery.trim());
+  //       setSuggestions(Array.isArray(data) ? data : []);
+  //       setShowSuggest(true);
+  //     } catch {
+  //       setSuggestions([]);
+  //     } finally {
+  //       setSuggestLoading(false);
+  //     }
+  //   }, 300); // debounce 300ms
+  // }, [bookingQuery]);
+ // Debounce gợi ý + tự apply filter ngay khi gõ
+// useEffect(() => {
+//   clearTimeout(debounceRef.current);
+
+//   if (!searchQuery.trim()) {
+//     setSuggestions([]);
+//     setShowSuggest(false);
+//     // Xóa hết filter khi user xóa text
+//     setFilters((f) => ({ ...f, bookingId: '', customerName: '', customerPhone: '' }));
+//     setPage(1);
+//     return;
+//   }
+
+//   debounceRef.current = setTimeout(async () => {
+//     const q = searchQuery.trim();
+
+//     // Parse loại input để apply đúng filter vào adminList
+//     const isIdSearch   = /^#?\d+$/.test(q);          // "47" hoặc "#47"
+//     const isPhoneSearch = /^[0-9+\-\s]{7,}$/.test(q); // "0944455667"
+
+//     if (isIdSearch) {
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: q.replace('#', ''),
+//         customerName: '',
+//         customerPhone: '',
+//       }));
+//     } else if (isPhoneSearch) {
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: '',
+//         customerName: '',
+//         customerPhone: q,
+//       }));
+//     } else {
+//       // Tên khách hàng
+//       setFilters((f) => ({
+//         ...f,
+//         bookingId: '',
+//         customerName: q,
+//         customerPhone: '',
+//       }));
+//     }
+//     setPage(1);
+
+//     // Vẫn gọi suggest để hiện dropdown gợi ý bên dưới
+//     setSuggestLoading(true);
+//     try {
+//       const data = await bookingApi.suggest(q);
+//       setSuggestions(Array.isArray(data) ? data : []);
+//       setShowSuggest(true);
+//     } catch {
+//       setSuggestions([]);
+//     } finally {
+//       setSuggestLoading(false);
+//     }
+//   }, 350);
+// }, [searchQuery]);
+// Debounce gọi API suggest khi gõ
+useEffect(() => {
+  clearTimeout(debounceRef.current);
+  if (!bookingQuery.trim()) {
+    setSuggestions([]);
+    setShowSuggest(false);
+    return;
+  }
+  debounceRef.current = setTimeout(async () => {
+    setSuggestLoading(true);
+    try {
+      const data = await bookingApi.suggest(bookingQuery.trim());
+      setSuggestions(Array.isArray(data) ? data : []);
+      setShowSuggest(true);
+    } catch {
       setSuggestions([]);
-      setShowSuggest(false);
-      return;
+    } finally {
+      setSuggestLoading(false);
     }
-    debounceRef.current = setTimeout(async () => {
-      setSuggestLoading(true);
-      try {
-        const data = await bookingApi.suggest(bookingQuery.trim());
-        setSuggestions(Array.isArray(data) ? data : []);
-        setShowSuggest(true);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setSuggestLoading(false);
-      }
-    }, 300); // debounce 300ms
-  }, [bookingQuery]);
- 
+  }, 300);
+}, [bookingQuery]);
   // Chọn 1 gợi ý → điền vào filter
   const selectSuggestion = (item) => {
     const id = pick(item, ['bookingID', 'BookingID']);
@@ -3475,19 +3575,32 @@ function PaymentsManager({ isOperator = false }) {
     loadPayments(next);
   };
  
+  // const confirmPayment = async (id) => {
+  //   if (!window.confirm('Xác nhận giao dịch này đã thanh toán?')) return;
+  //   setLoading(true);
+  //   try {
+  //     await paymentApi.confirm(id);
+  //     await loadPayments(filters);
+  //     setNotice({ type: 'success', text: 'Đã xác nhận thanh toán.' });
+  //   } catch (e) {
+  //     setNotice({ type: 'error', text: e.message || 'Không xác nhận được thanh toán.' });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const confirmPayment = async (id) => {
-    if (!window.confirm('Xác nhận giao dịch này đã thanh toán?')) return;
-    setLoading(true);
-    try {
-      await paymentApi.confirm(id);
-      await loadPayments(filters);
-      setNotice({ type: 'success', text: 'Đã xác nhận thanh toán.' });
-    } catch (e) {
-      setNotice({ type: 'error', text: e.message || 'Không xác nhận được thanh toán.' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!window.confirm('Xác nhận giao dịch này?')) return;
+  setLoading(true);
+  try {
+    await bookingApi.confirm(id);  // ← đổi từ paymentApi.confirm sang bookingApi.confirm
+    await loadPayments(filters);
+    setNotice({ type: 'success', text: 'Đã xác nhận.' });
+  } catch (e) {
+    setNotice({ type: 'error', text: e.message || 'Không xác nhận được.' });
+  } finally {
+    setLoading(false);
+  }
+};
  
   // ── Render ───────────────────────────────────────────────────
   return (
@@ -3664,14 +3777,14 @@ function PaymentsManager({ isOperator = false }) {
               <th>Số tiền</th>
               <th>Phương thức</th>
               <th>Trạng thái</th>
-              <th>Mã giao dịch</th>
+              {/* <th>Mã giao dịch</th> */}
               <th>Ngày tạo</th>
               {/* Chỉ hiện cột Thao tác nếu là admin, hoặc operator với đơn tiền mặt */}
-              <th>Thao tác</th>
+              {/* <th>Thao tác</th> */}
             </tr>
           </thead>
           <tbody>
-            {rows.map((item) => {
+            {/* {rows.map((item) => {
               const id     = pick(item, ['paymentID', 'PaymentID']);
               const status = pick(item, ['paymentStatus', 'PaymentStatus'], '');
               const method = String(pick(item, ['paymentMethod', 'PaymentMethod'], '')).toLowerCase();
@@ -3715,20 +3828,92 @@ function PaymentsManager({ isOperator = false }) {
                   </td>
                 </tr>
               );
-            })}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan="10" className="empty-cell">Chưa có giao dịch thanh toán.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
- 
-      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
-    </section>
-  );
-}
+            })} */}
+            {rows.map((item) => {
+        const id     = pick(item, ['bookingID', 'BookingID']);
+        const bs     = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
+        const method = String(pick(item, ['paymentMethod', 'PaymentMethod'], '')).toLowerCase();
+
+        // Xác nhận được khi bs = 0 (Pending) và là cash (hoặc admin)
+        const canConfirm = bs === 0 && (!isOperator || method === 'cash');
+
+        // Badge trạng thái dựa trên bookingStatus
+        const statusBadge = () => {
+          const map = {
+            0: { label: 'Chờ xác nhận',  bg: '#fef9c3', color: '#854d0e' },
+            1: { label: '✓ Đã xác nhận', bg: '#dcfce7', color: '#166534' },
+            2: { label: 'Đã hủy',        bg: '#fee2e2', color: '#991b1b' },
+            3: { label: 'Hoàn thành',    bg: '#dbeafe', color: '#1e40af' },
+            4: { label: 'Đã hoàn tiền',  bg: '#ede9fe', color: '#6b21a8' },
+            5: { label: 'Yêu cầu hủy',  bg: '#fce7f3', color: '#9d174d' },
+            6: { label: 'Từ chối hủy',  bg: '#f3f4f6', color: '#374151' },
+          };
+          const cfg = map[bs] ?? { label: 'Chưa rõ', bg: '#f3f4f6', color: '#6b7280' };
+          return (
+            <span className="badge" style={{ background: cfg.bg, color: cfg.color, fontWeight: 600, borderRadius: 20, padding: '3px 12px', fontSize: 12 }}>
+              {cfg.label}
+            </span>
+          );
+        };
+
+        return (
+          <tr key={id}>
+            <td>#{id}</td>
+            <td>#{id}</td>
+            <td>
+              <strong>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</strong>
+              <br />
+              <small>{pick(item, ['customerPhone', 'CustomerPhone'], '')}</small>
+            </td>
+            <td>
+              {pick(item, ['route', 'Route'], 'Chưa rõ tuyến')}
+              <br />
+              <small>{formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</small>
+            </td>
+            <td>{formatVND(pick(item, ['totalPrice', 'TotalPrice'], 0))}</td>
+            <td>{labelPaymentMethod(pick(item, ['paymentMethod', 'PaymentMethod'], ''))}</td>
+            <td>{statusBadge()}</td>
+            {/* <td>--</td>
+            <td>{formatDateTime(pick(item, ['bookingDate', 'BookingDate']))}</td>
+            <td className="admin-actions">
+              {canConfirm && (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => confirmPayment(id)}
+                  disabled={loading}
+                >
+                  Xác nhận
+                </button>
+              )}
+              {!canConfirm && <span className="admin-muted">—</span>}
+            </td> */}
+            <td>
+            <a
+              href={`/admin/bookings/${id}`}
+              className="btn btn-outline"
+              style={{ fontSize: 13, padding: '4px 10px' }}
+            >
+              <i className="fa-solid fa-eye" /> Xem đơn
+            </a>
+          </td>
+            
+          </tr>
+        );
+      })}
+                  {!loading && rows.length === 0 && (
+                    <tr>
+                      <td colSpan="10" className="empty-cell">Chưa có giao dịch thanh toán.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+      
+            <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+          </section>
+        );
+      }
 // ==================== REVIEWS ====================
 function ReviewsManager() {
   const [rows, setRows] = useState([]);

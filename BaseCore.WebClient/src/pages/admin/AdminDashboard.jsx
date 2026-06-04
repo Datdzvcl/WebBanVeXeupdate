@@ -906,7 +906,7 @@ export default function AdminDashboard({
                   <th>ID</th>
                   <th>Khách</th>
                   <th>Tuyến</th>
-                  <th>Thanh toán</th>
+                  <th>Trạng thái</th>
                   <th>Tiền</th>
                 </tr>
               </thead>
@@ -920,7 +920,8 @@ export default function AdminDashboard({
                       <td>{pick(booking, ["route", "Route"]) || "..."}</td>
                       <td>
                         <StatusBadge>
-                          {labelPaymentStatus(getPaymentStatus(booking))}
+                          {/* {labelPaymentStatus(getPaymentStatus(booking))} */}
+                          {labelBookingStatus(pick(booking, ["bookingStatus", "BookingStatus"]))}
                         </StatusBadge>
                       </td>
                       <td>

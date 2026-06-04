@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+// import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelBookingStatus, labelPaymentMethod, labelPaymentStatus, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
 import { reviewApi } from '../services/reviewApi';
-
+import { QRCodeSVG } from 'qrcode.react';
 function formatDateTime(value) {
   if (!value) return '--';
   return new Intl.DateTimeFormat('vi-VN', {
@@ -33,27 +34,34 @@ function qrValue(booking) {
   return qrCodes[0] || ticketSeats[0]?.qrCode || ticketSeats[0]?.QRCode || `BOOKING:${pick(booking, ['bookingID', 'BookingID', 'bookingId', 'id'])}`;
 }
 
-function PseudoQrCode({ value }) {
-  const cells = useMemo(() => {
-    let seed = 0;
-    const source = String(value || 'ticket');
-    for (let i = 0; i < source.length; i += 1) seed = (seed * 31 + source.charCodeAt(i)) >>> 0;
-    return Array.from({ length: 121 }, (_, index) => {
-      const row = Math.floor(index / 11);
-      const col = index % 11;
-      const finder = (row < 3 && col < 3) || (row < 3 && col > 7) || (row > 7 && col < 3);
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return finder || seed % 3 === 0;
-    });
-  }, [value]);
+// function PseudoQrCode({ value }) {
+//   const cells = useMemo(() => {
+//     let seed = 0;
+//     const source = String(value || 'ticket');
+//     for (let i = 0; i < source.length; i += 1) seed = (seed * 31 + source.charCodeAt(i)) >>> 0;
+//     return Array.from({ length: 121 }, (_, index) => {
+//       const row = Math.floor(index / 11);
+//       const col = index % 11;
+//       const finder = (row < 3 && col < 3) || (row < 3 && col > 7) || (row > 7 && col < 3);
+//       seed = (seed * 1664525 + 1013904223) >>> 0;
+//       return finder || seed % 3 === 0;
+//     });
+//   }, [value]);
 
-  return (
-    <div className="pseudo-qr">
-      {cells.map((filled, index) => <span key={index} className={filled ? 'filled' : ''} />)}
-    </div>
-  );
-}
-
+//   return (
+//     <div className="pseudo-qr">
+//       {cells.map((filled, index) => <span key={index} className={filled ? 'filled' : ''} />)}
+//     </div>
+//   );
+// }
+{/* <QRCodeSVG
+  value={code}
+  size={200}
+  bgColor="#ffffff"
+  fgColor="#000000"
+  level="M"
+  includeMargin={true}
+/> */}
 export default function MyTicketDetail() {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);
@@ -274,7 +282,16 @@ const loadBooking = async () => {
 
         <aside className="ticket-detail-side">
           <h2>Mã QR</h2>
-          <PseudoQrCode value={code} />
+          {/* <PseudoQrCode value={code} /> */}
+          <QRCodeSVG
+            value={code || 'empty'}
+            size={200}
+            bgColor="#ffffff"
+            fgColor="#000000"
+            level="M"
+            includeMargin={true}
+            style={{ display: 'block', margin: '0 auto' }}
+          />
           <p>{code}</p>
           <Link className="btn btn-outline" to="/my-tickets">Quay lại danh sách</Link>
           {/* <button
