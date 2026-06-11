@@ -6302,9 +6302,11 @@ a:hover,
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;  /* ← thêm */
+  min-width: 0;  /* ← tránh overflow */
 }
  
-.payment-date-field label {
+.payment-date-field span:first-child {
   font-size: 10px;
   font-weight: 600;
   color: #94a3b8;
@@ -6320,6 +6322,7 @@ a:hover,
   outline: none;
   cursor: pointer;
   padding: 0;
+  width: 100%;
 }
  
 .payment-date-sep {

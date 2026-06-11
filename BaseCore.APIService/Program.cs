@@ -82,7 +82,7 @@ builder.Services.AddScoped<BaseCore.Services.BookingService>();
 // Background job: tự động xóa booking Pending quá 10 phút
 builder.Services.AddHostedService<ExpiredBookingCleanupService>();
 builder.Services.AddHostedService<ExpiredSeatHoldCleanupService>();
-
+builder.Services.AddHostedService<TripCompletionService>();
 // JWT Authentication
 var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "YourSecretKeyForAuthenticationShouldBeLongEnough");
 builder.Services.AddAuthentication(x =>

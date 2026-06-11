@@ -473,12 +473,176 @@ namespace BaseCore.APIService.Controllers
                     : $"{review.Booking.Trip.DepartureLocation} - {review.Booking.Trip.ArrivalLocation}"
             };
         }
+        [HttpGet]
+[Authorize(Roles = "Admin,Operator")]  // ← thêm Admin vào
+public async Task<IActionResult> GetAll(
+    int page = 1, int pageSize = 20,
+    string? keyword = null,
+    int? rating = null,
+    int? hasReply = null,
+    bool? isHidden = null,
+    DateTime? fromDate = null,
+    DateTime? toDate = null)
+{
+    page = page <= 0 ? 1 : page;
+    pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+    var query = _context.Reviews
+        .AsNoTracking()
+        .Include(x => x.User)
+        .Include(x => x.Booking)
+            .ThenInclude(x => x.Trip)
+                .ThenInclude(x => x.Bus)
+                    .ThenInclude(x => x.Operator)
+        .AsQueryable();
+
+    // Operator chỉ thấy reviews của nhà xe mình
+    if (User.IsInRole("Operator"))
+    {
+        var operatorId = await GetCurrentOperatorId();
+        if (operatorId.HasValue)
+            query = query.Where(x => x.Booking.Trip.Bus.OperatorID == operatorId.Value);
     }
 
+    // Filter keyword (tên/SĐT khách) — Admin
+    if (!string.IsNullOrWhiteSpace(keyword))
+        query = query.Where(x =>
+            x.Booking.CustomerName.Contains(keyword) ||
+            x.Booking.CustomerPhone.Contains(keyword));
+
+    // Filter rating
+    if (rating.HasValue)
+        query = query.Where(x => x.Rating == rating.Value);
+
+    // Filter hasReply (Operator)
+    if (hasReply.HasValue)
+        query = hasReply.Value == 1
+            ? query.Where(x => x.ReplyContent != null && x.ReplyContent != "")
+            : query.Where(x => x.ReplyContent == null || x.ReplyContent == "");
+
+    // Filter isHidden (Admin)
+    if (isHidden.HasValue)
+        query = query.Where(x => x.IsHidden == isHidden.Value);
+
+    // Filter fromDate/toDate theo CreatedAt
+    if (fromDate.HasValue)
+        query = query.Where(x => x.CreatedAt >= fromDate.Value);
+    if (toDate.HasValue)
+        query = query.Where(x => x.CreatedAt <= toDate.Value);
+
+    var totalCount = await query.CountAsync();
+    var items = await query
+        .OrderByDescending(x => x.CreatedAt)
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .Select(x => new
+        {
+            x.ReviewID,
+            x.BookingID,
+            x.UserID,
+            x.Rating,
+            x.Comment,
+            x.CreatedAt,
+            x.ReplyContent,
+            x.RepliedAt,
+            x.IsHidden,
+            customerName = x.Booking.CustomerName,
+            customerPhone = x.Booking.CustomerPhone,
+            operatorName = x.Booking.Trip.Bus.Operator == null
+                ? null : x.Booking.Trip.Bus.Operator.Name,
+            departureLocation = x.Booking.Trip.DepartureLocation,
+            arrivalLocation   = x.Booking.Trip.ArrivalLocation,
+            departureTime     = x.Booking.Trip.DepartureTime,
+        })
+        .ToListAsync();
+
+    return Ok(new { items, totalCount, page, pageSize,
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize) });
+}
+
+// ── PUT /api/reviews/{id}/reply ──────────────────────────────
+[HttpPut("{id:int}/reply")]
+[Authorize(Roles = "Admin,Operator")]
+public async Task<IActionResult> Reply(int id, [FromBody] ReplyRequest request)
+{
+    var review = await _context.Reviews
+        .Include(x => x.Booking).ThenInclude(x => x.Trip)
+            .ThenInclude(x => x.Bus)
+        .FirstOrDefaultAsync(x => x.ReviewID == id);
+
+    if (review == null)
+        return NotFound(new { message = "Không tìm thấy đánh giá." });
+
+    // Operator chỉ reply review của nhà xe mình
+    if (User.IsInRole("Operator"))
+    {
+        var operatorId = await GetCurrentOperatorId();
+        if (review.Booking?.Trip?.Bus?.OperatorID != operatorId)
+            return Forbid();
+    }
+
+    // Chỉ reply 1 lần
+    if (!string.IsNullOrWhiteSpace(review.ReplyContent))
+        return BadRequest(new { message = "Đánh giá này đã được phản hồi." });
+
+    review.ReplyContent = request.ReplyContent?.Trim();
+    review.RepliedAt    = DateTime.Now;
+    await _context.SaveChangesAsync();
+
+    return Ok(new { message = "Đã gửi phản hồi.", review.ReplyContent, review.RepliedAt });
+}
+
+// ── PUT /api/reviews/{id}/hide — chỉ Admin ──────────────────
+[HttpPut("{id:int}/hide")]
+[Authorize(Roles = "Admin")]
+public async Task<IActionResult> Hide(int id)
+{
+    var review = await _context.Reviews.FindAsync(id);
+    if (review == null)
+        return NotFound(new { message = "Không tìm thấy đánh giá." });
+
+    review.IsHidden = true;
+    await _context.SaveChangesAsync();
+    return Ok(new { message = "Đã ẩn đánh giá." });
+}
+
+// ── PUT /api/reviews/{id}/show — chỉ Admin ──────────────────
+[HttpPut("{id:int}/show")]
+[Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Show(int id)
+    {
+        var review = await _context.Reviews.FindAsync(id);
+        if (review == null)
+            return NotFound(new { message = "Không tìm thấy đánh giá." });
+
+        review.IsHidden = false;
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Đã hiện đánh giá." });
+    }
+    [HttpGet("/api/operator/reviews")]
+    [Authorize(Roles = "Operator")]
+    public async Task<IActionResult> GetOperatorReviews(
+        int page = 1, int pageSize = 20,
+        int? rating = null,
+        int? hasReply = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null)
+    {
+        // Gọi lại GetAll với params tương ứng
+        return await GetAll(page, pageSize, null, rating, hasReply, null, fromDate, toDate);
+    }
+}
+    // ── GET /api/reviews — fix cho cả Admin + Operator ──────────
+
+    
     public class ReviewRequest
     {
         public int BookingID { get; set; }
         public byte Rating { get; set; }
         public string? Comment { get; set; }
+    }
+    public class ReplyRequest
+    {
+        public string? ReplyContent { get; set; }
     }
 }

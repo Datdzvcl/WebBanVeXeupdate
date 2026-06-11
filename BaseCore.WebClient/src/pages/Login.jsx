@@ -89,11 +89,19 @@ export default function Login() {
         password: form.password,
       });
 
+      // const role = Number(user?.role ?? 0);
+      // if (role === 2 || role === 1) {
+      //   navigate('/admin', { replace: true }); // Admin và Operator đều vào /admin
+      // } else {
+      //   navigate('/', { replace: true });       // Customer về trang chủ
+      // }
       const role = Number(user?.role ?? 0);
-      if (role === 2 || role === 1) {
-        navigate('/admin', { replace: true }); // Admin và Operator đều vào /admin
+      if (role === 2) {
+        navigate('/admin/dashboard', { replace: true });
+      } else if (role === 1) {
+        navigate('/operator/dashboard', { replace: true });
       } else {
-        navigate('/', { replace: true });       // Customer về trang chủ
+        navigate('/', { replace: true });
       }
 
     } catch (err) {
