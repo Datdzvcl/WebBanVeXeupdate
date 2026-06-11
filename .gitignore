@@ -48,10 +48,12 @@ Thumbs.db
 
 # Build artifacts
 UpgradeLog*.htm
-# appsettings local
-appsettings.json
-appsettings.Development.json
 
 # ignore all appsettings in projects
 **/appsettings.json
 **/appsettings.Development.json
+
+# Binary files
+*.dll
+*.exe
+*.pdb
