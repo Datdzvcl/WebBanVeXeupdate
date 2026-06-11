@@ -49,4 +49,23 @@ export const reviewApi = {
     const response = await apiClient.delete(`/api/reviews/${id}`);
     return response.data;
   },
+  async listOperator(params) {
+  const response = await apiClient.get('/api/operator/reviews', { params });
+  return response.data;
+},
+
+async reply(id, content) {
+  const response = await apiClient.put(`/api/reviews/${id}/reply`, { replyContent: content });
+  return response.data;
+},
+
+async hide(id) {
+  const response = await apiClient.put(`/api/reviews/${id}/hide`);
+  return response.data;
+},
+
+async show(id) {
+  const response = await apiClient.put(`/api/reviews/${id}/show`);
+  return response.data;
+},
 };

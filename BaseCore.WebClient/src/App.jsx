@@ -21,6 +21,8 @@ import ChangePassword from './pages/ChangePassword';
 import { formatVND } from './api';
 import ProtectedRoute from './routes/ProtectedRoute';
 import AdminRoute from './routes/AdminRoute';
+import OperatorRoute from './routes/OperatorRoute';
+import OrderHistory from './pages/OrderHistory';
 
 // Component hiển thị thông báo giữ chỗ toàn cục
 function HoldSeatNotification() {
@@ -150,6 +152,8 @@ export default function App() {
         <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
         <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/operator/*" element={<OperatorRoute><AdminPage /></OperatorRoute>} />
+        <Route path="/order-history" element={<OrderHistory />} />
       </Routes>
     </BrowserRouter>
   );

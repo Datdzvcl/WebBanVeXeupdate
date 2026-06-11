@@ -385,7 +385,8 @@ if (isOperator && active === 'operators')
   if (active === 'orders')   return <BookingsManager />;
   if (active === 'promotions') return <PromotionsManager />;
   if (active === 'payments') return <PaymentsManager isOperator={isOperator} />;
-  if (active === 'reviews')  return <ReviewsManager />;
+  // if (active === 'reviews')  return <ReviewsManager />;
+  if (active === 'reviews') return <ReviewsManager isOperator={isOperator} />;
   if (active === 'buses')
     return <BusesManager buses={buses} operators={operators} onRefresh={onRefresh} isOperator={isOperator} />;
   if (active === 'users')
@@ -808,12 +809,16 @@ function UsersManager({ onRefresh }) {
     pageSize: ADMIN_CRUD_PAGE_SIZE,
     totalPages: 1,
   });
+  // const [filters, setFilters] = useState({
+  //   fullName: "",
+  //   email: "",
+  //   phone: "",
+  //   role: "",
+  // });
   const [filters, setFilters] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    role: "",
-  });
+  keyword: "",
+  role: "",
+});
   const [page, setPage] = useState(1);
   const [form, setForm] = useState({
     userID: null,
@@ -827,29 +832,57 @@ function UsersManager({ onRefresh }) {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
 
+  // const loadUsers = async () => {
+  //   setLoading(true);
+  //   try {
+  //     const data = await userApi.list(
+  //       cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
+  //     );
+  //     const paged = normalizePagedResponse(data, page);
+  //     setRows(paged.items);
+  //     setMeta(paged);
+  //   } catch (e) {
+  //     setNotice({
+  //       type: "error",
+  //       text: e.message || "Không tải được danh sách người dùng.",
+  //     });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const data = await userApi.list(
-        cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
-      );
-      const paged = normalizePagedResponse(data, page);
-      setRows(paged.items);
-      setMeta(paged);
-    } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không tải được danh sách người dùng.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const kw = filters.keyword.trim();
+    const isPhone = /^[0-9+]{6,}$/.test(kw);
+    const isEmail = kw.includes("@");
 
-  useEffect(() => {
-    loadUsers();
-  }, [page, filters.fullName, filters.email, filters.phone, filters.role]);
+    const params = cleanParams({
+      fullName: !isPhone && !isEmail ? kw : "",
+      phone:    isPhone ? kw : "",
+      email:    isEmail ? kw : "",
+      role:     filters.role,
+      page,
+      pageSize: ADMIN_CRUD_PAGE_SIZE,
+    });
 
+    const data = await userApi.list(params);
+    const paged = normalizePagedResponse(data, page);
+    setRows(paged.items);
+    setMeta(paged);
+  } catch (e) {
+    setNotice({ type: "error", text: e.message || "Không tải được danh sách." });
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // useEffect(() => {
+  //   loadUsers();
+  // }, [page, filters.fullName, filters.email, filters.phone, filters.role]);
+useEffect(() => {
+  loadUsers();
+}, [page, filters.keyword, filters.role]);
   const updateFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
     setPage(1);
@@ -963,9 +996,9 @@ function UsersManager({ onRefresh }) {
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
-              <option value="Customer">Khách hàng</option>
-              <option value="Operator">Nhà xe</option>
-              <option value="Admin">Quản trị viên</option>
+              <option value="0">Khách hàng</option>
+              <option value="2">Nhà xe</option>
+              <option value="1">Quản trị viên</option>
             </select>
             <input
               type="password"
@@ -995,7 +1028,7 @@ function UsersManager({ onRefresh }) {
           </form>
         </AdminFormModal>
       )}
-      <div className="admin-filter-grid">
+      {/* <div className="admin-filter-grid">
         <input
           value={filters.fullName}
           onChange={(e) => updateFilter("fullName", e.target.value)}
@@ -1020,7 +1053,24 @@ function UsersManager({ onRefresh }) {
           <option value="Operator">Nhà xe</option>
           <option value="Admin">Quản trị viên</option>
         </select>
-      </div>
+      </div> */}
+      <div className="admin-filter-grid">
+  <input
+    value={filters.keyword}
+    onChange={(e) => { setFilters(f => ({ ...f, keyword: e.target.value })); setPage(1); }}
+    placeholder="Tìm theo tên, email hoặc số điện thoại..."
+    style={{ gridColumn: "span 2" }}
+  />
+  <select
+    value={filters.role}
+    onChange={(e) => { setFilters(f => ({ ...f, role: e.target.value })); setPage(1); }}
+  >
+    <option value="">Tất cả vai trò</option>
+    <option value="0">Khách hàng</option>
+    <option value="1">Nhà xe</option>
+    <option value="2">Quản trị viên</option>
+  </select>
+</div>
       {loading && <div className="admin-loading">Đang tải dữ liệu...</div>}
       <div className="table-wrap">
         <table>
@@ -3404,8 +3454,9 @@ export function AdminBookingDetail({ bookingId }) {
 // }
 function PaymentsManager({ isOperator = false }) {
   const [rows, setRows]       = useState([]);
+  const basePath = isOperator ? '/operator' : '/admin';
   const [filters, setFilters] = useState({
-    paymentStatus: '',
+    bookingStatus: '',
     bookingId: '',
     fromDate: '',
     toDate: '',
@@ -3423,7 +3474,8 @@ function PaymentsManager({ isOperator = false }) {
   const [suggestLoading, setSuggestLoading] = useState(false);
   const suggestRef = useRef(null);
   const debounceRef = useRef(null);
- 
+ const [fromDateRaw, setFromDateRaw] = useState('');
+const [toDateRaw, setToDateRaw] = useState('');
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
     const handler = (e) => {
@@ -3562,12 +3614,46 @@ useEffect(() => {
  
   useEffect(() => { loadPayments(); }, []);
  
-  const applyFilters = (e) => {
-    e.preventDefault();
-    const next = { ...filters, bookingId: bookingQuery || filters.bookingId, page: 1 };
-    setFilters(next);
-    loadPayments(next);
+  // const applyFilters = (e) => {
+  //   e.preventDefault();
+  //   const next = { ...filters, bookingId: bookingQuery || filters.bookingId, page: 1 };
+  //   setFilters(next);
+  //   loadPayments(next);
+  // };
+//   const applyFilters = (e) => {
+//   e.preventDefault();
+//   const q = bookingQuery.trim();
+//   const isId    = /^#?\d+$/.test(q);
+//   const isPhone = /^[0-9+\-\s]{7,}$/.test(q);
+
+//   const next = {
+//     ...filters,
+//     bookingId:     isId    ? q.replace('#','') : '',
+//     customerPhone: isPhone ? q : '',
+//     customerName:  (!isId && !isPhone) ? q : '',
+//     page: 1,
+//   };
+//   setFilters(next);
+//   loadPayments(next);
+// };
+const applyFilters = (e) => {
+  e.preventDefault();
+  const q = bookingQuery.trim();
+  const isId    = /^#?\d+$/.test(q);
+  const isPhone = /^[0-9+\-\s]{7,}$/.test(q);
+
+  const next = {
+    ...filters,
+    bookingId:     isId    ? q.replace('#', '') : '',
+    customerPhone: isPhone && !isId ? q : '',
+    customerName:  !isId && !isPhone ? q : '',
+    fromDate: fromDateRaw ? `${fromDateRaw}T00:00:00` : '',
+    toDate:   toDateRaw   ? `${toDateRaw}T23:59:59`   : '',
+    page: 1,
   };
+  setFilters(next);
+  loadPayments(next);
+};
  
   const changePage = (page) => {
     const next = { ...filters, page };
@@ -3714,7 +3800,7 @@ useEffect(() => {
         </label>
  
         {/* Range date picker */}
-        <div className="payment-date-range">
+        {/* <div className="payment-date-range">
           <label className={`payment-date-field ${filters.fromDate ? 'has-value' : ''}`}>
             <span>Từ ngày</span>
             <strong>{formatDateLabel(filters.fromDate)}</strong>
@@ -3740,7 +3826,96 @@ useEffect(() => {
               aria-label="Đến ngày"
             />
           </label>
-        </div>
+        </div> */}
+        {/* Từ ngày */}
+<div className="payment-date-range" style={{ gridColumn: 'span 1', minWidth: 280 }}>
+  {/* <label
+    className={`payment-date-field ${filters.fromDate ? 'has-value' : ''}`}
+    onClick={() => document.getElementById('fromDate').showPicker?.()}
+    style={{ cursor: 'pointer', flex: 1 }}
+  >
+    <span>Từ ngày</span>
+    <strong>{formatDateLabel(filters.fromDate)}</strong>
+    <i className="fa-regular fa-calendar-days" />
+    {/* <input
+      id="fromDate"
+      type="date"
+      value={filters.fromDate}
+      max={filters.toDate || undefined}
+      onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+      aria-label="Từ ngày"
+    /> */}
+    {/* <input
+      id="fromDate"
+      type="date"
+      value={fromDateRaw}
+      max={toDateRaw || undefined}
+      onChange={(e) => setFromDateRaw(e.target.value)}
+    />
+  </label> */} 
+  <label
+  className={`payment-date-field ${fromDateRaw ? 'has-value' : ''}`}
+  onClick={() => document.getElementById('fromDate').showPicker?.()}
+  style={{ cursor: 'pointer', flex: 1 }}
+>
+  <span>Từ ngày</span>
+  <strong>{formatDateLabel(fromDateRaw)}</strong>  {/* ← dùng raw */}
+  <i className="fa-regular fa-calendar-days" />
+  <input
+    id="fromDate"
+    type="date"
+    value={fromDateRaw}
+    max={toDateRaw || undefined}
+    onChange={(e) => setFromDateRaw(e.target.value)}
+  />
+</label>
+
+<span className="payment-date-sep">→</span>
+
+<label
+  className={`payment-date-field ${toDateRaw ? 'has-value' : ''}`}
+  onClick={() => document.getElementById('toDate').showPicker?.()}
+  style={{ cursor: 'pointer', flex: 1 }}
+>
+  <span>Đến ngày</span>
+  <strong>{formatDateLabel(toDateRaw)}</strong>  {/* ← dùng raw */}
+  <i className="fa-regular fa-calendar-days" />
+  <input
+    id="toDate"
+    type="date"
+    value={toDateRaw}
+    min={fromDateRaw || undefined}
+    onChange={(e) => setToDateRaw(e.target.value)}
+  />
+</label>
+
+  {/* <span className="payment-date-sep">→</span>
+
+  <label
+    className={`payment-date-field ${filters.toDate ? 'has-value' : ''}`}
+    onClick={() => document.getElementById('toDate').showPicker?.()}
+    style={{ cursor: 'pointer', flex: 1 }}
+  >
+    <span>Đến ngày</span>
+    <strong>{formatDateLabel(filters.toDate)}</strong>
+    <i className="fa-regular fa-calendar-days" />
+    {/* <input
+      id="toDate"
+      type="date"
+      value={filters.toDate}
+      min={filters.fromDate || undefined}
+      onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+      aria-label="Đến ngày"
+    /> */}
+    {/* <input
+      id="fromDate"
+      type="date"
+      value={fromDateRaw}
+      max={toDateRaw || undefined}
+      onChange={(e) => setFromDateRaw(e.target.value)}
+    /> */}
+  {/* </label> */} 
+</div>
  
         {/* Nút lọc + xóa lọc */}
         <div className="payment-filter-actions">
@@ -3751,8 +3926,10 @@ useEffect(() => {
             className="btn btn-outline"
             type="button"
             onClick={() => {
-              const reset = { paymentStatus: '', bookingId: '', fromDate: '', toDate: '', page: 1, pageSize: 20 };
+              const reset = { bookingStatus: '', bookingId: '', fromDate: '', toDate: '', page: 1, pageSize: 20 };
               setFilters(reset);
+              setFromDateRaw('');   // ← thêm
+              setToDateRaw('');
               setBookingQuery('');
               setSuggestions([]);
               loadPayments(reset);
@@ -3770,7 +3947,7 @@ useEffect(() => {
         <table>
           <thead>
             <tr>
-              <th>Mã GD</th>
+              {/* <th>Mã GD</th> */}
               <th>Đơn</th>
               <th>Khách hàng</th>
               <th>Tuyến</th>
@@ -3858,15 +4035,22 @@ useEffect(() => {
 
         return (
           <tr key={id}>
-            <td>#{id}</td>
+            {/* <td>#{id}</td> */}
             <td>#{id}</td>
             <td>
               <strong>{pick(item, ['customerName', 'CustomerName'], 'Chưa rõ')}</strong>
               <br />
               <small>{pick(item, ['customerPhone', 'CustomerPhone'], '')}</small>
             </td>
-            <td>
+            {/* <td>
               {pick(item, ['route', 'Route'], 'Chưa rõ tuyến')}
+              <br />
+              <small>{formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</small>
+            </td> */}
+            <td>
+              {pick(item, ['departureLocation'], '') && pick(item, ['arrivalLocation'], '')
+                ? `${pick(item, ['departureLocation'])} - ${pick(item, ['arrivalLocation'])}`
+                : 'Chưa rõ tuyến'}
               <br />
               <small>{formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</small>
             </td>
@@ -3890,7 +4074,13 @@ useEffect(() => {
             </td> */}
             <td>
             <a
-              href={`/admin/bookings/${id}`}
+            //   href={`/admin/bookings/${id}`}
+            //   className="btn btn-outline"
+            //   style={{ fontSize: 13, padding: '4px 10px' }}
+            // >
+            //   <i className="fa-solid fa-eye" /> Xem đơn
+            // </a>
+            href={`${basePath}/bookings/${id}`}
               className="btn btn-outline"
               style={{ fontSize: 13, padding: '4px 10px' }}
             >
@@ -3915,191 +4105,576 @@ useEffect(() => {
         );
       }
 // ==================== REVIEWS ====================
-function ReviewsManager() {
-  const [rows, setRows] = useState([]);
-  const [filters, setFilters] = useState({
-    tripId: "",
-    operatorId: "",
-    page: 1,
-    pageSize: 20,
-  });
-  const [paging, setPaging] = useState({
-    totalCount: 0,
-    page: 1,
-    pageSize: 20,
-    totalPages: 1,
-  });
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState(null);
-  const [tripQuery, setTripQuery] = useState("");
-  const [operatorQuery, setOperatorQuery] = useState("");
-  const [tripSuggestions, setTripSuggestions] = useState([]);
-  const [operatorSuggestions, setOperatorSuggestions] = useState([]);
-  const [showTripSuggest, setShowTripSuggest] = useState(false);
-  const [showOperatorSuggest, setShowOperatorSuggest] = useState(false);
-  const [tripSuggestLoading, setTripSuggestLoading] = useState(false);
-  const [operatorSuggestLoading, setOperatorSuggestLoading] = useState(false);
-  const tripSuggestRef = useRef(null);
-  const operatorSuggestRef = useRef(null);
-  const tripDebounceRef = useRef(null);
-  const operatorDebounceRef = useRef(null);
+// function ReviewsManager() {
+//   const [rows, setRows] = useState([]);
+//   const [filters, setFilters] = useState({
+//     tripId: "",
+//     operatorId: "",
+//     page: 1,
+//     pageSize: 20,
+//   });
+//   const [paging, setPaging] = useState({
+//     totalCount: 0,
+//     page: 1,
+//     pageSize: 20,
+//     totalPages: 1,
+//   });
+//   const [loading, setLoading] = useState(false);
+//   const [notice, setNotice] = useState(null);
+//   const [tripQuery, setTripQuery] = useState("");
+//   const [operatorQuery, setOperatorQuery] = useState("");
+//   const [tripSuggestions, setTripSuggestions] = useState([]);
+//   const [operatorSuggestions, setOperatorSuggestions] = useState([]);
+//   const [showTripSuggest, setShowTripSuggest] = useState(false);
+//   const [showOperatorSuggest, setShowOperatorSuggest] = useState(false);
+//   const [tripSuggestLoading, setTripSuggestLoading] = useState(false);
+//   const [operatorSuggestLoading, setOperatorSuggestLoading] = useState(false);
+//   const tripSuggestRef = useRef(null);
+//   const operatorSuggestRef = useRef(null);
+//   const tripDebounceRef = useRef(null);
+//   const operatorDebounceRef = useRef(null);
 
+//   const loadReviews = async (nextFilters = filters) => {
+//     setLoading(true);
+//     setNotice(null);
+//     try {
+//       const data = await reviewApi.list(cleanParams(nextFilters));
+//       const normalized = normalizePagedResponse(
+//         data,
+//         nextFilters.page,
+//         nextFilters.pageSize,
+//       );
+//       setRows(normalized.items);
+//       setPaging(normalized);
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không tải được đánh giá.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     loadReviews();
+//   }, []);
+
+//   useEffect(() => {
+//     const handler = (event) => {
+//       if (tripSuggestRef.current && !tripSuggestRef.current.contains(event.target)) {
+//         setShowTripSuggest(false);
+//       }
+//       if (operatorSuggestRef.current && !operatorSuggestRef.current.contains(event.target)) {
+//         setShowOperatorSuggest(false);
+//       }
+//     };
+
+//     document.addEventListener("mousedown", handler);
+//     return () => document.removeEventListener("mousedown", handler);
+//   }, []);
+
+//   useEffect(() => {
+//     clearTimeout(tripDebounceRef.current);
+//     if (!tripQuery.trim()) {
+//       setTripSuggestions([]);
+//       setShowTripSuggest(false);
+//       return;
+//     }
+
+//     tripDebounceRef.current = setTimeout(async () => {
+//       setTripSuggestLoading(true);
+//       try {
+//         const data = await reviewApi.suggestTrips(tripQuery.trim());
+//         setTripSuggestions(Array.isArray(data) ? data : []);
+//         setShowTripSuggest(true);
+//       } catch {
+//         setTripSuggestions([]);
+//       } finally {
+//         setTripSuggestLoading(false);
+//       }
+//     }, 300);
+
+//     return () => clearTimeout(tripDebounceRef.current);
+//   }, [tripQuery]);
+
+//   useEffect(() => {
+//     clearTimeout(operatorDebounceRef.current);
+//     if (!operatorQuery.trim()) {
+//       setOperatorSuggestions([]);
+//       setShowOperatorSuggest(false);
+//       return;
+//     }
+
+//     operatorDebounceRef.current = setTimeout(async () => {
+//       setOperatorSuggestLoading(true);
+//       try {
+//         const data = await reviewApi.suggestOperators(operatorQuery.trim());
+//         setOperatorSuggestions(Array.isArray(data) ? data : []);
+//         setShowOperatorSuggest(true);
+//       } catch {
+//         setOperatorSuggestions([]);
+//       } finally {
+//         setOperatorSuggestLoading(false);
+//       }
+//     }, 300);
+
+//     return () => clearTimeout(operatorDebounceRef.current);
+//   }, [operatorQuery]);
+
+//   const updateFilter = (field, value) => {
+//     setFilters((current) => ({ ...current, [field]: value, page: 1 }));
+//   };
+
+//   const applyFilters = (event) => {
+//     event.preventDefault();
+//     const nextFilters = {
+//       ...filters,
+//       tripId: filters.tripId || (Number.isInteger(Number(tripQuery)) ? tripQuery : ""),
+//       operatorId:
+//         filters.operatorId || (Number.isInteger(Number(operatorQuery)) ? operatorQuery : ""),
+//       page: 1,
+//     };
+//     setFilters(nextFilters);
+//     loadReviews(nextFilters);
+//   };
+
+//   const selectTripSuggestion = (item) => {
+//     const tripId = pick(item, ["tripID", "TripID"]);
+//     const route = pick(item, ["route", "Route"], "");
+//     const operatorName = pick(item, ["operatorName", "OperatorName"], "");
+//     setTripQuery(`#${tripId}${route ? ` - ${route}` : ""}${operatorName ? ` (${operatorName})` : ""}`);
+//     setFilters((current) => ({ ...current, tripId: String(tripId), page: 1 }));
+//     setShowTripSuggest(false);
+//     setTripSuggestions([]);
+//   };
+
+//   const selectOperatorSuggestion = (item) => {
+//     const operatorId = pick(item, ["operatorID", "OperatorID"]);
+//     const name = pick(item, ["name", "Name"], "");
+//     setOperatorQuery(`#${operatorId}${name ? ` - ${name}` : ""}`);
+//     setFilters((current) => ({ ...current, operatorId: String(operatorId), page: 1 }));
+//     setShowOperatorSuggest(false);
+//     setOperatorSuggestions([]);
+//   };
+
+//   const clearReviewFilters = () => {
+//     const reset = { tripId: "", operatorId: "", page: 1, pageSize: 20 };
+//     setFilters(reset);
+//     setTripQuery("");
+//     setOperatorQuery("");
+//     setTripSuggestions([]);
+//     setOperatorSuggestions([]);
+//     loadReviews(reset);
+//   };
+
+//   const changePage = (page) => {
+//     const nextFilters = { ...filters, page };
+//     setFilters(nextFilters);
+//     loadReviews(nextFilters);
+//   };
+
+//   const deleteReview = async (id) => {
+//     if (!window.confirm("Xóa đánh giá này?")) return;
+//     setLoading(true);
+//     try {
+//       await reviewApi.remove(id);
+//       await loadReviews(filters);
+//       setNotice({ type: "success", text: "Đã xóa đánh giá." });
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không xóa được đánh giá.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <section className="admin-card table-card">
+//       <div className="admin-section-head">
+//         <div>
+//           <p className="eyebrow">Đánh giá</p>
+//           <h3>Quản lý đánh giá nhà xe</h3>
+//         </div>
+//         <button
+//           className="btn btn-outline"
+//           type="button"
+//           onClick={() => loadReviews(filters)}
+//           disabled={loading}
+//         >
+//           Làm mới
+//         </button>
+//       </div>
+
+//       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+
+//       <form className="review-filter-grid" onSubmit={applyFilters}>
+//         <div className="review-suggest-wrap" ref={tripSuggestRef}>
+//           <div className="payment-suggest-input-wrap">
+//             <i className="fa-solid fa-route payment-suggest-icon" />
+//             <input
+//               type="text"
+//               className="payment-suggest-input"
+//               value={tripQuery}
+//               onChange={(e) => {
+//                 const value = e.target.value;
+//                 setTripQuery(value);
+//                 updateFilter("tripId", "");
+//               }}
+//               onFocus={() => tripSuggestions.length > 0 && setShowTripSuggest(true)}
+//               placeholder="Tìm mã chuyến hoặc tuyến..."
+//               autoComplete="off"
+//             />
+//             {tripSuggestLoading && (
+//               <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
+//             )}
+//             {tripQuery && (
+//               <button
+//                 type="button"
+//                 className="payment-suggest-clear"
+//                 onClick={() => {
+//                   setTripQuery("");
+//                   setTripSuggestions([]);
+//                   updateFilter("tripId", "");
+//                 }}
+//               >
+//                 <i className="fa-solid fa-xmark" />
+//               </button>
+//             )}
+//           </div>
+
+//           {showTripSuggest && tripSuggestions.length > 0 && (
+//             <ul className="payment-suggest-dropdown">
+//               {tripSuggestions.map((item) => {
+//                 const tripId = pick(item, ["tripID", "TripID"]);
+//                 const route = pick(item, ["route", "Route"], "Chưa rõ tuyến");
+//                 const operatorName = pick(item, ["operatorName", "OperatorName"], "");
+//                 const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
+//                 return (
+//                   <li
+//                     key={tripId}
+//                     className="payment-suggest-item review-suggest-item"
+//                     onMouseDown={() => selectTripSuggestion(item)}
+//                   >
+//                     <span className="suggest-id">#{tripId}</span>
+//                     <span className="suggest-name">{route}</span>
+//                     {operatorName && <span className="suggest-route">{operatorName}</span>}
+//                     <span className="suggest-amount">{reviewCount} đánh giá</span>
+//                   </li>
+//                 );
+//               })}
+//             </ul>
+//           )}
+
+//           {showTripSuggest && !tripSuggestLoading && tripSuggestions.length === 0 && tripQuery && (
+//             <ul className="payment-suggest-dropdown">
+//               <li className="payment-suggest-empty">Không tìm thấy chuyến có đánh giá</li>
+//             </ul>
+//           )}
+//         </div>
+
+//         <div className="review-suggest-wrap" ref={operatorSuggestRef}>
+//           <div className="payment-suggest-input-wrap">
+//             <i className="fa-solid fa-bus payment-suggest-icon" />
+//             <input
+//               type="text"
+//               className="payment-suggest-input"
+//               value={operatorQuery}
+//               onChange={(e) => {
+//                 const value = e.target.value;
+//                 setOperatorQuery(value);
+//                 updateFilter("operatorId", "");
+//               }}
+//               onFocus={() => operatorSuggestions.length > 0 && setShowOperatorSuggest(true)}
+//               placeholder="Tìm mã nhà xe hoặc tên nhà xe..."
+//               autoComplete="off"
+//             />
+//             {operatorSuggestLoading && (
+//               <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
+//             )}
+//             {operatorQuery && (
+//               <button
+//                 type="button"
+//                 className="payment-suggest-clear"
+//                 onClick={() => {
+//                   setOperatorQuery("");
+//                   setOperatorSuggestions([]);
+//                   updateFilter("operatorId", "");
+//                 }}
+//               >
+//                 <i className="fa-solid fa-xmark" />
+//               </button>
+//             )}
+//           </div>
+
+//           {showOperatorSuggest && operatorSuggestions.length > 0 && (
+//             <ul className="payment-suggest-dropdown">
+//               {operatorSuggestions.map((item) => {
+//                 const operatorId = pick(item, ["operatorID", "OperatorID"]);
+//                 const name = pick(item, ["name", "Name"], "Chưa rõ nhà xe");
+//                 const phone = pick(item, ["contactPhone", "ContactPhone"], "");
+//                 const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
+//                 return (
+//                   <li
+//                     key={operatorId}
+//                     className="payment-suggest-item review-suggest-item"
+//                     onMouseDown={() => selectOperatorSuggestion(item)}
+//                   >
+//                     <span className="suggest-id">#{operatorId}</span>
+//                     <span className="suggest-name">{name}</span>
+//                     {phone && <span className="suggest-route">{phone}</span>}
+//                     <span className="suggest-amount">{reviewCount} đánh giá</span>
+//                   </li>
+//                 );
+//               })}
+//             </ul>
+//           )}
+
+//           {showOperatorSuggest && !operatorSuggestLoading && operatorSuggestions.length === 0 && operatorQuery && (
+//             <ul className="payment-suggest-dropdown">
+//               <li className="payment-suggest-empty">Không tìm thấy nhà xe có đánh giá</li>
+//             </ul>
+//           )}
+//         </div>
+
+//         <div className="review-filter-actions">
+//           <button className="btn btn-primary" type="submit" disabled={loading}>
+//             <i className="fa-solid fa-filter" /> Lọc
+//           </button>
+//           <button className="btn btn-outline" type="button" onClick={clearReviewFilters}>
+//             Xóa lọc
+//           </button>
+//         </div>
+//       </form>
+
+//       {loading && <div className="admin-loading">Đang tải đánh giá...</div>}
+
+//       <div className="table-wrap">
+//         <table>
+//           <thead>
+//             <tr>
+//               <th>ID</th>
+//               <th>Đơn</th>
+//               <th>Khách hàng</th>
+//               <th>Tuyến</th>
+//               <th>Nhà xe</th>
+//               <th>Rating</th>
+//               <th>Bình luận</th>
+//               <th>Ngày tạo</th>
+//               <th>Thao tác</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {rows.map((item) => {
+//               const id = pick(item, ["reviewID", "ReviewID"]);
+//               const rating = Number(pick(item, ["rating", "Rating"], 0));
+//               return (
+//                 <tr key={id}>
+//                   <td>#{id}</td>
+//                   <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+//                   <td>
+//                     {pick(
+//                       item,
+//                       ["userName", "UserName", "customerName", "CustomerName"],
+//                       "Chưa rõ",
+//                     )}
+//                   </td>
+//                   <td>{pick(item, ["route", "Route"], "Chưa rõ tuyến")}</td>
+//                   <td>
+//                     {pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}
+//                   </td>
+//                   <td>
+//                     {"★".repeat(rating)}
+//                     {"☆".repeat(Math.max(0, 5 - rating))}
+//                   </td>
+//                   <td>
+//                     {pick(item, ["comment", "Comment"], "") ||
+//                       "Không có bình luận"}
+//                   </td>
+//                   <td>
+//                     {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
+//                   </td>
+//                   <td className="admin-actions">
+//                     <button
+//                       className="btn btn-danger"
+//                       type="button"
+//                       disabled={loading}
+//                       onClick={() => deleteReview(id)}
+//                     >
+//                       Xóa
+//                     </button>
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+//             {!loading && rows.length === 0 && (
+//               <tr>
+//                 <td colSpan="9" className="empty-cell">
+//                   Chưa có đánh giá.
+//                 </td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+
+//       <Pagination
+//         page={paging.page}
+//         totalPages={paging.totalPages}
+//         onPageChange={changePage}
+//       />
+//     </section>
+//   );
+// }
+function ReviewsManager({ isOperator = false }) {
+  const [rows, setRows]   = useState([]);
+  const [stats, setStats] = useState(null); // { total, avgRating, unread, badCount }
+  const [filters, setFilters] = useState(
+    isOperator
+      ? { fromDate: '', toDate: '', rating: '', hasReply: '', page: 1, pageSize: 20 }
+      : { keyword: '', rating: '', isHidden: '', page: 1, pageSize: 20 }
+  );
+  const [fromDateRaw, setFromDateRaw] = useState('');
+  const [toDateRaw,   setToDateRaw]   = useState('');
+  const [paging, setPaging] = useState({
+    totalCount: 0, page: 1, pageSize: 20, totalPages: 1,
+  });
+  const [loading, setLoading]       = useState(false);
+  const [notice,  setNotice]        = useState(null);
+  const [replyModal, setReplyModal] = useState(null);
+  const [replyText,  setReplyText]  = useState('');
+
+  // ── Load ─────────────────────────────────────────────────────
   const loadReviews = async (nextFilters = filters) => {
     setLoading(true);
     setNotice(null);
     try {
-      const data = await reviewApi.list(cleanParams(nextFilters));
-      const normalized = normalizePagedResponse(
-        data,
-        nextFilters.page,
-        nextFilters.pageSize,
-      );
+      const apiCall = isOperator ? reviewApi.listOperator : reviewApi.list;
+      const data = await apiCall(cleanParams(nextFilters));
+      const normalized = normalizePagedResponse(data, nextFilters.page, nextFilters.pageSize);
       setRows(normalized.items);
       setPaging(normalized);
+
+      // Tính stats từ toàn bộ data trả về
+      if (isOperator && normalized.items.length > 0) {
+        const all = normalized.items;
+        const avg = (all.reduce((s, i) => s + Number(pick(i, ['rating','Rating'], 0)), 0) / all.length).toFixed(1);
+        setStats({
+          total:     normalized.totalCount,
+          avgRating: avg,
+          unread:    all.filter(i => !pick(i, ['replyContent','ReplyContent'], '')).length,
+          badCount:  all.filter(i => Number(pick(i, ['rating','Rating'], 0)) <= 2).length,
+        });
+      }
     } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không tải được đánh giá.",
-      });
+      setNotice({ type: 'error', text: e.message || 'Không tải được đánh giá.' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadReviews();
-  }, []);
+  useEffect(() => { loadReviews(); }, []);
 
-  useEffect(() => {
-    const handler = (event) => {
-      if (tripSuggestRef.current && !tripSuggestRef.current.contains(event.target)) {
-        setShowTripSuggest(false);
-      }
-      if (operatorSuggestRef.current && !operatorSuggestRef.current.contains(event.target)) {
-        setShowOperatorSuggest(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  useEffect(() => {
-    clearTimeout(tripDebounceRef.current);
-    if (!tripQuery.trim()) {
-      setTripSuggestions([]);
-      setShowTripSuggest(false);
-      return;
-    }
-
-    tripDebounceRef.current = setTimeout(async () => {
-      setTripSuggestLoading(true);
-      try {
-        const data = await reviewApi.suggestTrips(tripQuery.trim());
-        setTripSuggestions(Array.isArray(data) ? data : []);
-        setShowTripSuggest(true);
-      } catch {
-        setTripSuggestions([]);
-      } finally {
-        setTripSuggestLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(tripDebounceRef.current);
-  }, [tripQuery]);
-
-  useEffect(() => {
-    clearTimeout(operatorDebounceRef.current);
-    if (!operatorQuery.trim()) {
-      setOperatorSuggestions([]);
-      setShowOperatorSuggest(false);
-      return;
-    }
-
-    operatorDebounceRef.current = setTimeout(async () => {
-      setOperatorSuggestLoading(true);
-      try {
-        const data = await reviewApi.suggestOperators(operatorQuery.trim());
-        setOperatorSuggestions(Array.isArray(data) ? data : []);
-        setShowOperatorSuggest(true);
-      } catch {
-        setOperatorSuggestions([]);
-      } finally {
-        setOperatorSuggestLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(operatorDebounceRef.current);
-  }, [operatorQuery]);
-
-  const updateFilter = (field, value) => {
-    setFilters((current) => ({ ...current, [field]: value, page: 1 }));
-  };
-
-  const applyFilters = (event) => {
-    event.preventDefault();
-    const nextFilters = {
+  // ── Filter ───────────────────────────────────────────────────
+  const applyFilters = (e) => {
+    e.preventDefault();
+    const next = {
       ...filters,
-      tripId: filters.tripId || (Number.isInteger(Number(tripQuery)) ? tripQuery : ""),
-      operatorId:
-        filters.operatorId || (Number.isInteger(Number(operatorQuery)) ? operatorQuery : ""),
+      ...(isOperator ? {
+        fromDate: fromDateRaw ? `${fromDateRaw}T00:00:00` : '',
+        toDate:   toDateRaw   ? `${toDateRaw}T23:59:59`   : '',
+      } : {}),
       page: 1,
     };
-    setFilters(nextFilters);
-    loadReviews(nextFilters);
+    setFilters(next);
+    loadReviews(next);
   };
 
-  const selectTripSuggestion = (item) => {
-    const tripId = pick(item, ["tripID", "TripID"]);
-    const route = pick(item, ["route", "Route"], "");
-    const operatorName = pick(item, ["operatorName", "OperatorName"], "");
-    setTripQuery(`#${tripId}${route ? ` - ${route}` : ""}${operatorName ? ` (${operatorName})` : ""}`);
-    setFilters((current) => ({ ...current, tripId: String(tripId), page: 1 }));
-    setShowTripSuggest(false);
-    setTripSuggestions([]);
-  };
-
-  const selectOperatorSuggestion = (item) => {
-    const operatorId = pick(item, ["operatorID", "OperatorID"]);
-    const name = pick(item, ["name", "Name"], "");
-    setOperatorQuery(`#${operatorId}${name ? ` - ${name}` : ""}`);
-    setFilters((current) => ({ ...current, operatorId: String(operatorId), page: 1 }));
-    setShowOperatorSuggest(false);
-    setOperatorSuggestions([]);
-  };
-
-  const clearReviewFilters = () => {
-    const reset = { tripId: "", operatorId: "", page: 1, pageSize: 20 };
+  const clearFilters = () => {
+    const reset = isOperator
+      ? { fromDate: '', toDate: '', rating: '', hasReply: '', page: 1, pageSize: 20 }
+      : { keyword: '', rating: '', isHidden: '', page: 1, pageSize: 20 };
     setFilters(reset);
-    setTripQuery("");
-    setOperatorQuery("");
-    setTripSuggestions([]);
-    setOperatorSuggestions([]);
+    setFromDateRaw('');
+    setToDateRaw('');
     loadReviews(reset);
   };
 
   const changePage = (page) => {
-    const nextFilters = { ...filters, page };
-    setFilters(nextFilters);
-    loadReviews(nextFilters);
+    const next = { ...filters, page };
+    setFilters(next);
+    loadReviews(next);
   };
 
-  const deleteReview = async (id) => {
-    if (!window.confirm("Xóa đánh giá này?")) return;
+  // ── Ẩn/Hiện — chỉ Admin ──────────────────────────────────────
+  const toggleHidden = async (id, currentHidden) => {
+    const action = currentHidden ? 'hiện' : 'ẩn';
+    if (!window.confirm(`Xác nhận ${action} đánh giá này?`)) return;
     setLoading(true);
     try {
-      await reviewApi.remove(id);
+      await reviewApi[currentHidden ? 'show' : 'hide'](id);
       await loadReviews(filters);
-      setNotice({ type: "success", text: "Đã xóa đánh giá." });
+      setNotice({ type: 'success', text: `Đã ${action} đánh giá.` });
     } catch (e) {
-      setNotice({
-        type: "error",
-        text: e.message || "Không xóa được đánh giá.",
-      });
+      setNotice({ type: 'error', text: e.message || `Không ${action} được.` });
     } finally {
       setLoading(false);
     }
   };
+
+  // ── Xóa — chỉ Admin ──────────────────────────────────────────
+  const deleteReview = async (id) => {
+    if (!window.confirm('Xóa hẳn đánh giá này? Hành động không thể hoàn tác.')) return;
+    setLoading(true);
+    try {
+      await reviewApi.remove(id);
+      await loadReviews(filters);
+      setNotice({ type: 'success', text: 'Đã xóa đánh giá.' });
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message || 'Không xóa được.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Reply ─────────────────────────────────────────────────────
+  const openReply = (item) => {
+    setReplyModal({ reviewId: pick(item, ['reviewID','ReviewID']) });
+    setReplyText('');
+  };
+
+  const submitReply = async () => {
+    if (!replyText.trim()) return;
+    setLoading(true);
+    try {
+      await reviewApi.reply(replyModal.reviewId, replyText.trim());
+      await loadReviews(filters);
+      setNotice({ type: 'success', text: 'Đã gửi phản hồi.' });
+      setReplyModal(null);
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message || 'Không gửi được phản hồi.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Helpers ───────────────────────────────────────────────────
+  const renderStars = (rating) => (
+    <span style={{ color: '#f59e0b', fontSize: 15, letterSpacing: 1 }}>
+      {'★'.repeat(rating)}
+      <span style={{ color: '#d1d5db' }}>{'★'.repeat(5 - rating)}</span>
+    </span>
+  );
+
+  const renderReplyBadge = (reply) => reply
+    ? <span className="badge" style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Đã phản hồi</span>
+    : <span className="badge" style={{ background: '#f3f4f6', color: '#6b7280', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Chưa phản hồi</span>;
+
+  const renderHiddenBadge = (isHidden) => isHidden
+    ? <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Đã ẩn</span>
+    : <span className="badge" style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Hiển thị</span>;
 
   return (
     <section className="admin-card table-card">
@@ -4108,152 +4683,160 @@ function ReviewsManager() {
           <p className="eyebrow">Đánh giá</p>
           <h3>Quản lý đánh giá nhà xe</h3>
         </div>
-        <button
-          className="btn btn-outline"
-          type="button"
-          onClick={() => loadReviews(filters)}
-          disabled={loading}
-        >
+        <button className="btn btn-outline" type="button"
+          onClick={() => loadReviews(filters)} disabled={loading}>
           Làm mới
         </button>
       </div>
 
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
 
-      <form className="review-filter-grid" onSubmit={applyFilters}>
-        <div className="review-suggest-wrap" ref={tripSuggestRef}>
-          <div className="payment-suggest-input-wrap">
-            <i className="fa-solid fa-route payment-suggest-icon" />
-            <input
-              type="text"
-              className="payment-suggest-input"
-              value={tripQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setTripQuery(value);
-                updateFilter("tripId", "");
-              }}
-              onFocus={() => tripSuggestions.length > 0 && setShowTripSuggest(true)}
-              placeholder="Tìm mã chuyến hoặc tuyến..."
-              autoComplete="off"
-            />
-            {tripSuggestLoading && (
-              <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
-            )}
-            {tripQuery && (
-              <button
-                type="button"
-                className="payment-suggest-clear"
-                onClick={() => {
-                  setTripQuery("");
-                  setTripSuggestions([]);
-                  updateFilter("tripId", "");
-                }}
-              >
-                <i className="fa-solid fa-xmark" />
-              </button>
-            )}
+      {/* ── Thống kê — chỉ Operator ── */}
+      {isOperator && stats && (
+        <div className="review-stats-row">
+          <div className="review-stat-card">
+            <span className="review-stat-label">Tổng đánh giá</span>
+            <span className="review-stat-value">{stats.total}</span>
           </div>
-
-          {showTripSuggest && tripSuggestions.length > 0 && (
-            <ul className="payment-suggest-dropdown">
-              {tripSuggestions.map((item) => {
-                const tripId = pick(item, ["tripID", "TripID"]);
-                const route = pick(item, ["route", "Route"], "Chưa rõ tuyến");
-                const operatorName = pick(item, ["operatorName", "OperatorName"], "");
-                const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
-                return (
-                  <li
-                    key={tripId}
-                    className="payment-suggest-item review-suggest-item"
-                    onMouseDown={() => selectTripSuggestion(item)}
-                  >
-                    <span className="suggest-id">#{tripId}</span>
-                    <span className="suggest-name">{route}</span>
-                    {operatorName && <span className="suggest-route">{operatorName}</span>}
-                    <span className="suggest-amount">{reviewCount} đánh giá</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {showTripSuggest && !tripSuggestLoading && tripSuggestions.length === 0 && tripQuery && (
-            <ul className="payment-suggest-dropdown">
-              <li className="payment-suggest-empty">Không tìm thấy chuyến có đánh giá</li>
-            </ul>
-          )}
-        </div>
-
-        <div className="review-suggest-wrap" ref={operatorSuggestRef}>
-          <div className="payment-suggest-input-wrap">
-            <i className="fa-solid fa-bus payment-suggest-icon" />
-            <input
-              type="text"
-              className="payment-suggest-input"
-              value={operatorQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setOperatorQuery(value);
-                updateFilter("operatorId", "");
-              }}
-              onFocus={() => operatorSuggestions.length > 0 && setShowOperatorSuggest(true)}
-              placeholder="Tìm mã nhà xe hoặc tên nhà xe..."
-              autoComplete="off"
-            />
-            {operatorSuggestLoading && (
-              <i className="fa-solid fa-spinner fa-spin payment-suggest-spinner" />
-            )}
-            {operatorQuery && (
-              <button
-                type="button"
-                className="payment-suggest-clear"
-                onClick={() => {
-                  setOperatorQuery("");
-                  setOperatorSuggestions([]);
-                  updateFilter("operatorId", "");
-                }}
-              >
-                <i className="fa-solid fa-xmark" />
-              </button>
-            )}
+          <div className="review-stat-card">
+            <span className="review-stat-label">⭐ Trung bình</span>
+            <span className="review-stat-value" style={{ color: '#f59e0b' }}>{stats.avgRating}</span>
           </div>
-
-          {showOperatorSuggest && operatorSuggestions.length > 0 && (
-            <ul className="payment-suggest-dropdown">
-              {operatorSuggestions.map((item) => {
-                const operatorId = pick(item, ["operatorID", "OperatorID"]);
-                const name = pick(item, ["name", "Name"], "Chưa rõ nhà xe");
-                const phone = pick(item, ["contactPhone", "ContactPhone"], "");
-                const reviewCount = pick(item, ["reviewCount", "ReviewCount"], 0);
-                return (
-                  <li
-                    key={operatorId}
-                    className="payment-suggest-item review-suggest-item"
-                    onMouseDown={() => selectOperatorSuggestion(item)}
-                  >
-                    <span className="suggest-id">#{operatorId}</span>
-                    <span className="suggest-name">{name}</span>
-                    {phone && <span className="suggest-route">{phone}</span>}
-                    <span className="suggest-amount">{reviewCount} đánh giá</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {showOperatorSuggest && !operatorSuggestLoading && operatorSuggestions.length === 0 && operatorQuery && (
-            <ul className="payment-suggest-dropdown">
-              <li className="payment-suggest-empty">Không tìm thấy nhà xe có đánh giá</li>
-            </ul>
-          )}
+          <div className="review-stat-card">
+            <span className="review-stat-label">Chưa phản hồi</span>
+            <span className="review-stat-value" style={{ color: '#dc2626' }}>{stats.unread}</span>
+          </div>
+          <div className="review-stat-card">
+            <span className="review-stat-label">⚠️ 1-2 sao</span>
+            <span className="review-stat-value" style={{ color: '#dc2626' }}>{stats.badCount}</span>
+          </div>
         </div>
+      )}
 
-        <div className="review-filter-actions">
+      {/* ── Bộ lọc ── */}
+      <form className="payment-filter-grid" onSubmit={applyFilters}>
+        {isOperator ? (
+          <>
+            {/* Date range */}
+            <div className="payment-date-range">
+              <label
+                className={`payment-date-field ${fromDateRaw ? 'has-value' : ''}`}
+                onClick={() => document.getElementById('rv-fromDate').showPicker?.()}
+                style={{ cursor: 'pointer', flex: 1 }}
+              >
+                <span>Từ ngày</span>
+                <strong>{fromDateRaw ? formatDateLabel(fromDateRaw) : 'Chọn ngày'}</strong>
+                <i className="fa-regular fa-calendar-days" />
+                <input id="rv-fromDate" type="date" value={fromDateRaw}
+                  max={toDateRaw || undefined}
+                  onChange={(e) => setFromDateRaw(e.target.value)} />
+              </label>
+              <span className="payment-date-sep">→</span>
+              <label
+                className={`payment-date-field ${toDateRaw ? 'has-value' : ''}`}
+                onClick={() => document.getElementById('rv-toDate').showPicker?.()}
+                style={{ cursor: 'pointer', flex: 1 }}
+              >
+                <span>Đến ngày</span>
+                <strong>{toDateRaw ? formatDateLabel(toDateRaw) : 'Chọn ngày'}</strong>
+                <i className="fa-regular fa-calendar-days" />
+                <input id="rv-toDate" type="date" value={toDateRaw}
+                  min={fromDateRaw || undefined}
+                  onChange={(e) => setToDateRaw(e.target.value)} />
+              </label>
+            </div>
+
+            {/* Rating */}
+            <label className="payment-filter-field">
+              <span>Rating</span>
+              <div className="payment-filter-select-wrap">
+                <i className="fa-solid fa-star" style={{ color: '#f59e0b' }} />
+                <select className="payment-filter-select" value={filters.rating}
+                  onChange={(e) => setFilters((f) => ({ ...f, rating: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  <option value="5">⭐⭐⭐⭐⭐ (5 sao)</option>
+                  <option value="4">⭐⭐⭐⭐ (4 sao)</option>
+                  <option value="3">⭐⭐⭐ (3 sao)</option>
+                  <option value="2">⭐⭐ (2 sao)</option>
+                  <option value="1">⭐ (1 sao)</option>
+                </select>
+                <i className="fa-solid fa-chevron-down payment-select-chevron" />
+              </div>
+            </label>
+
+            {/* Phản hồi */}
+            <label className="payment-filter-field">
+              <span>Phản hồi</span>
+              <div className="payment-filter-select-wrap">
+                <i className="fa-solid fa-reply" />
+                <select className="payment-filter-select" value={filters.hasReply}
+                  onChange={(e) => setFilters((f) => ({ ...f, hasReply: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  <option value="0">Chưa phản hồi</option>
+                  <option value="1">Đã phản hồi</option>
+                </select>
+                <i className="fa-solid fa-chevron-down payment-select-chevron" />
+              </div>
+            </label>
+          </>
+        ) : (
+          <>
+            {/* Admin: tìm tên/SĐT */}
+            <div className="payment-suggest-input-wrap" style={{ flex: 2 }}>
+              <i className="fa-solid fa-magnifying-glass payment-suggest-icon" />
+              <input type="text" className="payment-suggest-input"
+                placeholder="Tìm tên hoặc SĐT khách hàng..."
+                value={filters.keyword}
+                onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
+                autoComplete="off" />
+              {filters.keyword && (
+                <button type="button" className="payment-suggest-clear"
+                  onClick={() => setFilters((f) => ({ ...f, keyword: '' }))}>
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              )}
+            </div>
+
+            {/* Admin: Rating */}
+            <label className="payment-filter-field">
+              <span>Rating</span>
+              <div className="payment-filter-select-wrap">
+                <i className="fa-solid fa-star" style={{ color: '#f59e0b' }} />
+                <select className="payment-filter-select" value={filters.rating}
+                  onChange={(e) => setFilters((f) => ({ ...f, rating: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  <option value="5">⭐⭐⭐⭐⭐ (5 sao)</option>
+                  <option value="4">⭐⭐⭐⭐ (4 sao)</option>
+                  <option value="3">⭐⭐⭐ (3 sao)</option>
+                  <option value="2">⭐⭐ (2 sao)</option>
+                  <option value="1">⭐ (1 sao)</option>
+                </select>
+                <i className="fa-solid fa-chevron-down payment-select-chevron" />
+              </div>
+            </label>
+
+            {/* Admin: ẩn/hiện */}
+            <label className="payment-filter-field">
+              <span>Trạng thái</span>
+              <div className="payment-filter-select-wrap">
+                <i className="fa-solid fa-eye" />
+                <select className="payment-filter-select" value={filters.isHidden}
+                  onChange={(e) => setFilters((f) => ({ ...f, isHidden: e.target.value }))}>
+                  <option value="">Tất cả</option>
+                  <option value="0">Đang hiển thị</option>
+                  <option value="1">Đã ẩn</option>
+                </select>
+                <i className="fa-solid fa-chevron-down payment-select-chevron" />
+              </div>
+            </label>
+          </>
+        )}
+
+        <div className="payment-filter-actions">
           <button className="btn btn-primary" type="submit" disabled={loading}>
             <i className="fa-solid fa-filter" /> Lọc
           </button>
-          <button className="btn btn-outline" type="button" onClick={clearReviewFilters}>
+          <button className="btn btn-outline" type="button" onClick={clearFilters}>
             Xóa lọc
           </button>
         </div>
@@ -4261,67 +4844,104 @@ function ReviewsManager() {
 
       {loading && <div className="admin-loading">Đang tải đánh giá...</div>}
 
+      {/* ── Bảng ── */}
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>ID</th>
               <th>Đơn</th>
               <th>Khách hàng</th>
               <th>Tuyến</th>
-              <th>Nhà xe</th>
+              {!isOperator && <th>Nhà xe</th>}
               <th>Rating</th>
               <th>Bình luận</th>
-              <th>Ngày tạo</th>
+              <th>Phản hồi</th>
+              {!isOperator && <th>Trạng thái</th>}
+              <th>Ngày đánh giá</th>
               <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((item) => {
-              const id = pick(item, ["reviewID", "ReviewID"]);
-              const rating = Number(pick(item, ["rating", "Rating"], 0));
+              const id       = pick(item, ['reviewID','ReviewID']);
+              const rating   = Number(pick(item, ['rating','Rating'], 0));
+              const isHidden = Boolean(pick(item, ['isHidden','IsHidden'], false));
+              const comment  = pick(item, ['comment','Comment'], '');
+              const reply    = pick(item, ['replyContent','ReplyContent'], '');
+
               return (
-                <tr key={id}>
-                  <td>#{id}</td>
-                  <td>#{pick(item, ["bookingID", "BookingID"])}</td>
+                <tr key={id} style={isHidden ? { opacity: 0.5 } : {}}>
+                  <td>#{pick(item, ['bookingID','BookingID'])}</td>
                   <td>
-                    {pick(
-                      item,
-                      ["userName", "UserName", "customerName", "CustomerName"],
-                      "Chưa rõ",
+                    <strong>{pick(item, ['customerName','CustomerName'], 'Chưa rõ')}</strong>
+                    <br />
+                    <small>{pick(item, ['customerPhone','CustomerPhone'], '')}</small>
+                  </td>
+                  <td>
+                    {pick(item, ['departureLocation','DepartureLocation'], '')}
+                    {' → '}
+                    {pick(item, ['arrivalLocation','ArrivalLocation'], '')}
+                    <br />
+                    <small>{formatDateTime(pick(item, ['departureTime','DepartureTime']))}</small>
+                  </td>
+                  {!isOperator && (
+                    <td>{pick(item, ['operatorName','OperatorName'], 'Chưa rõ')}</td>
+                  )}
+                  <td>{renderStars(rating)}</td>
+                  <td style={{ maxWidth: 200 }}>
+                    <span title={comment}>
+                      {comment
+                        ? (comment.length > 60 ? comment.slice(0, 60) + '…' : comment)
+                        : <span className="admin-muted">Không có</span>}
+                    </span>
+                  </td>
+                  <td>
+                    {renderReplyBadge(reply)}
+                    {reply && (
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, maxWidth: 160 }}
+                        title={reply}>
+                        {reply.length > 40 ? reply.slice(0, 40) + '…' : reply}
+                      </div>
                     )}
                   </td>
-                  <td>{pick(item, ["route", "Route"], "Chưa rõ tuyến")}</td>
-                  <td>
-                    {pick(item, ["operatorName", "OperatorName"], "Chưa rõ")}
-                  </td>
-                  <td>
-                    {"★".repeat(rating)}
-                    {"☆".repeat(Math.max(0, 5 - rating))}
-                  </td>
-                  <td>
-                    {pick(item, ["comment", "Comment"], "") ||
-                      "Không có bình luận"}
-                  </td>
-                  <td>
-                    {formatDateTime(pick(item, ["createdAt", "CreatedAt"]))}
-                  </td>
+                  {!isOperator && <td>{renderHiddenBadge(isHidden)}</td>}
+                  <td>{formatDateTime(pick(item, ['createdAt','CreatedAt']))}</td>
                   <td className="admin-actions">
-                    <button
-                      className="btn btn-danger"
-                      type="button"
-                      disabled={loading}
-                      onClick={() => deleteReview(id)}
-                    >
-                      Xóa
-                    </button>
+                    {/* Phản hồi — cả 2 role, nhưng chỉ 1 lần */}
+                    {!reply ? (
+                      <button className="btn btn-outline" type="button"
+                        style={{ fontSize: 12, padding: '3px 8px' }}
+                        onClick={() => openReply(item)} disabled={loading}>
+                        <i className="fa-solid fa-reply" /> Phản hồi
+                      </button>
+                    ) : (
+                      <span className="admin-muted">—</span>
+                    )}
+                    {/* Ẩn/Hiện + Xóa — chỉ Admin */}
+                    {!isOperator && (
+                      <>
+                        <button
+                          className={`btn ${isHidden ? 'btn-outline' : 'btn-warning'}`}
+                          type="button"
+                          style={{ fontSize: 12, padding: '3px 8px' }}
+                          onClick={() => toggleHidden(id, isHidden)} disabled={loading}>
+                          <i className={`fa-solid ${isHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+                          {isHidden ? ' Hiện' : ' Ẩn'}
+                        </button>
+                        <button className="btn btn-danger" type="button"
+                          style={{ fontSize: 12, padding: '3px 8px' }}
+                          onClick={() => deleteReview(id)} disabled={loading}>
+                          <i className="fa-solid fa-trash" />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               );
             })}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan="9" className="empty-cell">
+                <td colSpan={isOperator ? 8 : 10} className="empty-cell">
                   Chưa có đánh giá.
                 </td>
               </tr>
@@ -4330,15 +4950,42 @@ function ReviewsManager() {
         </table>
       </div>
 
-      <Pagination
-        page={paging.page}
-        totalPages={paging.totalPages}
-        onPageChange={changePage}
-      />
+      <Pagination page={paging.page} totalPages={paging.totalPages} onPageChange={changePage} />
+
+      {/* ── Modal phản hồi ── */}
+      {replyModal && (
+        <div className="modal-overlay" onClick={() => setReplyModal(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h4>Phản hồi đánh giá #{replyModal.reviewId}</h4>
+              <button type="button" className="modal-close"
+                onClick={() => setReplyModal(null)}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div className="modal-body">
+              <textarea className="form-control" rows={4}
+                placeholder="Nhập nội dung phản hồi..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                style={{ width: '100%', resize: 'vertical' }} />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" type="button"
+                onClick={() => setReplyModal(null)}>Hủy</button>
+              <button className="btn btn-primary" type="button"
+                onClick={submitReply}
+                disabled={loading || !replyText.trim()}>
+                <i className="fa-solid fa-paper-plane" /> Gửi phản hồi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
-
 // ==================== PROMOTIONS ====================
 function PromotionsManager() {
   const [rows, setRows] = useState([]);
@@ -5143,6 +5790,244 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
 }
 
 // ==================== OPERATORS ====================
+// function OperatorsManager({ onRefresh }) {
+//   const [rows, setRows] = useState([]);
+//   const [meta, setMeta] = useState({
+//     totalCount: 0,
+//     page: 1,
+//     pageSize: ADMIN_CRUD_PAGE_SIZE,
+//     totalPages: 1,
+//   });
+//   const [form, setForm] = useState(EMPTY_OPERATOR);
+//   const [showForm, setShowForm] = useState(false);
+//   const [filters, setFilters] = useState({ name: "", phone: "", email: "" });
+//   const [page, setPage] = useState(1);
+//   const [loading, setLoading] = useState(false);
+//   const [notice, setNotice] = useState(null);
+
+//   const loadOperators = async () => {
+//     setLoading(true);
+//     try {
+//       const data = await operatorApi.list(
+//         cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
+//       );
+//       const paged = normalizePagedResponse(data, page);
+//       setRows(paged.items);
+//       setMeta(paged);
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text: e.message || "Không tải được danh sách nhà xe.",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     loadOperators();
+//   }, [page, filters.name, filters.phone, filters.email]);
+
+//   const updateFilter = (field, value) => {
+//     setFilters((current) => ({ ...current, [field]: value }));
+//     setPage(1);
+//   };
+
+//   const submit = async (e) => {
+//     e.preventDefault();
+//     setNotice(null);
+//     try {
+//       const payload = {
+//         operatorID: form.operatorID || 0,
+//         name: form.name.trim(),
+//         description: form.description.trim(),
+//         contactPhone: form.contactPhone.trim(),
+//         email: form.email.trim(),
+//       };
+//       if (!payload.name || !payload.contactPhone)
+//         throw new Error("Vui lòng nhập tên và số điện thoại nhà xe.");
+//       if (form.operatorID) await operatorApi.update(form.operatorID, payload);
+//       else await operatorApi.create(payload);
+//       setNotice({
+//         type: "success",
+//         text: form.operatorID
+//           ? "Cập nhật nhà xe thành công."
+//           : "Thêm nhà xe thành công.",
+//       });
+//       setForm(EMPTY_OPERATOR);
+//       setShowForm(false);
+//       await loadOperators();
+//       await onRefresh?.();
+//     } catch (e2) {
+//       setNotice({
+//         type: "error",
+//         text: e2.message || "Không lưu được nhà xe.",
+//       });
+//     }
+//   };
+
+//   const editItem = (item) => {
+//     setForm({
+//       operatorID: pick(item, ["operatorID", "OperatorID"]),
+//       name: pick(item, ["name", "Name"], ""),
+//       description: pick(item, ["description", "Description"], ""),
+//       contactPhone: pick(item, ["contactPhone", "ContactPhone"], ""),
+//       email: pick(item, ["email", "Email"], ""),
+//     });
+//     setShowForm(true);
+//   };
+
+//   const removeItem = async (id) => {
+//     if (!confirm(`Xóa nhà xe #${id}?`)) return;
+//     setNotice(null);
+//     try {
+//       await operatorApi.remove(id);
+//       setNotice({ type: "success", text: "Xóa nhà xe thành công." });
+//       await loadOperators();
+//       await onRefresh?.();
+//     } catch (e) {
+//       setNotice({
+//         type: "error",
+//         text:
+//           e.message ||
+//           "Không xóa được nhà xe. Có thể vẫn còn xe thuộc nhà xe này.",
+//       });
+//     }
+//   };
+
+//   return (
+//     <section className="admin-card table-card">
+//       <SectionHeader
+//         title="Quản lý nhà xe"
+//         showForm={showForm}
+//         onToggle={() =>
+//           toggleCreateForm(showForm, setShowForm, setForm, EMPTY_OPERATOR)
+//         }
+//       />
+//       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
+//       {showForm && (
+//         <AdminFormModal
+//           title={form.operatorID ? "Sửa nhà xe" : "Thêm nhà xe"}
+//           onClose={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
+//         >
+//           <form className="admin-form-grid" onSubmit={submit}>
+//             <input
+//               value={form.name}
+//               onChange={(e) => setForm({ ...form, name: e.target.value })}
+//               placeholder="Tên nhà xe"
+//               required
+//             />
+//             <input
+//               value={form.contactPhone}
+//               onChange={(e) =>
+//                 setForm({ ...form, contactPhone: e.target.value })
+//               }
+//               placeholder="Số điện thoại"
+//               required
+//             />
+//             <input
+//               value={form.email}
+//               onChange={(e) => setForm({ ...form, email: e.target.value })}
+//               placeholder="Email"
+//             />
+//             <input
+//               value={form.description}
+//               onChange={(e) =>
+//                 setForm({ ...form, description: e.target.value })
+//               }
+//               placeholder="Mô tả"
+//             />
+//             <div className="admin-form-actions">
+//               <button className="btn btn-primary" type="submit">
+//                 {form.operatorID ? "Cập nhật" : "Lưu nhà xe"}
+//               </button>
+//               <button
+//                 className="btn btn-outline"
+//                 type="button"
+//                 onClick={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
+//               >
+//                 Hủy
+//               </button>
+//             </div>
+//           </form>
+//         </AdminFormModal>
+//       )}
+//       <div className="admin-filter-grid">
+//         <input
+//           value={filters.name}
+//           onChange={(e) => updateFilter("name", e.target.value)}
+//           placeholder="Tìm tên nhà xe"
+//         />
+//         <input
+//           value={filters.phone}
+//           onChange={(e) => updateFilter("phone", e.target.value)}
+//           placeholder="Tìm số điện thoại"
+//         />
+//         <input
+//           value={filters.email}
+//           onChange={(e) => updateFilter("email", e.target.value)}
+//           placeholder="Tìm email"
+//         />
+//       </div>
+//       {loading && <div className="admin-loading">Đang tải dữ liệu...</div>}
+//       <div className="table-wrap">
+//         <table>
+//           <thead>
+//             <tr>
+//               <th>ID</th>
+//               <th>Tên nhà xe</th>
+//               <th>Điện thoại</th>
+//               <th>Email</th>
+//               <th>Mô tả</th>
+//               <th>Thao tác</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {rows.map((item) => {
+//               const id = pick(item, ["operatorID", "OperatorID"]);
+//               return (
+//                 <tr key={id}>
+//                   <td>{id}</td>
+//                   <td>{pick(item, ["name", "Name"])}</td>
+//                   <td>{pick(item, ["contactPhone", "ContactPhone"])}</td>
+//                   <td>{pick(item, ["email", "Email"])}</td>
+//                   <td>{pick(item, ["description", "Description"])}</td>
+//                   <td className="admin-actions">
+//                     <button
+//                       className="btn btn-outline"
+//                       onClick={() => editItem(item)}
+//                     >
+//                       Sửa
+//                     </button>
+//                     <button
+//                       className="btn btn-danger"
+//                       onClick={() => removeItem(id)}
+//                     >
+//                       Xóa
+//                     </button>
+//                   </td>
+//                 </tr>
+//               );
+//             })}
+//             {!loading && rows.length === 0 && (
+//               <tr>
+//                 <td colSpan="6" className="empty-cell">
+//                   Không có nhà xe phù hợp.
+//                 </td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+//       <AdminPagination
+//         page={meta.page}
+//         totalPages={meta.totalPages}
+//         totalCount={meta.totalCount}
+//         onPageChange={setPage}
+//       />
+//     </section>
+//   );
+// }
 function OperatorsManager({ onRefresh }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({
@@ -5153,7 +6038,7 @@ function OperatorsManager({ onRefresh }) {
   });
   const [form, setForm] = useState(EMPTY_OPERATOR);
   const [showForm, setShowForm] = useState(false);
-  const [filters, setFilters] = useState({ name: "", phone: "", email: "" });
+  const [search, setSearch] = useState("");          // ← 1 ô duy nhất
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -5161,12 +6046,12 @@ function OperatorsManager({ onRefresh }) {
   const loadOperators = async () => {
     setLoading(true);
     try {
+      // Luôn fetch không filter server-side — filter ở client
       const data = await operatorApi.list(
-        cleanParams({ ...filters, page, pageSize: ADMIN_CRUD_PAGE_SIZE }),
+        cleanParams({ page: 1, pageSize: 9999 }),
       );
-      const paged = normalizePagedResponse(data, page);
+      const paged = normalizePagedResponse(data, 1, 9999);
       setRows(paged.items);
-      setMeta(paged);
     } catch (e) {
       setNotice({
         type: "error",
@@ -5179,10 +6064,30 @@ function OperatorsManager({ onRefresh }) {
 
   useEffect(() => {
     loadOperators();
-  }, [page, filters.name, filters.phone, filters.email]);
+  }, []);                                            // ← chỉ load 1 lần
 
-  const updateFilter = (field, value) => {
-    setFilters((current) => ({ ...current, [field]: value }));
+  // ── Filter client-side theo name | phone | email ──
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return rows;
+    const q = search.trim().toLowerCase();
+    return rows.filter((item) =>
+      [
+        pick(item, ["name", "Name"], ""),
+        pick(item, ["contactPhone", "ContactPhone"], ""),
+        pick(item, ["email", "Email"], ""),
+      ].some((v) => String(v).toLowerCase().includes(q)),
+    );
+  }, [rows, search]);
+
+  // Pagination trên filteredRows
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / ADMIN_CRUD_PAGE_SIZE));
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * ADMIN_CRUD_PAGE_SIZE;
+    return filteredRows.slice(start, start + ADMIN_CRUD_PAGE_SIZE);
+  }, [filteredRows, page]);
+
+  const updateSearch = (v) => {
+    setSearch(v);
     setPage(1);
   };
 
@@ -5248,6 +6153,26 @@ function OperatorsManager({ onRefresh }) {
     }
   };
 
+  // Highlight chữ khớp
+  const hl = (text) => {
+    if (!search.trim() || !text) return text || "";
+    const str = String(text);
+    const idx = str.toLowerCase().indexOf(search.trim().toLowerCase());
+    if (idx === -1) return str;
+    return (
+      <>
+        {str.slice(0, idx)}
+        <mark style={{
+          background: "#fef08a", color: "#713f12",
+          borderRadius: 2, padding: "0 2px", fontWeight: 600,
+        }}>
+          {str.slice(idx, idx + search.trim().length)}
+        </mark>
+        {str.slice(idx + search.trim().length)}
+      </>
+    );
+  };
+
   return (
     <section className="admin-card table-card">
       <SectionHeader
@@ -5259,69 +6184,102 @@ function OperatorsManager({ onRefresh }) {
       />
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
-        <AdminFormModal
-          title={form.operatorID ? "Sửa nhà xe" : "Thêm nhà xe"}
-          onClose={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
-        >
-          <form className="admin-form-grid" onSubmit={submit}>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Tên nhà xe"
-              required
-            />
-            <input
-              value={form.contactPhone}
-              onChange={(e) =>
-                setForm({ ...form, contactPhone: e.target.value })
-              }
-              placeholder="Số điện thoại"
-              required
-            />
-            <input
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="Email"
-            />
-            <input
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-              placeholder="Mô tả"
-            />
-            <div className="admin-form-actions">
-              <button className="btn btn-primary" type="submit">
-                {form.operatorID ? "Cập nhật" : "Lưu nhà xe"}
-              </button>
-              <button
-                className="btn btn-outline"
-                type="button"
-                onClick={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
-              >
-                Hủy
-              </button>
-            </div>
-          </form>
-        </AdminFormModal>
+        <form className="admin-form-grid" onSubmit={submit}>
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Tên nhà xe"
+            required
+          />
+          <input
+            value={form.contactPhone}
+            onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+            placeholder="Số điện thoại"
+            required
+          />
+          <input
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder="Email"
+          />
+          <input
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="Mô tả"
+          />
+          <div className="admin-form-actions">
+            <button className="btn btn-primary" type="submit">
+              {form.operatorID ? "Cập nhật" : "Lưu nhà xe"}
+            </button>
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={() => cancelForm(setShowForm, setForm, EMPTY_OPERATOR)}
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
       )}
-      <div className="admin-filter-grid">
-        <input
-          value={filters.name}
-          onChange={(e) => updateFilter("name", e.target.value)}
-          placeholder="Tìm tên nhà xe"
-        />
-        <input
-          value={filters.phone}
-          onChange={(e) => updateFilter("phone", e.target.value)}
-          placeholder="Tìm số điện thoại"
-        />
-        <input
-          value={filters.email}
-          onChange={(e) => updateFilter("email", e.target.value)}
-          placeholder="Tìm email"
-        />
+
+      {/* ── Search bar gộp 1 ô + nút xóa lọc ── */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <i
+            className="fa-solid fa-magnifying-glass"
+            style={{
+              position: "absolute", left: 11, top: "50%",
+              transform: "translateY(-50%)", fontSize: 13,
+              color: "#94a3b8", pointerEvents: "none",
+            }}
+          />
+          <input
+            value={search}
+            onChange={(e) => updateSearch(e.target.value)}
+            placeholder="Tìm tên nhà xe, số điện thoại hoặc email..."
+            style={{
+              width: "100%", height: 38, paddingLeft: 34,
+              paddingRight: search ? 32 : 12, fontSize: 13,
+              border: "1.5px solid #e2e8f0", borderRadius: 8,
+              outline: "none", boxSizing: "border-box",
+              transition: "border-color .15s",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
+            onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+          />
+          {search && (
+            <button
+              onClick={() => updateSearch("")}
+              style={{
+                position: "absolute", right: 8, top: "50%",
+                transform: "translateY(-50%)", border: "none",
+                background: "none", cursor: "pointer",
+                color: "#94a3b8", fontSize: 17, lineHeight: 1, padding: 2,
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Nút xóa lọc — chỉ hiện khi đang lọc */}
+        {search && (
+          <button
+            className="btn btn-outline"
+            onClick={() => updateSearch("")}
+            style={{ height: 38, whiteSpace: "nowrap", fontSize: 13 }}
+          >
+            <i className="fa-solid fa-xmark" /> Xóa lọc
+          </button>
+        )}
       </div>
+
+      {search && (
+        <p style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
+          Tìm thấy <b>{filteredRows.length}</b> / {rows.length} nhà xe
+        </p>
+      )}
+
       {loading && <div className="admin-loading">Đang tải dữ liệu...</div>}
       <div className="table-wrap">
         <table>
@@ -5336,14 +6294,14 @@ function OperatorsManager({ onRefresh }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((item) => {
+            {pagedRows.map((item) => {
               const id = pick(item, ["operatorID", "OperatorID"]);
               return (
                 <tr key={id}>
                   <td>{id}</td>
-                  <td>{pick(item, ["name", "Name"])}</td>
-                  <td>{pick(item, ["contactPhone", "ContactPhone"])}</td>
-                  <td>{pick(item, ["email", "Email"])}</td>
+                  <td>{hl(pick(item, ["name", "Name"]))}</td>
+                  <td>{hl(pick(item, ["contactPhone", "ContactPhone"]))}</td>
+                  <td>{hl(pick(item, ["email", "Email"]))}</td>
                   <td>{pick(item, ["description", "Description"])}</td>
                   <td className="admin-actions">
                     <button
@@ -5362,7 +6320,7 @@ function OperatorsManager({ onRefresh }) {
                 </tr>
               );
             })}
-            {!loading && rows.length === 0 && (
+            {!loading && pagedRows.length === 0 && (
               <tr>
                 <td colSpan="6" className="empty-cell">
                   Không có nhà xe phù hợp.
@@ -5373,9 +6331,9 @@ function OperatorsManager({ onRefresh }) {
         </table>
       </div>
       <AdminPagination
-        page={meta.page}
-        totalPages={meta.totalPages}
-        totalCount={meta.totalCount}
+        page={page}
+        totalPages={totalPages}
+        totalCount={filteredRows.length}
         onPageChange={setPage}
       />
     </section>

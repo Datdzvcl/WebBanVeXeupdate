@@ -29,8 +29,16 @@ export default function MyTickets() {
     setLoading(true);
     setError('');
     try {
+      // const data = await bookingApi.my();
+      // setBookings(Array.isArray(data) ? data : []);
       const data = await bookingApi.my();
-      setBookings(Array.isArray(data) ? data : []);
+      const all = Array.isArray(data) ? data : [];
+      // Chỉ giữ vé còn hiệu lực: PendingConfirm(0), Confirmed(1), CancelRequested(5), CancelRejected(6)
+      const activeOnly = all.filter(b => {
+        const bs = Number(b.bookingStatus ?? b.BookingStatus ?? 0);
+        return bs === 0 || bs === 1 || bs === 5 || bs === 6;
+      });
+      setBookings(activeOnly);
     } catch (err) {
       setError(err.message || 'Không tải được danh sách vé.');
     } finally {

@@ -2,7 +2,7 @@ import { apiClient } from './httpClient';
 
 export const paymentApi = {
   async list(params) {
-    const response = await apiClient.get('/api/payments', { params });
+    const response = await apiClient.get('/api/bookings', { params });
     return response.data;
   },
 

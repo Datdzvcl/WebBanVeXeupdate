@@ -194,6 +194,10 @@ export default function Header({ simple = false }) {
                       <i className="fa-solid fa-ticket" />
                       Vé của tôi
                     </Link>
+                     <Link to="/order-history" onClick={closeMenus}>        {/* thêm dòng này */}
+                      <i className="fa-solid fa-clock-rotate-left" />
+                      Lịch sử đơn hàng
+                    </Link>
                     <Link to="/change-password" onClick={closeMenus}>
                       <i className="fa-solid fa-lock" />
                       Đổi mật khẩu

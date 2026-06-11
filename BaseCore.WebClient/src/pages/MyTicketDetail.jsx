@@ -105,7 +105,14 @@ const loadBooking = async () => {
   useEffect(() => {
     loadBooking();
   }, [id]);
-
+  useEffect(() => {
+    if (window.location.hash === '#review' && !loading) {
+      setTimeout(() => {
+        document.querySelector('.ticket-review-form')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }, [loading]);
   const requestCancel = async () => {
     const reason = window.prompt('Nhập lý do yêu cầu hủy vé:', 'Khách yêu cầu hủy vé');
     if (reason === null) return;
@@ -183,13 +190,15 @@ const loadBooking = async () => {
   // const canReview = !review &&
   //   !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
   //   (String(tripStatus).toLowerCase() === 'completed' || (arrivalTime && new Date(arrivalTime) <= new Date()));
-  const canReview = !review
-  && bs !== 2   // Cancelled
-  && bs !== 4   // Refunded
-  && bs !== 5   // CancelRequested
-  && (String(tripStatus).toLowerCase() === 'completed' 
-      || (arrivalTime && new Date(arrivalTime) <= new Date()));
-  const code = qrValue(booking);
+  // const canReview = !review
+  // && bs !== 2   // Cancelled
+  // && bs !== 4   // Refunded
+  // && bs !== 5   // CancelRequested
+  // && (String(tripStatus).toLowerCase() === 'completed' 
+  //     || (arrivalTime && new Date(arrivalTime) <= new Date()));
+  // const code = qrValue(booking);
+  const canReview = !review && bs === 3; // chỉ Completed
+const code = qrValue(booking);
 
   return (
     <UserLayout>
@@ -245,8 +254,8 @@ const loadBooking = async () => {
             </>
           )}
 
-          <h2 className="ticket-section-title">Đánh giá nhà xe</h2>
-          {review ? (
+          {/* <h2 className="ticket-section-title">Đánh giá nhà xe</h2> */}
+          {/* {review ? (
             <div className="ticket-review-box">
               <strong>{'★'.repeat(Number(pick(review, ['rating', 'Rating'], 0)))}{'☆'.repeat(5 - Number(pick(review, ['rating', 'Rating'], 0)))}</strong>
               <p>{pick(review, ['comment', 'Comment'], '') || 'Bạn chưa nhập bình luận.'}</p>
@@ -277,7 +286,65 @@ const loadBooking = async () => {
           ) : (
             <p className="muted">Bạn có thể đánh giá nhà xe sau khi chuyến xe hoàn thành.</p>
           )}
-          {reviewMessage && <p className={`profile-status ${review ? 'success' : ''}`}>{reviewMessage}</p>}
+          {reviewMessage && <p className={`profile-status ${review ? 'success' : ''}`}>{reviewMessage}</p>} */}
+          <h2 className="ticket-section-title">Đánh giá nhà xe</h2>
+    {review ? (
+      <div className="ticket-review-box">
+        <div style={{ fontSize: '1.4rem', letterSpacing: 2 }}>
+          {[1,2,3,4,5].map(s => (
+            <span key={s} style={{ color: s <= Number(pick(review, ['rating','Rating'], 0)) ? '#f59e0b' : '#d1d5db' }}>★</span>
+          ))}
+        </div>
+        <p>{pick(review, ['comment','Comment'], '') || 'Bạn chưa nhập bình luận.'}</p>
+        <small>Đã đánh giá lúc {formatDateTime(pick(review, ['createdAt','CreatedAt']))}</small>
+
+        {/* Reply của nhà xe */}
+        {pick(review, ['replyContent','ReplyContent'], '') && (
+          <div className="ticket-review-reply" style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f3f4f6', borderRadius: 6, borderLeft: '3px solid #6366f1' }}>
+            <small style={{ fontWeight: 600, color: '#6366f1' }}>Phản hồi từ nhà xe</small>
+            <p style={{ margin: '0.25rem 0 0' }}>{pick(review, ['replyContent','ReplyContent'])}</p>
+            {pick(review, ['repliedAt','RepliedAt'], '') && (
+              <small style={{ color: '#9ca3af' }}>{formatDateTime(pick(review, ['repliedAt','RepliedAt']))}</small>
+            )}
+          </div>
+        )}
+      </div>
+    ) : canReview ? (
+      <form className="ticket-review-form" onSubmit={submitReview}>
+        {/* Star rating click */}
+        <label>
+          <span>Số sao</span>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            {[1,2,3,4,5].map(s => (
+              <span
+                key={s}
+                onClick={() => setReviewForm(cur => ({ ...cur, rating: s }))}
+                style={{
+                  fontSize: '2rem',
+                  cursor: 'pointer',
+                  color: s <= Number(reviewForm.rating) ? '#f59e0b' : '#d1d5db',
+                  transition: 'color 0.15s',
+                }}
+              >★</span>
+            ))}
+          </div>
+        </label>
+        <label>
+          <span>Bình luận</span>
+          <textarea
+            value={reviewForm.comment}
+            onChange={e => setReviewForm(cur => ({ ...cur, comment: e.target.value }))}
+            rows="4"
+            maxLength="500"
+            placeholder="Chia sẻ trải nghiệm về nhà xe, xe và phục vụ"
+          />
+        </label>
+        <button className="btn btn-primary" type="submit" disabled={actionLoading}>Gửi đánh giá</button>
+      </form>
+    ) : (
+      <p className="muted">Bạn có thể đánh giá nhà xe sau khi chuyến xe hoàn thành.</p>
+    )}
+{reviewMessage && <p className={`profile-status ${review ? 'success' : ''}`}>{reviewMessage}</p>}
         </main>
 
         <aside className="ticket-detail-side">
