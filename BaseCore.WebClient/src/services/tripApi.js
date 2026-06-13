@@ -45,4 +45,9 @@ export const tripApi = {
     const response = await apiClient.delete(`/api/trips/${id}`);
     return response.data;
   },
+
+  async cloneTrips(sourceDate, targetDate) {
+    const response = await apiClient.post('/api/trips/clone', { sourceDate, targetDate });
+    return response.data;
+  },
 };

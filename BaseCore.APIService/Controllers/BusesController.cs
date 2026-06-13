@@ -198,6 +198,7 @@ namespace BaseCore.APIService.Controllers
                 query = query.Where(x => EF.Functions.Like(x.BusType, $"%{busType.Trim()}%"));
 
             var totalCount = await query.CountAsync();
+            var now = DateTime.Now;
             var items = await query
                 .OrderBy(x => x.BusID)
                 .Skip((page - 1) * pageSize)
@@ -209,7 +210,11 @@ namespace BaseCore.APIService.Controllers
                     x.LicensePlate,
                     x.Capacity,
                     x.BusType,
-                    OperatorName = x.Operator != null ? x.Operator.Name : null
+                    OperatorName = x.Operator != null ? x.Operator.Name : null,
+                    // Tính trạng thái xe từ chuyến: Ongoing=1 > Scheduled=0 > Idle
+                    BusStatus = x.Trips.Any(t => t.Status == 1) ? "ongoing"
+                              : x.Trips.Any(t => t.Status == 0 && t.DepartureTime > now) ? "scheduled"
+                              : "idle"
                 })
                 .ToListAsync();
 

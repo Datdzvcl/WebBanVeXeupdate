@@ -7,6 +7,7 @@ namespace BaseCore.Services.Authen
     public interface IUserService
     {
         Task<User?> Authenticate(string loginIdentifier, string password);
+        Task<User?> GetByLoginIdentifier(string identifier);
         Task<List<User>> GetAll();
         Task<User?> GetById(int id);
         Task<User> Create(User user, string password);
@@ -90,6 +91,11 @@ namespace BaseCore.Services.Authen
 
             return user;
         }
+        public async Task<User?> GetByLoginIdentifier(string identifier)
+        {
+            return await _userRepository.GetByLoginIdentifierAsync(identifier);
+        }
+
         public async Task<List<User>> GetAll()
         {
             return await _userRepository.GetAllAsync();

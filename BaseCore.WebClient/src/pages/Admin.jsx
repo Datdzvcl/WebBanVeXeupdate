@@ -1170,6 +1170,10 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const [cloneModal, setCloneModal] = useState(null); // { sourceDate, targetDate }
+  const [cloneLoading, setCloneLoading] = useState(false);
 
   const loadTrips = async () => {
     setLoading(true);
@@ -1289,15 +1293,38 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
     }
   };
 
+  const handleCloneTrips = async () => {
+    if (!cloneModal) return;
+    setCloneLoading(true);
+    try {
+      const res = await tripApi.cloneTrips(cloneModal.sourceDate, cloneModal.targetDate);
+      setCloneModal(null);
+      setNotice({ type: "success", text: res.message || `Đã nhân bản ${res.cloned} chuyến.` });
+      await loadTrips();
+    } catch (e) {
+      setNotice({ type: "error", text: e.message || "Không nhân bản được chuyến." });
+    } finally {
+      setCloneLoading(false);
+    }
+  };
+
   return (
     <section className="admin-card table-card">
-      <SectionHeader
-        title="Quản lý chuyến xe"
-        showForm={showForm}
-        onToggle={() =>
-          toggleCreateForm(showForm, setShowForm, setForm, EMPTY_TRIP)
-        }
-      />
+      <div className="admin-section-head">
+        <h3>Quản lý chuyến xe</h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="btn btn-outline"
+            onClick={() => setCloneModal({ sourceDate: filters.departureDate || todayStr, targetDate: tomorrowStr })}
+          >
+            <i className="fa-solid fa-copy" /> Nhân bản chuyến
+          </button>
+          <button className="btn btn-primary" onClick={() => toggleCreateForm(showForm, setShowForm, setForm, EMPTY_TRIP)}>
+            <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />{" "}
+            {showForm ? "Đóng" : "Thêm mới"}
+          </button>
+        </div>
+      </div>
       {notice && <AdminNotice type={notice.type}>{notice.text}</AdminNotice>}
       {showForm && (
         <AdminFormModal
@@ -1493,6 +1520,65 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
         totalCount={meta.totalCount}
         onPageChange={setPage}
       />
+
+      {/* ── Modal nhân bản chuyến ── */}
+      {cloneModal && createPortal(
+        <div className="modal-overlay" onClick={() => setCloneModal(null)}>
+          <div className="modal-box" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3><i className="fa-solid fa-copy" /> Nhân bản chuyến xe</h3>
+              <button className="modal-close" onClick={() => setCloneModal(null)}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div style={{ padding: "16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Ngày nguồn (copy từ ngày này)</span>
+                <input
+                  type="date"
+                  value={cloneModal.sourceDate}
+                  onChange={(e) => setCloneModal((m) => ({ ...m, sourceDate: e.target.value }))}
+                  onClick={(e) => e.target.showPicker?.()}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: "0.95rem" }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#64748b" }}>Ngày đích (tạo chuyến sang ngày này)</span>
+                <input
+                  type="date"
+                  value={cloneModal.targetDate}
+                  min={cloneModal.sourceDate}
+                  onChange={(e) => setCloneModal((m) => ({ ...m, targetDate: e.target.value }))}
+                  onClick={(e) => e.target.showPicker?.()}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: "0.95rem" }}
+                />
+              </label>
+              {cloneModal.sourceDate && cloneModal.targetDate && cloneModal.sourceDate !== cloneModal.targetDate && (
+                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 14px", fontSize: "0.88rem", color: "#1d4ed8" }}>
+                  <i className="fa-solid fa-circle-info" /> Tất cả chuyến ngày{" "}
+                  <strong>{new Date(cloneModal.sourceDate + "T00:00:00").toLocaleDateString("vi-VN")}</strong>{" "}
+                  sẽ được nhân bản sang ngày{" "}
+                  <strong>{new Date(cloneModal.targetDate + "T00:00:00").toLocaleDateString("vi-VN")}</strong>{" "}
+                  (cùng tuyến, giờ, xe, giá — chỗ ngồi reset về tối đa).
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 8, borderTop: "1px solid #e2e8f0" }}>
+              <button className="btn btn-outline" onClick={() => setCloneModal(null)} disabled={cloneLoading}>Hủy</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCloneTrips}
+                disabled={cloneLoading || !cloneModal.sourceDate || !cloneModal.targetDate || cloneModal.sourceDate === cloneModal.targetDate}
+              >
+                {cloneLoading
+                  ? <><i className="fa-solid fa-spinner fa-spin" /> Đang nhân bản...</>
+                  : <><i className="fa-solid fa-copy" /> Nhân bản</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }
@@ -4588,6 +4674,14 @@ function ReviewsManager({ isOperator = false }) {
   useEffect(() => { loadReviews(); }, []);
 
   // ── Filter ───────────────────────────────────────────────────
+  // Dùng cho select (rating, hasReply, isHidden) — tự reload ngay khi thay đổi
+  const applySelectFilter = (field, value) => {
+    const next = { ...filters, [field]: value, page: 1 };
+    setFilters(next);
+    loadReviews(next);
+  };
+
+  // Dùng cho form submit (date range + keyword)
   const applyFilters = (e) => {
     e.preventDefault();
     const next = {
@@ -4733,7 +4827,6 @@ function ReviewsManager({ isOperator = false }) {
             <div className="payment-date-range">
               <label
                 className={`payment-date-field ${fromDateRaw ? 'has-value' : ''}`}
-                onClick={() => document.getElementById('rv-fromDate').showPicker?.()}
                 style={{ cursor: 'pointer', flex: 1 }}
               >
                 <span>Từ ngày</span>
@@ -4741,12 +4834,23 @@ function ReviewsManager({ isOperator = false }) {
                 <i className="fa-regular fa-calendar-days" />
                 <input id="rv-fromDate" type="date" value={fromDateRaw}
                   max={toDateRaw || undefined}
-                  onChange={(e) => setFromDateRaw(e.target.value)} />
+                  onClick={(e) => e.target.showPicker?.()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFromDateRaw(v);
+                    const next = {
+                      ...filters,
+                      fromDate: v ? `${v}T00:00:00` : '',
+                      toDate: toDateRaw ? `${toDateRaw}T23:59:59` : '',
+                      page: 1,
+                    };
+                    setFilters(next);
+                    loadReviews(next);
+                  }} />
               </label>
               <span className="payment-date-sep">→</span>
               <label
                 className={`payment-date-field ${toDateRaw ? 'has-value' : ''}`}
-                onClick={() => document.getElementById('rv-toDate').showPicker?.()}
                 style={{ cursor: 'pointer', flex: 1 }}
               >
                 <span>Đến ngày</span>
@@ -4754,7 +4858,19 @@ function ReviewsManager({ isOperator = false }) {
                 <i className="fa-regular fa-calendar-days" />
                 <input id="rv-toDate" type="date" value={toDateRaw}
                   min={fromDateRaw || undefined}
-                  onChange={(e) => setToDateRaw(e.target.value)} />
+                  onClick={(e) => e.target.showPicker?.()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setToDateRaw(v);
+                    const next = {
+                      ...filters,
+                      fromDate: fromDateRaw ? `${fromDateRaw}T00:00:00` : '',
+                      toDate: v ? `${v}T23:59:59` : '',
+                      page: 1,
+                    };
+                    setFilters(next);
+                    loadReviews(next);
+                  }} />
               </label>
             </div>
 
@@ -4764,7 +4880,7 @@ function ReviewsManager({ isOperator = false }) {
               <div className="payment-filter-select-wrap">
                 <i className="fa-solid fa-star" style={{ color: '#f59e0b' }} />
                 <select className="payment-filter-select" value={filters.rating}
-                  onChange={(e) => setFilters((f) => ({ ...f, rating: e.target.value }))}>
+                  onChange={(e) => applySelectFilter('rating', e.target.value)}>
                   <option value="">Tất cả</option>
                   <option value="5">⭐⭐⭐⭐⭐ (5 sao)</option>
                   <option value="4">⭐⭐⭐⭐ (4 sao)</option>
@@ -4782,7 +4898,7 @@ function ReviewsManager({ isOperator = false }) {
               <div className="payment-filter-select-wrap">
                 <i className="fa-solid fa-reply" />
                 <select className="payment-filter-select" value={filters.hasReply}
-                  onChange={(e) => setFilters((f) => ({ ...f, hasReply: e.target.value }))}>
+                  onChange={(e) => applySelectFilter('hasReply', e.target.value)}>
                   <option value="">Tất cả</option>
                   <option value="0">Chưa phản hồi</option>
                   <option value="1">Đã phản hồi</option>
@@ -4815,7 +4931,7 @@ function ReviewsManager({ isOperator = false }) {
               <div className="payment-filter-select-wrap">
                 <i className="fa-solid fa-star" style={{ color: '#f59e0b' }} />
                 <select className="payment-filter-select" value={filters.rating}
-                  onChange={(e) => setFilters((f) => ({ ...f, rating: e.target.value }))}>
+                  onChange={(e) => applySelectFilter('rating', e.target.value)}>
                   <option value="">Tất cả</option>
                   <option value="5">⭐⭐⭐⭐⭐ (5 sao)</option>
                   <option value="4">⭐⭐⭐⭐ (4 sao)</option>
@@ -4833,7 +4949,7 @@ function ReviewsManager({ isOperator = false }) {
               <div className="payment-filter-select-wrap">
                 <i className="fa-solid fa-eye" />
                 <select className="payment-filter-select" value={filters.isHidden}
-                  onChange={(e) => setFilters((f) => ({ ...f, isHidden: e.target.value }))}>
+                  onChange={(e) => applySelectFilter('isHidden', e.target.value)}>
                   <option value="">Tất cả</option>
                   <option value="0">Đang hiển thị</option>
                   <option value="1">Đã ẩn</option>
@@ -5589,6 +5705,12 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
     licensePlate: "",
     operatorId: "",
   });
+  // ── Image modal ──────────────────────────────────────────────
+  const [imgModal, setImgModal] = useState(null); // { busId, licensePlate, images: [] }
+  const [imgLoading, setImgLoading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]); // files chờ lưu
+  const [pendingAvatar, setPendingAvatar] = useState(null); // key của ảnh pending sẽ làm đại diện
+  const fileInputRef = useRef(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -5704,6 +5826,105 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
     }
   };
 
+  // ── Image handlers ───────────────────────────────────────────
+  const openImgModal = async (item) => {
+    const busId = pick(item, ["busID", "BusID"]);
+    const licensePlate = pick(item, ["licensePlate", "LicensePlate"], `Xe #${busId}`);
+    setPendingFiles([]);
+    setPendingAvatar(null);
+    setImgLoading(true);
+    setImgModal({ busId, licensePlate, images: [] });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    try {
+      const imgs = await busApi.getImages(busId);
+      setImgModal({ busId, licensePlate, images: Array.isArray(imgs) ? imgs : [] });
+    } catch {
+      setImgModal({ busId, licensePlate, images: [] });
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
+  const closeImgModal = () => {
+    pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    setPendingFiles([]);
+    setPendingAvatar(null);
+    setImgModal(null);
+  };
+
+  const addPendingFiles = (files) => {
+    if (!files || files.length === 0) return;
+    const newItems = Array.from(files).map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      key: `${file.name}_${file.size}_${Math.random()}`,
+    }));
+    setPendingFiles((prev) => [...prev, ...newItems]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePending = (key) => {
+    if (pendingAvatar === key) setPendingAvatar(null);
+    setPendingFiles((prev) => {
+      const item = prev.find((p) => p.key === key);
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((p) => p.key !== key);
+    });
+  };
+
+  const saveImages = async () => {
+    if (pendingFiles.length === 0 || !imgModal) return;
+    setImgLoading(true);
+    try {
+      let avatarImageId = null;
+      for (const p of pendingFiles) {
+        const result = await busApi.uploadImage(imgModal.busId, p.file);
+        if (p.key === pendingAvatar) {
+          avatarImageId = result?.imageID ?? result?.ImageID;
+        }
+      }
+      if (avatarImageId) {
+        await busApi.setAvatar(avatarImageId);
+      }
+      pendingFiles.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      setPendingFiles([]);
+      setPendingAvatar(null);
+      const imgs = await busApi.getImages(imgModal.busId);
+      setImgModal((m) => ({ ...m, images: Array.isArray(imgs) ? imgs : [] }));
+    } catch (e) {
+      alert(e.message || "Không upload được ảnh.");
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
+  const setAvatarImg = async (imageId) => {
+    if (!imgModal) return;
+    setImgLoading(true);
+    try {
+      await busApi.setAvatar(imageId);
+      const imgs = await busApi.getImages(imgModal.busId);
+      setImgModal((m) => ({ ...m, images: Array.isArray(imgs) ? imgs : [] }));
+    } catch (e) {
+      alert(e.message || "Không đặt được ảnh đại diện.");
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
+  const deleteImg = async (imageId) => {
+    if (!confirm("Xóa ảnh này?") || !imgModal) return;
+    setImgLoading(true);
+    try {
+      await busApi.removeImage(imageId);
+      setImgModal((m) => ({ ...m, images: m.images.filter((i) => (i.imageID ?? i.ImageID) !== imageId) }));
+    } catch (e) {
+      alert(e.message || "Không xóa được ảnh.");
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
   return (
     <section className="admin-card table-card">
       <SectionHeader
@@ -5807,12 +6028,20 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
               <th>Biển số</th>
               <th>Loại xe</th>
               <th>Sức chứa</th>
-              <th>Thao tác</th>
+              <th>Trạng thái</th>
+              <th style={{ width: "1%", whiteSpace: "nowrap" }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((item) => {
               const id = pick(item, ["busID", "BusID"]);
+              const busStatus = pick(item, ["busStatus", "BusStatus"], "idle");
+              const statusBadge =
+                busStatus === "ongoing"
+                  ? { label: "Đang chạy", cls: "bus-status-ongoing" }
+                  : busStatus === "scheduled"
+                  ? { label: "Sắp chạy", cls: "bus-status-scheduled" }
+                  : { label: "Đang dừng", cls: "bus-status-idle" };
               return (
                 <tr key={id}>
                   <td>{id}</td>
@@ -5828,7 +6057,19 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
                   <td>{pick(item, ["licensePlate", "LicensePlate"])}</td>
                   <td>{pick(item, ["busType", "BusType"])}</td>
                   <td>{pick(item, ["capacity", "Capacity"])}</td>
-                  <td className="admin-actions">
+                  <td>
+                    <span className={`bus-status-badge ${statusBadge.cls}`}>
+                      {statusBadge.label}
+                    </span>
+                  </td>
+                  <td className="admin-actions" style={{ whiteSpace: "nowrap" }}>
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => openImgModal(item)}
+                      title="Quản lý ảnh xe"
+                    >
+                      <i className="fa-solid fa-images" /> Ảnh
+                    </button>
                     <button
                       className="btn btn-outline"
                       onClick={() => editItem(item)}
@@ -5847,7 +6088,7 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
             })}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={isOperator ? 5 : 6} className="empty-cell">
+                <td colSpan={isOperator ? 6 : 7} className="empty-cell">
                   Không có xe phù hợp.
                 </td>
               </tr>
@@ -5861,6 +6102,127 @@ function BusesManager({ operators: initialOperators = [], onRefresh, isOperator 
         totalCount={meta.totalCount}
         onPageChange={setPage}
       />
+
+      {/* ── Modal quản lý ảnh xe ── */}
+      {imgModal && createPortal(
+        <div className="modal-overlay" onClick={closeImgModal}>
+          <div className="modal-box bus-img-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3><i className="fa-solid fa-images" /> Ảnh xe — {imgModal.licensePlate}</h3>
+              <button className="modal-close" onClick={closeImgModal}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            {/* Thêm ảnh từ máy tính */}
+            <div className="bus-img-add-row">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                style={{ display: "none" }}
+                onChange={(e) => addPendingFiles(e.target.files)}
+              />
+              <button
+                className="btn btn-primary bus-img-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={imgLoading}
+              >
+                <i className="fa-solid fa-plus" /> Thêm ảnh
+              </button>
+              <span className="bus-img-hint">JPG, PNG, WEBP, GIF · tối đa 5MB</span>
+            </div>
+
+            {/* Ảnh đã lưu */}
+            {imgLoading && <div className="admin-loading">Đang tải...</div>}
+            {!imgLoading && imgModal.images.length === 0 && pendingFiles.length === 0 && (
+              <div className="bus-img-empty">Chưa có ảnh nào. Nhấn "Thêm ảnh" để chọn từ máy.</div>
+            )}
+            {imgModal.images.length > 0 && (
+              <div className="bus-img-grid">
+                {imgModal.images.map((img) => {
+                  const imgId  = img.imageID  ?? img.ImageID;
+                  const rawUrl = img.imageURL ?? img.ImageURL ?? "";
+                  const url    = rawUrl.startsWith("/") ? `http://localhost:5001${rawUrl}` : rawUrl;
+                  const isAvatar = img.isAvatar ?? img.IsAvatar ?? false;
+                  return (
+                    <div key={imgId} className={`bus-img-card${isAvatar ? " bus-img-card--avatar" : ""}`}>
+                      <img src={url} alt="" onError={(e) => { e.target.src = ""; e.target.style.display = "none"; }} />
+                      {isAvatar && <span className="bus-img-avatar-badge"><i className="fa-solid fa-star" /> Đại diện</span>}
+                      <div className="bus-img-actions">
+                        {isAvatar ? (
+                          <button className="btn btn-outline btn-xs" disabled style={{ opacity: 0.5, cursor: "default" }} title="Ảnh này đã là đại diện">
+                            <i className="fa-solid fa-check" /> Đại diện
+                          </button>
+                        ) : (
+                          <button className="btn btn-outline btn-xs" onClick={() => setAvatarImg(imgId)} disabled={imgLoading}>
+                            Đặt đại diện
+                          </button>
+                        )}
+                        <button className="btn btn-danger btn-xs" onClick={() => deleteImg(imgId)} disabled={imgLoading}>
+                          <i className="fa-solid fa-trash" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Ảnh chờ lưu */}
+            {pendingFiles.length > 0 && (
+              <>
+                <div className="bus-img-pending-label">
+                  <i className="fa-solid fa-clock" /> {pendingFiles.length} ảnh chờ lưu
+                </div>
+                <div className="bus-img-grid">
+                  {pendingFiles.map((p) => {
+                    const isPA = pendingAvatar === p.key;
+                    return (
+                      <div key={p.key} className={`bus-img-card bus-img-card--pending${isPA ? " bus-img-card--avatar" : ""}`}>
+                        <img src={p.previewUrl} alt="" />
+                        {isPA && <span className="bus-img-avatar-badge"><i className="fa-solid fa-star" /> Đại diện</span>}
+                        <div className="bus-img-actions">
+                          {isPA ? (
+                            <button className="btn btn-outline btn-xs" disabled style={{ opacity: 0.5, cursor: "default" }}>
+                              <i className="fa-solid fa-check" /> Đại diện
+                            </button>
+                          ) : (
+                            <button className="btn btn-outline btn-xs" onClick={() => setPendingAvatar(p.key)}>
+                              Đặt đại diện
+                            </button>
+                          )}
+                          <button className="btn btn-danger btn-xs" onClick={() => removePending(p.key)}>
+                            <i className="fa-solid fa-trash" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Footer */}
+            <div className="bus-img-footer">
+              <button className="btn btn-outline" onClick={closeImgModal} disabled={imgLoading}>
+                Đóng
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={saveImages}
+                disabled={imgLoading || pendingFiles.length === 0}
+              >
+                {imgLoading
+                  ? <><i className="fa-solid fa-spinner fa-spin" /> Đang lưu...</>
+                  : <><i className="fa-solid fa-floppy-disk" /> Lưu {pendingFiles.length > 0 ? `(${pendingFiles.length} ảnh)` : ""}</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }

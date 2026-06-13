@@ -1,6 +1,6 @@
 // import { useEffect, useMemo, useState } from 'react';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelBookingStatus, labelPaymentMethod, labelPaymentStatus, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
@@ -64,6 +64,7 @@ function qrValue(booking) {
 /> */}
 export default function MyTicketDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -163,7 +164,7 @@ const loadBooking = async () => {
         <div className="container pickup-placeholder">
           <h1>Không tải được vé</h1>
           <p>{error || 'Không tìm thấy vé.'}</p>
-          <Link className="btn btn-primary" to="/my-tickets">Quay lại Vé của tôi</Link>
+          <button className="btn btn-primary" onClick={() => navigate(-1)}>Quay lại</button>
         </div>
       </UserLayout>
     );
@@ -181,12 +182,17 @@ const loadBooking = async () => {
   const refundAmount = pick(booking, ['refundAmount', 'RefundAmount'], null);
   // const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
   const bs = Number(bookingStatus);
-  const canRequestCancel = bs !== 2   // Cancelled
+  const arrivalTime = pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime']));
+  const tripStatus = pick(trip, ['status', 'Status'], pick(booking, ['tripStatus', 'TripStatus'], ''));
+  const ts = Number(tripStatus);
+  const tripEnded = ts === 2 || ts === 3 // Completed hoặc Cancelled
+    || (arrivalTime && new Date(arrivalTime) < new Date()); // hoặc đã qua giờ đến
+  const canRequestCancel = !tripEnded
+                      && bs !== 2   // Cancelled
+                      && bs !== 3   // Completed
                       && bs !== 4   // Refunded
                       && bs !== 5   // CancelRequested
                       && bs !== 6;  // CancelRejected
-  const arrivalTime = pick(trip, ['arrivalTime', 'ArrivalTime'], pick(booking, ['arrivalTime', 'ArrivalTime']));
-  const tripStatus = pick(trip, ['status', 'Status'], pick(booking, ['tripStatus', 'TripStatus'], ''));
   // const canReview = !review &&
   //   !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
   //   (String(tripStatus).toLowerCase() === 'completed' || (arrivalTime && new Date(arrivalTime) <= new Date()));
@@ -360,7 +366,7 @@ const code = qrValue(booking);
             style={{ display: 'block', margin: '0 auto' }}
           />
           <p>{code}</p>
-          <Link className="btn btn-outline" to="/my-tickets">Quay lại danh sách</Link>
+          <button className="btn btn-outline" onClick={() => navigate(-1)}>Quay lại danh sách</button>
           {/* <button
             type="button"
             className="btn btn-danger"
