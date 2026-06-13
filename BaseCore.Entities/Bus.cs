@@ -10,5 +10,6 @@ namespace BaseCore.Entities
 
         public Operator? Operator { get; set; }
         public List<Trip> Trips { get; set; } = new();
+        public List<BusImage> BusImages { get; set; } = new();
     }
 }

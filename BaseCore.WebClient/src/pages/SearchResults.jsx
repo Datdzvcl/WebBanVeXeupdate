@@ -80,9 +80,74 @@ function formatDateLabel(value) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+// function LocationPicker({ label, value, onChange, options, icon, accentClass, placeholder }) {
+//   const [open, setOpen] = useState(false);
+//   const [isTyping, setIsTyping] = useState(false);
+//   const filteredOptions = useMemo(() => {
+//     const keyword = isTyping ? normalizeText(value) : '';
+//     const source = keyword
+//       ? options.filter((item) => normalizeText(item).includes(keyword))
+//       : options;
+//     return source.slice(0, 12);
+//   }, [isTyping, options, value]);
+
+//   const selectLocation = (location) => {
+//     onChange(location);
+//     setIsTyping(false);
+//     setOpen(false);
+//   };
+
+//   return (
+//     <div className={`home-location-picker ${open ? 'open' : ''}`}>
+//       <i className={`fa-solid ${icon} ${accentClass}`} />
+//       <label>
+//         <span>{label}</span>
+//         <input
+//           value={value}
+//           placeholder={placeholder}
+//           onFocus={() => {
+//             setIsTyping(false);
+//             setOpen(true);
+//           }}
+//           onChange={(event) => {
+//             onChange(event.target.value);
+//             setIsTyping(true);
+//             setOpen(true);
+//           }}
+//           onBlur={() => window.setTimeout(() => {
+//             setIsTyping(false);
+//             setOpen(false);
+//           }, 120)}
+//         />
+//       </label>
+
+//       {open && (
+//         <div className="home-location-menu">
+//           <strong>Địa điểm phổ biến</strong>
+//           {filteredOptions.length > 0 ? (
+//             filteredOptions.map((location) => (
+//               <button
+//                 type="button"
+//                 key={location}
+//                 onMouseDown={(event) => event.preventDefault()}
+//                 onClick={() => selectLocation(location)}
+//               >
+//                 <i className="fa-solid fa-location-dot" />
+//                 <span>{location}</span>
+//               </button>
+//             ))
+//           ) : (
+//             <p>Không có gợi ý phù hợp. Bạn có thể nhập tay.</p>
+//           )}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 function LocationPicker({ label, value, onChange, options, icon, accentClass, placeholder }) {
   const [open, setOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+
   const filteredOptions = useMemo(() => {
     const keyword = isTyping ? normalizeText(value) : '';
     const source = keyword
@@ -219,7 +284,9 @@ export default function SearchResults() {
     error: '',
   });
   const today = useMemo(() => getToday(), []);
-  const [locations, setLocations] = useState([]);
+  // const [locations, setLocations] = useState([]);
+  const [departureOptions, setDepartureOptions] = useState([]);
+const [arrivalOptions, setArrivalOptions] = useState([]);
 
   const [filters, setFilters] = useState({
     busType: searchParams.get('busType') || '',
@@ -249,22 +316,34 @@ export default function SearchResults() {
     returnDate: '',
   });
 
-  const locationOptions = useMemo(() => {
-    return Array.from(new Set(
-      locations
-        .map((item) => String(item || '').trim())
-        .filter(Boolean)
-    )).sort((a, b) => a.localeCompare(b, 'vi'));
-  }, [locations]);
+  // const locationOptions = useMemo(() => {
+  //   return Array.from(new Set(
+  //     locations
+  //       .map((item) => String(item || '').trim())
+  //       .filter(Boolean)
+  //   )).sort((a, b) => a.localeCompare(b, 'vi'));
+  // }, [locations]);
 
   const page = Number(searchParams.get('page') || 1);
 
+  // useEffect(() => {
+  //   fetch(`${API_BASE}/api/trips/locations`)
+  //     .then((response) => (response.ok ? response.json() : []))
+  //     .then((data) => setLocations(Array.isArray(data) ? data : []))
+  //     .catch(() => setLocations([]));
+  // }, []);
   useEffect(() => {
-    fetch(`${API_BASE}/api/trips/locations`)
-      .then((response) => (response.ok ? response.json() : []))
-      .then((data) => setLocations(Array.isArray(data) ? data : []))
-      .catch(() => setLocations([]));
-  }, []);
+  fetch(`${API_BASE}/api/trips/locations`)
+    .then((response) => response.json())
+    .then((data) => {
+      setDepartureOptions(data.departures || []);
+      setArrivalOptions(data.arrivals || []);
+    })
+    .catch(() => {
+      setDepartureOptions([]);
+      setArrivalOptions([]);
+    });
+}, []);
 
   useEffect(() => {
     setSearchForm({
@@ -289,39 +368,77 @@ export default function SearchResults() {
     }
   }, [baseQuery, roundTripStage]);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError('');
+  // useEffect(() => {
+  //   const load = async () => {
+  //     setLoading(true);
+  //     setError('');
 
-      try {
-        const params = {
-          ...baseQuery,
-          ...filters,
-          page,
-          pageSize: PAGE_SIZE,
-        };
+  //     try {
+  //       const params = {
+  //         ...baseQuery,
+  //         ...filters,
+  //         page,
+  //         pageSize: PAGE_SIZE,
+  //       };
 
-        Object.keys(params).forEach((key) => {
-          if (params[key] === '' || params[key] == null) delete params[key];
-        });
+  //       Object.keys(params).forEach((key) => {
+  //         if (params[key] === '' || params[key] == null) delete params[key];
+  //       });
 
-        const response = await tripApi.search(params);
-        const result = parseItems(response);
-        setItems(result.items);
-        setPagination(result);
-      } catch (err) {
-        setError(err.message || 'Không thể tải danh sách chuyến xe.');
-        setItems([]);
-        setPagination({ totalCount: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 });
-      } finally {
-        setLoading(false);
-      }
-    };
+  //       const response = await tripApi.search(params);
+  //       const result = parseItems(response);
+  //       setItems(result.items);
+  //       setPagination(result);
+  //     } catch (err) {
+  //       setError(err.message || 'Không thể tải danh sách chuyến xe.');
+  //       setItems([]);
+  //       setPagination({ totalCount: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 });
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
 
-    load();
-  }, [baseQuery, filters, page]);
+  //   load();
+  // }, [baseQuery, filters, page]);
+useEffect(() => {
+  const load = async () => {
+    // ← Thêm guard này
+    if (!baseQuery.from || !baseQuery.to || !baseQuery.departureDate) {
+      setItems([]);
+      setPagination({ totalCount: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 });
+      return;
+    }
 
+    setLoading(true);
+    setError('');
+
+    try {
+      const params = {
+        ...baseQuery,
+        ...filters,
+        page,
+        pageSize: PAGE_SIZE,
+      };
+
+      Object.keys(params).forEach((key) => {
+        if (params[key] === '' || params[key] == null) delete params[key];
+      });
+
+      const response = await tripApi.search(params);
+      const result = parseItems(response);
+      setItems(result.items);
+      setPagination(result);
+    } catch (err) {
+      setError(err.message || 'Không thể tải danh sách chuyến xe.');
+      setItems([]);
+      setPagination({ totalCount: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  load();
+}, [baseQuery, filters, page]);
   const updateFilter = (key, value) => {
     setFilters((current) => ({ ...current, [key]: value }));
     const next = new URLSearchParams(searchParams);
@@ -473,11 +590,20 @@ export default function SearchResults() {
         <div className="container">
           <form className="featured-search modern-home-search" onSubmit={submitSearch}>
             <div className="home-search-widget">
-              <LocationPicker
+              {/* <LocationPicker
                 label="Nơi xuất phát"
                 value={searchForm.from}
                 onChange={(value) => updateSearchForm('from', value)}
                 options={locationOptions}
+                icon="fa-circle-dot"
+                accentClass="from"
+                placeholder="Chọn điểm đi"
+              /> */}
+              <LocationPicker
+                label="Nơi xuất phát"
+                value={searchForm.from}
+                onChange={(value) => updateSearchForm('from', value)}
+                options={departureOptions}   // ← đổi từ locationOptions
                 icon="fa-circle-dot"
                 accentClass="from"
                 placeholder="Chọn điểm đi"
@@ -492,11 +618,20 @@ export default function SearchResults() {
                 <i className="fa-solid fa-right-left" />
               </button>
 
-              <LocationPicker
+              {/* <LocationPicker
                 label="Nơi đến"
                 value={searchForm.to}
                 onChange={(value) => updateSearchForm('to', value)}
                 options={locationOptions}
+                icon="fa-location-dot"
+                accentClass="to"
+                placeholder="Chọn điểm đến"
+              /> */}
+              <LocationPicker
+                label="Nơi đến"
+                value={searchForm.to}
+                onChange={(value) => updateSearchForm('to', value)}
+                options={arrivalOptions}     // ← đổi từ locationOptions
                 icon="fa-location-dot"
                 accentClass="to"
                 placeholder="Chọn điểm đến"

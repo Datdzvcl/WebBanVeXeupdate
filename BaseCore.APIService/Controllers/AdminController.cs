@@ -502,7 +502,8 @@ namespace BaseCore.APIService.Controllers
                         .ThenInclude(x => x.Operator)
                 .Where(x =>
                     x.BookingDate.HasValue &&
-                    x.BookingStatus == BookingStatusConstant.Confirmed);
+                    (x.BookingStatus == BookingStatusConstant.Confirmed ||
+                     x.BookingStatus == BookingStatusConstant.Completed));
         }
 
         private static IQueryable<Booking> ApplyBookingDateRange(IQueryable<Booking> query, DateTime? fromDate, DateTime? toDate)

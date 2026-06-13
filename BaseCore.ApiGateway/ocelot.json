@@ -188,6 +188,20 @@
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5001 }],
       "UpstreamPathTemplate": "/api/reviews",
       "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/busimages/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5001 }],
+      "UpstreamPathTemplate": "/api/busimages/{everything}",
+      "UpstreamHttpMethod": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    },
+    {
+      "DownstreamPathTemplate": "/api/busimages",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5001 }],
+      "UpstreamPathTemplate": "/api/busimages",
+      "UpstreamHttpMethod": ["GET", "POST", "OPTIONS"]
     }
   ],
   "GlobalConfiguration": {
