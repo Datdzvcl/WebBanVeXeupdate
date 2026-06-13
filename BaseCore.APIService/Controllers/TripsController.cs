@@ -1348,56 +1348,83 @@ namespace BaseCore.APIService.Controllers
         // ─────────────────────────────────────────────
         // GET /api/trips/locations  — Public
         // ─────────────────────────────────────────────
+        // [HttpGet("locations")]
+        // [AllowAnonymous]
+        // public async Task<IActionResult> GetLocations(
+        //     [FromQuery] string? type = null,
+        //     [FromQuery] string? q = null,
+        //     [FromQuery] int take = 40)
+        // {
+        //     take = Math.Clamp(take, 1, 100);
+        //     var keyword = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+
+        //     var query = _context.Trips
+        //         .AsNoTracking()
+        //         .Include(x => x.Bus)
+        //         .AsQueryable();
+
+        //     var currentOperatorId = await GetCurrentOperatorId();
+        //     if (currentOperatorId.HasValue)
+        //         query = query.Where(x => x.Bus != null && x.Bus.OperatorID == currentOperatorId.Value);
+
+        //     var normalizedType = type?.Trim().ToLowerInvariant();
+
+        //     async Task<List<string>> LoadLocations(IQueryable<string> source)
+        //     {
+        //         if (!string.IsNullOrWhiteSpace(keyword))
+        //             source = source.Where(x => EF.Functions.Like(x, $"%{keyword}%"));
+
+        //         return await source
+        //             .Where(x => !string.IsNullOrWhiteSpace(x))
+        //             .Distinct()
+        //             .OrderBy(x => x)
+        //             .Take(take)
+        //             .ToListAsync();
+        //     }
+
+        //     if (normalizedType == "departure")
+        //         return Ok(await LoadLocations(query.Select(x => x.DepartureLocation)));
+
+        //     if (normalizedType == "arrival")
+        //         return Ok(await LoadLocations(query.Select(x => x.ArrivalLocation)));
+
+        //     var departures = await LoadLocations(query.Select(x => x.DepartureLocation));
+        //     var arrivals = await LoadLocations(query.Select(x => x.ArrivalLocation));
+
+        //     return Ok(new
+        //     {
+        //         departures,
+        //         arrivals,
+        //         all = departures.Union(arrivals).OrderBy(x => x).Take(take).ToList()
+        //     });
+        // }
         [HttpGet("locations")]
-        [AllowAnonymous]
-        public async Task<IActionResult> GetLocations(
-            [FromQuery] string? type = null,
-            [FromQuery] string? q = null,
-            [FromQuery] int take = 40)
-        {
-            take = Math.Clamp(take, 1, 100);
-            var keyword = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+[AllowAnonymous]
+public async Task<IActionResult> GetLocations()
+{
+    var departures = await _context.Trips
+        .AsNoTracking()
+        .Select(x => x.DepartureLocation)
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct()
+        .OrderBy(x => x)
+        .ToListAsync();
 
-            var query = _context.Trips
-                .AsNoTracking()
-                .Include(x => x.Bus)
-                .AsQueryable();
+    var arrivals = await _context.Trips
+        .AsNoTracking()
+        .Select(x => x.ArrivalLocation)
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct()
+        .OrderBy(x => x)
+        .ToListAsync();
 
-            var currentOperatorId = await GetCurrentOperatorId();
-            if (currentOperatorId.HasValue)
-                query = query.Where(x => x.Bus != null && x.Bus.OperatorID == currentOperatorId.Value);
+    var all = departures
+        .Union(arrivals)
+        .OrderBy(x => x)
+        .ToList();
 
-            var normalizedType = type?.Trim().ToLowerInvariant();
-
-            async Task<List<string>> LoadLocations(IQueryable<string> source)
-            {
-                if (!string.IsNullOrWhiteSpace(keyword))
-                    source = source.Where(x => EF.Functions.Like(x, $"%{keyword}%"));
-
-                return await source
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct()
-                    .OrderBy(x => x)
-                    .Take(take)
-                    .ToListAsync();
-            }
-
-            if (normalizedType == "departure")
-                return Ok(await LoadLocations(query.Select(x => x.DepartureLocation)));
-
-            if (normalizedType == "arrival")
-                return Ok(await LoadLocations(query.Select(x => x.ArrivalLocation)));
-
-            var departures = await LoadLocations(query.Select(x => x.DepartureLocation));
-            var arrivals = await LoadLocations(query.Select(x => x.ArrivalLocation));
-
-            return Ok(new
-            {
-                departures,
-                arrivals,
-                all = departures.Union(arrivals).OrderBy(x => x).Take(take).ToList()
-            });
-        }
+    return Ok(new { departures, arrivals, all });
+}
 
         // ═════════════════════════════════════════════
         // PRIVATE HELPERS

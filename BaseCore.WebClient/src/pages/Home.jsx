@@ -182,6 +182,80 @@ function getVisibleItems(items, start, size = 3) {
   );
 }
 
+// function LocationPicker({
+//   label,
+//   value,
+//   onChange,
+//   options,
+//   icon,
+//   accentClass,
+//   placeholder,
+// }) {
+//   const [open, setOpen] = useState(false);
+//   const [isTyping, setIsTyping] = useState(false);
+//   const filteredOptions = useMemo(() => {
+//     const keyword = isTyping ? normalizeText(value) : "";
+//     const source = keyword
+//       ? options.filter((item) => normalizeText(item).includes(keyword))
+//       : options;
+//     return source.slice(0, 12);
+//   }, [isTyping, options, value]);
+
+//   const selectLocation = (location) => {
+//     onChange(location);
+//     setIsTyping(false);
+//     setOpen(false);
+//   };
+
+//   return (
+//     <div className={`home-location-picker ${open ? "open" : ""}`}>
+//       <i className={`fa-solid ${icon} ${accentClass}`} />
+//       <label>
+//         <span>{label}</span>
+//         <input
+//           value={value}
+//           placeholder={placeholder}
+//           onFocus={() => {
+//             setIsTyping(false);
+//             setOpen(true);
+//           }}
+//           onChange={(event) => {
+//             onChange(event.target.value);
+//             setIsTyping(true);
+//             setOpen(true);
+//           }}
+//           onBlur={() =>
+//             window.setTimeout(() => {
+//               setIsTyping(false);
+//               setOpen(false);
+//             }, 120)
+//           }
+//         />
+//       </label>
+
+//       {open && (
+//         <div className="home-location-menu">
+//           <strong>Địa điểm phổ biến</strong>
+//           {filteredOptions.length > 0 ? (
+//             filteredOptions.map((location) => (
+//               <button
+//                 type="button"
+//                 key={location}
+//                 onMouseDown={(event) => event.preventDefault()}
+//                 onClick={() => selectLocation(location)}
+//               >
+//                 <i className="fa-solid fa-location-dot" />
+//                 <span>{location}</span>
+//               </button>
+//             ))
+//           ) : (
+//             <p>Không có gợi ý phù hợp. Bạn có thể nhập tay.</p>
+//           )}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 function LocationPicker({
   label,
   value,
@@ -192,20 +266,15 @@ function LocationPicker({
   placeholder,
 }) {
   const [open, setOpen] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const filteredOptions = useMemo(() => {
-    const keyword = isTyping ? normalizeText(value) : "";
-    const source = keyword
-      ? options.filter((item) => normalizeText(item).includes(keyword))
-      : options;
-    return source.slice(0, 12);
-  }, [isTyping, options, value]);
 
   const selectLocation = (location) => {
     onChange(location);
-    setIsTyping(false);
     setOpen(false);
   };
+
+  const filteredOptions = useMemo(() => {
+    return options.slice(0, 12);
+  }, [options]);
 
   return (
     <div className={`home-location-picker ${open ? "open" : ""}`}>
@@ -215,21 +284,9 @@ function LocationPicker({
         <input
           value={value}
           placeholder={placeholder}
-          onFocus={() => {
-            setIsTyping(false);
-            setOpen(true);
-          }}
-          onChange={(event) => {
-            onChange(event.target.value);
-            setIsTyping(true);
-            setOpen(true);
-          }}
-          onBlur={() =>
-            window.setTimeout(() => {
-              setIsTyping(false);
-              setOpen(false);
-            }, 120)
-          }
+          readOnly           // ← không cho gõ tay
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         />
       </label>
 
@@ -241,7 +298,7 @@ function LocationPicker({
               <button
                 type="button"
                 key={location}
-                onMouseDown={(event) => event.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectLocation(location)}
               >
                 <i className="fa-solid fa-location-dot" />
@@ -249,7 +306,7 @@ function LocationPicker({
               </button>
             ))
           ) : (
-            <p>Không có gợi ý phù hợp. Bạn có thể nhập tay.</p>
+            <p>Không có gợi ý.</p>
           )}
         </div>
       )}
@@ -505,7 +562,7 @@ export default function Home() {
                 emptyText="Chọn ngày đi"
               />
 
-              {form.isRoundTrip ? (
+              {/* {form.isRoundTrip ? (
                 <DatePickerField
                   label="Ngày về"
                   value={form.returnDate}
@@ -523,7 +580,39 @@ export default function Home() {
                   <i className="fa-solid fa-plus" />
                   Thêm ngày về
                 </button>
-              )}
+              )} */}
+              {form.isRoundTrip ? (
+              <div className="return-date-wrapper">
+                <DatePickerField
+                  label="Ngày về"
+                  value={form.returnDate}
+                  min={form.departureDate || today}
+                  onChange={(value) => updateForm("returnDate", value)}
+                  icon="fa-calendar-plus"
+                  emptyText="Chọn ngày về"
+                />
+                <button
+                  type="button"
+                  className="remove-return-date-btn"
+                  onClick={() => {
+                    updateForm("returnDate", null);
+                    updateForm("isRoundTrip", false);
+                  }}
+                  title="Bỏ ngày về"
+                >
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="home-return-button"
+                onClick={() => updateForm("isRoundTrip", true)}
+              >
+                <i className="fa-solid fa-plus" />
+                Thêm ngày về
+              </button>
+            )}
 
               <button type="submit" className="home-search-button">
                 Tìm kiếm

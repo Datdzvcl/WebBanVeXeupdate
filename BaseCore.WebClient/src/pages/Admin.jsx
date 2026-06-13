@@ -1,7 +1,7 @@
 ﻿// import { useEffect, useMemo, useState } from "react";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   apiFetch,
   formatVND,
@@ -1356,6 +1356,7 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
                 onChange={(e) =>
                   setForm({ ...form, departureTime: e.target.value })
                 }
+                onClick={(e) => e.target.showPicker?.()}
                 required
               />
             </label>
@@ -1370,6 +1371,7 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
                 onChange={(e) =>
                   setForm({ ...form, arrivalTime: e.target.value })
                 }
+                onClick={(e) => e.target.showPicker?.()}
                 required
               />
             </label>
@@ -1444,6 +1446,7 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
             type="date"
             value={filters.departureDate}
             onChange={(e) => updateFilter("departureDate", e.target.value)}
+            onClick={(e) => e.target.showPicker?.()}
             aria-label="Ngày đi"
           />
         </label>
@@ -1479,7 +1482,7 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
         trips={rows}
         onEdit={editItem}
         onDelete={removeItem}
-        onRowClick={(id) => navigate(`/admin/trips/${id}`)}
+        onRowClick={(id) => navigate(`/${isOperator ? "operator" : "admin"}/trips/${id}`)}
       />
       {!loading && rows.length === 0 && (
         <div className="empty-cell">Không có chuyến xe phù hợp.</div>
@@ -1511,12 +1514,16 @@ function TripLocationInput({
   const loadLocations = async (query = value) => {
     setLoading(true);
     try {
-      const data = await tripApi.locations({
-        type,
-        q: query || "",
-        take: 60,
-      });
-      setSuggestions(Array.isArray(data) ? data : []);
+      const data = await tripApi.locations({ type, q: query || "", take: 60 });
+      let list = Array.isArray(data) ? data
+        : type === "departure" ? (data?.departures || [])
+        : type === "arrival"   ? (data?.arrivals   || [])
+        : (data?.all || []);
+      if (query) {
+        const q = query.toLowerCase();
+        list = list.filter((x) => x.toLowerCase().includes(q));
+      }
+      setSuggestions(list);
       setOpen(true);
     } catch {
       setSuggestions([]);
@@ -1613,6 +1620,8 @@ function TripLocationInput({
 
 export function AdminTripDetail({ tripId }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const basePath = pathname.startsWith("/operator") ? "/operator" : "/admin";
   const [trip, setTrip] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [bookingFilter, setBookingFilter] = useState({
@@ -1707,7 +1716,7 @@ export function AdminTripDetail({ tripId }) {
           <button
             className="btn btn-outline"
             type="button"
-            onClick={() => navigate("/admin/trips")}
+            onClick={() => navigate(`${basePath}/trips`)}
           >
             <i className="fa-solid fa-arrow-left" /> Quay lại danh sách
           </button>
@@ -2785,6 +2794,7 @@ function BookingsManager() {
             type="date"
             value={filters.bookingDate}
             onChange={(e) => updateFilter('bookingDate', e.target.value)}
+            onClick={(e) => e.target.showPicker?.()}
             aria-label="Ngày đặt"
           />
         </label>
@@ -4662,19 +4672,19 @@ function ReviewsManager({ isOperator = false }) {
 
   // ── Helpers ───────────────────────────────────────────────────
   const renderStars = (rating) => (
-    <span style={{ color: '#f59e0b', fontSize: 15, letterSpacing: 1 }}>
+    <span className="review-stars-display">
       {'★'.repeat(rating)}
-      <span style={{ color: '#d1d5db' }}>{'★'.repeat(5 - rating)}</span>
+      <span className="review-stars-empty">{'★'.repeat(5 - rating)}</span>
     </span>
   );
 
   const renderReplyBadge = (reply) => reply
-    ? <span className="badge" style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Đã phản hồi</span>
-    : <span className="badge" style={{ background: '#f3f4f6', color: '#6b7280', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Chưa phản hồi</span>;
+    ? <span className="badge badge-success">Đã phản hồi</span>
+    : <span className="badge badge-neutral">Chưa phản hồi</span>;
 
   const renderHiddenBadge = (isHidden) => isHidden
-    ? <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Đã ẩn</span>
-    : <span className="badge" style={{ background: '#dcfce7', color: '#166534', borderRadius: 20, padding: '2px 10px', fontSize: 12 }}>Hiển thị</span>;
+    ? <span className="badge badge-danger">Đã ẩn</span>
+    : <span className="badge badge-success">Hiển thị</span>;
 
   return (
     <section className="admin-card table-card">
@@ -4698,17 +4708,19 @@ function ReviewsManager({ isOperator = false }) {
             <span className="review-stat-label">Tổng đánh giá</span>
             <span className="review-stat-value">{stats.total}</span>
           </div>
-          <div className="review-stat-card">
-            <span className="review-stat-label">⭐ Trung bình</span>
-            <span className="review-stat-value" style={{ color: '#f59e0b' }}>{stats.avgRating}</span>
+          <div className="review-stat-card review-stat-card--rating">
+            <span className="review-stat-label">Điểm trung bình</span>
+            <span className="review-stat-value review-stat-value--rating">
+              {stats.avgRating} <i className="fa-solid fa-star" />
+            </span>
           </div>
-          <div className="review-stat-card">
+          <div className="review-stat-card review-stat-card--warn">
             <span className="review-stat-label">Chưa phản hồi</span>
-            <span className="review-stat-value" style={{ color: '#dc2626' }}>{stats.unread}</span>
+            <span className="review-stat-value review-stat-value--danger">{stats.unread}</span>
           </div>
-          <div className="review-stat-card">
-            <span className="review-stat-label">⚠️ 1-2 sao</span>
-            <span className="review-stat-value" style={{ color: '#dc2626' }}>{stats.badCount}</span>
+          <div className="review-stat-card review-stat-card--warn">
+            <span className="review-stat-label">Đánh giá 1–2 sao</span>
+            <span className="review-stat-value review-stat-value--danger">{stats.badCount}</span>
           </div>
         </div>
       )}
@@ -4858,7 +4870,7 @@ function ReviewsManager({ isOperator = false }) {
               <th>Phản hồi</th>
               {!isOperator && <th>Trạng thái</th>}
               <th>Ngày đánh giá</th>
-              <th>Thao tác</th>
+              {!isOperator && <th>Thao tác</th>}
             </tr>
           </thead>
           <tbody>
@@ -4898,50 +4910,44 @@ function ReviewsManager({ isOperator = false }) {
                   <td>
                     {renderReplyBadge(reply)}
                     {reply && (
-                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, maxWidth: 160 }}
-                        title={reply}>
+                      <div className="review-reply-preview" title={reply}>
                         {reply.length > 40 ? reply.slice(0, 40) + '…' : reply}
                       </div>
+                    )}
+                    {isOperator && !reply && (
+                      <button className="btn btn-outline btn-sm" style={{ marginTop: 6 }} type="button"
+                        onClick={() => openReply(item)} disabled={loading}>
+                        <i className="fa-solid fa-reply" /> Phản hồi
+                      </button>
                     )}
                   </td>
                   {!isOperator && <td>{renderHiddenBadge(isHidden)}</td>}
                   <td>{formatDateTime(pick(item, ['createdAt','CreatedAt']))}</td>
-                  <td className="admin-actions">
-                    {/* Phản hồi — cả 2 role, nhưng chỉ 1 lần */}
-                    {!reply ? (
-                      <button className="btn btn-outline" type="button"
-                        style={{ fontSize: 12, padding: '3px 8px' }}
-                        onClick={() => openReply(item)} disabled={loading}>
-                        <i className="fa-solid fa-reply" /> Phản hồi
+                  {!isOperator && (
+                    <td className="admin-actions">
+                      <button className="btn btn-outline btn-sm" type="button"
+                        onClick={() => openReply(item)} disabled={loading || !!reply}>
+                        <i className="fa-solid fa-reply" />
                       </button>
-                    ) : (
-                      <span className="admin-muted">—</span>
-                    )}
-                    {/* Ẩn/Hiện + Xóa — chỉ Admin */}
-                    {!isOperator && (
-                      <>
-                        <button
-                          className={`btn ${isHidden ? 'btn-outline' : 'btn-warning'}`}
-                          type="button"
-                          style={{ fontSize: 12, padding: '3px 8px' }}
-                          onClick={() => toggleHidden(id, isHidden)} disabled={loading}>
-                          <i className={`fa-solid ${isHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
-                          {isHidden ? ' Hiện' : ' Ẩn'}
-                        </button>
-                        <button className="btn btn-danger" type="button"
-                          style={{ fontSize: 12, padding: '3px 8px' }}
-                          onClick={() => deleteReview(id)} disabled={loading}>
-                          <i className="fa-solid fa-trash" />
-                        </button>
-                      </>
-                    )}
-                  </td>
+                      <button
+                        className={`btn btn-sm ${isHidden ? 'btn-outline' : 'btn-warning'}`}
+                        type="button"
+                        onClick={() => toggleHidden(id, isHidden)} disabled={loading}>
+                        <i className={`fa-solid ${isHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+                        {isHidden ? ' Hiện' : ' Ẩn'}
+                      </button>
+                      <button className="btn btn-sm btn-danger" type="button"
+                        onClick={() => deleteReview(id)} disabled={loading}>
+                        <i className="fa-solid fa-trash" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={isOperator ? 8 : 10} className="empty-cell">
+                <td colSpan={isOperator ? 7 : 10} className="empty-cell">
                   Chưa có đánh giá.
                 </td>
               </tr>
@@ -5108,87 +5114,159 @@ function PromotionsManager() {
           title={form.promotionID ? "Sửa mã giảm giá" : "Thêm mã giảm giá"}
           onClose={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}
         >
-          <form className="admin-form-grid" onSubmit={submitForm}>
-            <input
-              value={form.code}
-              onChange={(e) => updateForm("code", e.target.value)}
-              placeholder="Mã giảm giá"
-              required
-            />
-            <textarea
-              value={form.description}
-              onChange={(e) => updateForm("description", e.target.value)}
-              placeholder="Mô tả/điều kiện hiển thị cho khách"
-              rows="3"
-            />
-            <select
-              value={form.discountType}
-              onChange={(e) => updateForm("discountType", e.target.value)}
-            >
-              <option value="1">Phần trăm</option>
-              <option value="2">Số tiền cố định</option>
-            </select>
-            <input
-              type="number"
-              value={form.discountValue}
-              onChange={(e) => updateForm("discountValue", e.target.value)}
-              placeholder="Giá trị giảm"
-              required
-            />
-            <input
-              type="number"
-              value={form.minOrderValue}
-              onChange={(e) => updateForm("minOrderValue", e.target.value)}
-              placeholder="Đơn tối thiểu"
-            />
-            <input
-              type="number"
-              value={form.maxDiscount}
-              onChange={(e) => updateForm("maxDiscount", e.target.value)}
-              placeholder="Giảm tối đa"
-            />
-            <input
-              type="number"
-              value={form.usageLimit}
-              onChange={(e) => updateForm("usageLimit", e.target.value)}
-              placeholder="Giới hạn lượt dùng"
-            />
-            <input
-              type="date"
-              value={form.startDate}
-              onChange={(e) => updateForm("startDate", e.target.value)}
-              required
-            />
-            <input
-              type="date"
-              value={form.endDate}
-              onChange={(e) => updateForm("endDate", e.target.value)}
-              required
-            />
-            <label>
+          <form className="promo-form-grid" onSubmit={submitForm}>
+            {/* Mã giảm giá */}
+            <label className="form-field form-field--full">
+              <span>Mã giảm giá *</span>
               <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) => updateForm("isActive", e.target.checked)}
-              />{" "}
-              Đang bật
+                value={form.code}
+                onChange={(e) => updateForm("code", e.target.value.toUpperCase())}
+                placeholder="VD: SUMMER20, GIAM50K"
+                required
+              />
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={form.isPublic}
-                onChange={(e) => updateForm("isPublic", e.target.checked)}
-              />{" "}
-              Công khai
+
+            {/* Mô tả */}
+            <label className="form-field form-field--full">
+              <span>Mô tả (hiển thị cho khách)</span>
+              <textarea
+                value={form.description}
+                onChange={(e) => updateForm("description", e.target.value)}
+                placeholder="VD: Giảm 20% tối đa 50.000đ cho đơn từ 200.000đ"
+                rows="2"
+              />
             </label>
-            {!form.isPublic && (
+
+            {/* Loại + Giá trị */}
+            <label className="form-field">
+              <span>Loại giảm giá</span>
+              <select
+                value={form.discountType}
+                onChange={(e) => updateForm("discountType", e.target.value)}
+              >
+                <option value="1">Phần trăm (%)</option>
+                <option value="2">Số tiền cố định (đ)</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Giá trị giảm {Number(form.discountType) === 1 ? "(%)" : "(đ)"} *</span>
               <input
                 type="number"
-                value={form.userID}
-                onChange={(e) => updateForm("userID", e.target.value)}
-                placeholder="UserID áp dụng"
+                min="0"
+                max={Number(form.discountType) === 1 ? 100 : undefined}
+                value={form.discountValue}
+                onChange={(e) => updateForm("discountValue", e.target.value)}
+                placeholder={Number(form.discountType) === 1 ? "VD: 20" : "VD: 50000"}
+                required
               />
+            </label>
+
+            {/* Đơn tối thiểu + Giảm tối đa */}
+            <label className="form-field">
+              <span>Đơn tối thiểu (đ)</span>
+              <input
+                type="number"
+                min="0"
+                value={form.minOrderValue}
+                onChange={(e) => updateForm("minOrderValue", e.target.value)}
+                placeholder="Bỏ trống = không giới hạn"
+              />
+            </label>
+            <label className="form-field">
+              <span>Giảm tối đa (đ){Number(form.discountType) === 2 ? " — không cần thiết" : ""}</span>
+              <input
+                type="number"
+                min="0"
+                value={form.maxDiscount}
+                onChange={(e) => updateForm("maxDiscount", e.target.value)}
+                placeholder="Bỏ trống = không giới hạn"
+                disabled={Number(form.discountType) === 2}
+              />
+            </label>
+
+            {/* Giới hạn lượt dùng */}
+            <label className="form-field">
+              <span>Giới hạn lượt dùng</span>
+              <input
+                type="number"
+                min="1"
+                value={form.usageLimit}
+                onChange={(e) => updateForm("usageLimit", e.target.value)}
+                placeholder="Bỏ trống = không giới hạn"
+              />
+            </label>
+            <div className="form-field" />
+
+            {/* Ngày bắt đầu + kết thúc */}
+            <label className={`form-field admin-date-input ${form.startDate ? "has-value" : ""}`}>
+              <span>Ngày bắt đầu *</span>
+              <strong>
+                {form.startDate
+                  ? new Date(form.startDate).toLocaleDateString("vi-VN")
+                  : "Chọn ngày"}
+              </strong>
+              <i className="fa-regular fa-calendar-days" />
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => updateForm("startDate", e.target.value)}
+                onClick={(e) => e.target.showPicker?.()}
+                required
+              />
+            </label>
+            <label className={`form-field admin-date-input ${form.endDate ? "has-value" : ""}`}>
+              <span>Ngày kết thúc *</span>
+              <strong>
+                {form.endDate
+                  ? new Date(form.endDate).toLocaleDateString("vi-VN")
+                  : "Chọn ngày"}
+              </strong>
+              <i className="fa-regular fa-calendar-days" />
+              <input
+                type="date"
+                value={form.endDate}
+                min={form.startDate || undefined}
+                onChange={(e) => updateForm("endDate", e.target.value)}
+                onClick={(e) => e.target.showPicker?.()}
+                required
+              />
+            </label>
+
+            {/* Toggles */}
+            <div className="form-toggle-row">
+              <label className="form-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) => updateForm("isActive", e.target.checked)}
+                />
+                <span className="form-toggle-track" />
+                <span className="form-toggle-label">Đang bật</span>
+              </label>
+              <label className="form-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.isPublic}
+                  onChange={(e) => updateForm("isPublic", e.target.checked)}
+                />
+                <span className="form-toggle-track" />
+                <span className="form-toggle-label">Công khai</span>
+              </label>
+            </div>
+
+            {/* UserID nếu không public */}
+            {!form.isPublic && (
+              <label className="form-field form-field--full">
+                <span>UserID áp dụng (mã dành riêng cho người dùng cụ thể)</span>
+                <input
+                  type="number"
+                  value={form.userID}
+                  onChange={(e) => updateForm("userID", e.target.value)}
+                  placeholder="Nhập UserID của người dùng"
+                />
+              </label>
             )}
+
             <div className="admin-form-actions">
               <button className="btn btn-primary" disabled={loading}>
                 Lưu
@@ -5196,9 +5274,7 @@ function PromotionsManager() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() =>
-                  cancelForm(setShowForm, setForm, EMPTY_PROMOTION)
-                }
+                onClick={() => cancelForm(setShowForm, setForm, EMPTY_PROMOTION)}
               >
                 Hủy
               </button>
@@ -6342,7 +6418,7 @@ function OperatorsManager({ onRefresh }) {
 
 // ==================== SHARED COMPONENTS ====================
 function TripsTable({ trips, onEdit, onDelete, onRowClick }) {
-  const showActions = Boolean(onEdit || onDelete);
+  const showActions = Boolean(onEdit || onDelete || onRowClick);
   return (
     <div className="table-wrap">
       <table>
@@ -6360,11 +6436,7 @@ function TripsTable({ trips, onEdit, onDelete, onRowClick }) {
         </thead>
         <tbody>
           {trips.map((t) => (
-            <tr
-              key={t.id}
-              className={onRowClick ? "clickable-row" : ""}
-              onClick={() => onRowClick?.(t.id)}
-            >
+            <tr key={t.id}>
               <td>{t.id}</td>
               <td>
                 <b>{t.departureLocation}</b> → <b>{t.arrivalLocation}</b>
@@ -6376,13 +6448,18 @@ function TripsTable({ trips, onEdit, onDelete, onRowClick }) {
               <td>{formatVND(t.price)}</td>
               {showActions && (
                 <td className="admin-actions">
+                  {onRowClick && (
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => onRowClick(t.id)}
+                    >
+                      <i className="fa-solid fa-eye" /> Xem
+                    </button>
+                  )}
                   {onEdit && (
                     <button
                       className="btn btn-outline"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEdit(t);
-                      }}
+                      onClick={() => onEdit(t)}
                     >
                       Sửa
                     </button>
@@ -6390,10 +6467,7 @@ function TripsTable({ trips, onEdit, onDelete, onRowClick }) {
                   {onDelete && (
                     <button
                       className="btn btn-danger"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete(t.id);
-                      }}
+                      onClick={() => onDelete(t.id)}
                     >
                       Xóa
                     </button>

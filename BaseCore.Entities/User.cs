@@ -11,7 +11,10 @@ namespace BaseCore.Entities
         public string Phone { get; set; } = string.Empty;
 
         public string PasswordHash { get; set; } = string.Empty;
-
+        public DateTime? DateOfBirth { get; set; }
+        public byte? Gender { get; set; }
+        public string? IdentityNumber { get; set; }
+        public string? AvatarUrl { get; set; }
         public byte Role { get; set; }
         public Operator? Operator { get; set; }      
         public DateTime? CreatedAt { get; set; }

@@ -5,7 +5,8 @@ namespace BaseCore.Entities
         public int TicketSeatID { get; set; }
         public int BookingID { get; set; }
         public string SeatLabel { get; set; } = string.Empty;
-        public string QRCode { get; set; } = string.Empty;
+        public string? QRCode { get; set; }
+        public bool IsActive { get; set; } = true;
 
         public Booking? Booking { get; set; }
     }

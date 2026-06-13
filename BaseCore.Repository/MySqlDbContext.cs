@@ -21,6 +21,7 @@ namespace BaseCore.Repository
         public DbSet<Review> Reviews { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<BookingStatusHistory> BookingStatusHistory { get; set; }
+        public DbSet<BusImage> BusImages { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -48,6 +49,26 @@ namespace BaseCore.Repository
                       .WithMany(e => e.Buses)
                       .HasForeignKey(e => e.OperatorID)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<BusImage>(entity =>
+            {
+                entity.ToTable("BusImages");
+                entity.HasKey(e => e.ImageID);
+
+                entity.Property(e => e.ImageURL).HasMaxLength(500).IsRequired();
+                entity.Property(e => e.IsAvatar).HasDefaultValue(false);
+                entity.Property(e => e.SortOrder).HasDefaultValue(0);
+                entity.Property(e => e.UploadedAt).HasDefaultValueSql("getdate()");
+
+                entity.HasIndex(e => new { e.BusID, e.IsAvatar })
+                      .IsUnique()
+                      .HasFilter("[IsAvatar] = 1");
+
+                entity.HasOne(e => e.Bus)
+                      .WithMany(e => e.BusImages)
+                      .HasForeignKey(e => e.BusID)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<Trip>(entity =>
@@ -243,6 +264,7 @@ namespace BaseCore.Repository
 
                 entity.Property(e => e.SeatLabel).HasMaxLength(10).IsRequired();
                 entity.Property(e => e.QRCode);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
 
                 entity.HasOne(e => e.Booking)
                       .WithMany(e => e.TicketSeats)
