@@ -78,6 +78,8 @@ export default function PickupDropoff() {
   const [dropoffStopId, setDropoffStopId] = useState(() => Number(readPendingBooking()?.dropoffStopId || 0));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pickupError, setPickupError] = useState('');
+  const [dropoffError, setDropoffError] = useState('');
 
   const trip = pendingBooking?.trip || {};
   const tripId = pendingBooking?.tripId;
@@ -118,13 +120,16 @@ export default function PickupDropoff() {
   );
 
   const continueBooking = () => {
+    setPickupError('');
+    setDropoffError('');
+
     if (!pickupStopId) {
-      alert('Vui lòng chọn điểm đón.');
+      setPickupError('Vui lòng chọn điểm đón.');
       return;
     }
 
     if (!dropoffStopId) {
-      alert('Vui lòng chọn điểm trả.');
+      setDropoffError('Vui lòng chọn điểm trả.');
       return;
     }
 
@@ -224,12 +229,13 @@ export default function PickupDropoff() {
                       stop={stop}
                       name="pickupStop"
                       checked={pickupStopId === id}
-                      onChange={setPickupStopId}
+                      onChange={(val) => { setPickupStopId(val); setPickupError(''); }}
                     />
                   );
                 })
               )}
             </div>
+            {pickupError && <p className="stop-error-msg" role="alert"><i className="fa-solid fa-circle-exclamation" /> {pickupError}</p>}
           </div>
 
           <div className="pickup-section-card">
@@ -253,12 +259,13 @@ export default function PickupDropoff() {
                       stop={stop}
                       name="dropoffStop"
                       checked={dropoffStopId === id}
-                      onChange={setDropoffStopId}
+                      onChange={(val) => { setDropoffStopId(val); setDropoffError(''); }}
                     />
                   );
                 })
               )}
             </div>
+            {dropoffError && <p className="stop-error-msg" role="alert"><i className="fa-solid fa-circle-exclamation" /> {dropoffError}</p>}
           </div>
         </main>
 

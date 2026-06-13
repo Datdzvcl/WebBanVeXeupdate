@@ -430,8 +430,8 @@ namespace BaseCore.APIService.Controllers
                     .Where(x =>
                         x.Booking != null &&
                         x.Booking.TripID == request.TripId &&
-                        // (x.Booking.PaymentStatus == null || x.Booking.PaymentStatus != "Cancelled") &&
-                        (x.Booking.BookingStatus == null || x.Booking.BookingStatus != BookingStatusConstant.Cancelled) &&
+                        x.Booking.BookingStatus != BookingStatusConstant.Cancelled &&
+                        x.Booking.BookingStatus != BookingStatusConstant.Refunded &&
                         seatLabels.Contains(x.SeatLabel.ToUpper()))
                     .Select(x => x.SeatLabel)
                     .ToListAsync();
@@ -629,18 +629,8 @@ namespace BaseCore.APIService.Controllers
             catch (DbUpdateException ex)
 {
     await transaction.RollbackAsync();
-    
-    var innerMsg = ex.InnerException?.Message ?? "no inner";
-    var innerInnerMsg = ex.InnerException?.InnerException?.Message ?? "no inner inner";
-    Console.WriteLine($"=== DbUpdateException ===");
-    Console.WriteLine($"Message: {ex.Message}");
-    Console.WriteLine($"Inner: {innerMsg}");
-    Console.WriteLine($"InnerInner: {innerInnerMsg}");
-    
-    return Conflict(new { 
-        message = "Không thể tạo booking vì trạng thái ghế vừa thay đổi. Vui lòng chọn lại.",
-        debug = innerMsg
-    });
+    Console.WriteLine($"[BookingCreate] DbUpdateException: {ex.Message} | Inner: {ex.InnerException?.Message}");
+    return Conflict(new { message = "Không thể tạo booking vì trạng thái ghế vừa thay đổi. Vui lòng chọn lại." });
 }
         }
 
@@ -1011,6 +1001,12 @@ namespace BaseCore.APIService.Controllers
                 booking.Trip.AvailableSeats += booking.TotalSeats;
 
             booking.BookingStatus = BookingStatusConstant.Cancelled;
+
+            var cancelHolds = await _context.SeatHolds
+                .Where(x => x.BookingID == booking.BookingID && x.Status == SeatHoldStatusConstant.Confirmed)
+                .ToListAsync();
+            foreach (var hold in cancelHolds)
+                hold.Status = SeatHoldStatusConstant.Released;
             // var latestPayment = await _context.Payments
             //     .Where(x => x.BookingID == booking.BookingID)
             //     .OrderByDescending(x => x.CreatedAt)
@@ -1123,6 +1119,12 @@ namespace BaseCore.APIService.Controllers
 
             if (ticketSeats.Any())
                 _context.TicketSeats.RemoveRange(ticketSeats);
+
+            var deleteHolds = await _context.SeatHolds
+                .Where(x => x.BookingID == booking.BookingID)
+                .ToListAsync();
+            foreach (var hold in deleteHolds)
+                hold.Status = SeatHoldStatusConstant.Released;
 
             var trip = await _context.Trips.FindAsync(booking.TripID);
             if (trip != null)

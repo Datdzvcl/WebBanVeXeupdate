@@ -143,6 +143,7 @@ export default function BookingPayment() {
   const [pendingBooking] = useState(() => readPendingBooking());
   const [roundTripBooking] = useState(() => readRoundTripBooking());
   const [paymentMethod, setPaymentMethod] = useState('BankTransfer');
+  const [submitError, setSubmitError] = useState('');
   const paymentSessionKey = buildPaymentSessionKey(pendingBooking, roundTripBooking);
   const [expiresAt] = useState(() => {
     let stored = null;
@@ -194,9 +195,11 @@ export default function BookingPayment() {
 
   useEffect(() => {
     if (expiresAt > now) return;
-    alert('Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.');
     localStorage.removeItem(PAYMENT_EXPIRES_KEY);
-    navigate(pendingBooking?.tripId ? `/trips/${pendingBooking.tripId}/seats` : '/search-results', { replace: true });
+    navigate(pendingBooking?.tripId ? `/trips/${pendingBooking.tripId}/seats` : '/search-results', {
+      replace: true,
+      state: { expiredMessage: 'Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.' },
+    });
   }, [expiresAt, navigate, now, pendingBooking?.tripId]);
 
   const trip = pendingBooking?.trip || {};
@@ -310,52 +313,41 @@ export default function BookingPayment() {
 const submit = async () => {
   if (submittingRef.current) return;
   submittingRef.current = true;
+  setSubmitError('');
 
   if (bookingsToPay.length === 0 || bookingsToPay.some((booking) => !booking?.tripId || !booking?.contact)) {
-    alert('Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.');
-    submittingRef.current = false; // ← thêm
-    navigate('/search-results');
+    submittingRef.current = false;
+    navigate('/search-results', { state: { expiredMessage: 'Thiếu dữ liệu đặt vé. Vui lòng thực hiện lại từ bước chọn ghế.' } });
     return;
   }
 
   if (remainingMs <= 0) {
-    alert('Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.');
-    submittingRef.current = false; // ← thêm
-    navigate(`/trips/${pendingBooking.tripId}/seats`);
+    submittingRef.current = false;
+    navigate(`/trips/${pendingBooking.tripId}/seats`, { state: { expiredMessage: 'Đã hết thời gian thanh toán. Vui lòng chọn lại ghế.' } });
     return;
   }
 
-  // setSubmitting(true);
-  // try {
-  //   const responses = [];
-  //   for (let index = 0; index < bookingsToPay.length; index += 1) {
-  //     const booking = bookingsToPay[index];
-  //     const code = index === 0 && promotionResult ? promotionCode : '';
-  //     const response = await bookingApi.create(buildBookingRequest(booking, paymentMethod, code));
-  //     responses.push(response);
-  //   }
   setSubmitting(true);
-    try {
-      const responses = [];
+  try {
+    const responses = [];
 
-      for (let index = 0; index < bookingsToPay.length; index += 1) {
-        const booking = bookingsToPay[index];
-        const code = index === 0 && promotionResult ? promotionCode : '';
+    for (let index = 0; index < bookingsToPay.length; index += 1) {
+      const booking = bookingsToPay[index];
+      const code = index === 0 && promotionResult ? promotionCode : '';
 
-        const response = await bookingApi.create(
-          buildBookingRequest(booking, paymentMethod, code)
-        );
+      const response = await bookingApi.create(
+        buildBookingRequest(booking, paymentMethod, code)
+      );
+      responses.push(response);
 
-        responses.push(response);
-
-        // Nếu chuyển khoản thì tự xác nhận thanh toán
-        if (paymentMethod === 'BankTransfer'||   paymentMethod === 'EWallet') {
-          await paymentApi.simulate({
-            bookingID: response.bookingID || response.BookingID,
-            paymentMethod: 'BankTransfer',
-          });
-        }
+      // Ghi nhận thanh toán cho BankTransfer và VNPay (không phải Cash)
+      if (paymentMethod === 'BankTransfer' || paymentMethod === 'VNPay') {
+        await paymentApi.simulate({
+          bookingID: response.bookingID || response.BookingID,
+          paymentMethod,
+        });
       }
+    }
 
     const bookingIds = responses
       .map((response) => pick(response, ['bookingID', 'bookingId', 'BookingID', 'id', 'Id']))
@@ -373,12 +365,10 @@ const submit = async () => {
     const message = err.message || 'Không thể tạo booking.';
     const lowerMessage = message.toLowerCase();
     if (lowerMessage.includes('hết thời gian giữ') || lowerMessage.includes('het thoi gian')) {
-      alert('Ghế đã hết thời gian giữ, vui lòng chọn lại ghế.');
-      navigate(`/trips/${pendingBooking.tripId}/seats`);
+      navigate(`/trips/${pendingBooking.tripId}/seats`, { state: { expiredMessage: 'Ghế đã hết thời gian giữ, vui lòng chọn lại ghế.' } });
       return;
     }
-    alert(message);
-
+    setSubmitError(message);
   } finally {
     submittingRef.current = false;
     setSubmitting(false);
@@ -567,6 +557,12 @@ const submit = async () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {submitError && (
+            <p className="payment-submit-error" role="alert">
+              <i className="fa-solid fa-circle-exclamation" /> {submitError}
+            </p>
           )}
 
           <button type="button" className="btn btn-primary payment-submit-btn" disabled={submitting} onClick={submit}>

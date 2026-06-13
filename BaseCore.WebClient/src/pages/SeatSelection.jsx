@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelSeatStatus, pick } from '../api';
 import { tripApi } from '../services/tripApi';
@@ -68,6 +68,7 @@ function formatCountdown(ms) {
 export default function SeatSelection() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const tripId = Number(id);
   const [sessionId] = useState(() => ensureSessionId());
   const [trip, setTrip] = useState(null);
@@ -78,6 +79,7 @@ export default function SeatSelection() {
   const [loading, setLoading] = useState(true);
   const [busySeat, setBusySeat] = useState('');
   const [error, setError] = useState('');
+  const [seatError, setSeatError] = useState(location.state?.expiredMessage || '');
 
   const loadSeats = useCallback(async () => {
     const response = await seatApi.getByTrip(tripId, { sessionId });
@@ -146,7 +148,7 @@ export default function SeatSelection() {
     localStorage.removeItem(HOLD_STORAGE_KEY);
     setHoldExpiresAt(null);
     setSelectedSeats([]);
-    alert('Đã hết thời gian giữ ghế. Vui lòng chọn lại.');
+    setSeatError('Đã hết thời gian giữ ghế. Vui lòng chọn lại.');
     loadSeats().catch(() => {});
   }, [holdExpiresAt, loadSeats, now]);
 
@@ -179,6 +181,7 @@ export default function SeatSelection() {
 
   const holdSeat = async (seatLabel) => {
     setBusySeat(seatLabel);
+    setSeatError('');
     try {
       const nextSeats = Array.from(new Set([...selectedSeats, seatLabel]));
       const result = await seatApi.hold({
@@ -197,10 +200,11 @@ export default function SeatSelection() {
           seatLabels: nextSeats,
           holdExpiresAt: expiresAt,
         }));
+        window.dispatchEvent(new Event('holdSeatUpdated'));
       }
       await loadSeats();
     } catch (err) {
-      alert(err.message || 'Không thể giữ ghế này.');
+      setSeatError(err.message || 'Không thể giữ ghế này.');
       await loadSeats().catch(() => {});
     } finally {
       setBusySeat('');
@@ -209,6 +213,7 @@ export default function SeatSelection() {
 
   const releaseSeat = async (seatLabel) => {
     setBusySeat(seatLabel);
+    setSeatError('');
     try {
       await seatApi.release({
         tripId,
@@ -221,6 +226,7 @@ export default function SeatSelection() {
       if (nextSeats.length === 0) {
         setHoldExpiresAt(null);
         localStorage.removeItem(HOLD_STORAGE_KEY);
+        window.dispatchEvent(new Event('holdSeatUpdated'));
       } else {
         const storedHold = JSON.parse(localStorage.getItem(HOLD_STORAGE_KEY) || 'null');
         localStorage.setItem(HOLD_STORAGE_KEY, JSON.stringify({
@@ -229,10 +235,11 @@ export default function SeatSelection() {
           sessionId,
           seatLabels: nextSeats,
         }));
+        window.dispatchEvent(new Event('holdSeatUpdated'));
       }
       await loadSeats();
     } catch (err) {
-      alert(err.message || 'Không thể nhả ghế này.');
+      setSeatError(err.message || 'Không thể nhả ghế này.');
       await loadSeats().catch(() => {});
     } finally {
       setBusySeat('');
@@ -253,15 +260,16 @@ export default function SeatSelection() {
 
   const continueBooking = () => {
     if (selectedSeats.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 ghế.');
+      setSeatError('Vui lòng chọn ít nhất 1 ghế.');
       return;
     }
 
     if (!holdExpiresAt || remainingMs <= 0) {
-      alert('Đã hết thời gian giữ ghế. Vui lòng chọn lại.');
+      setSeatError('Đã hết thời gian giữ ghế. Vui lòng chọn lại.');
       loadSeats().catch(() => {});
       return;
     }
+    setSeatError('');
 
     let bookingLeg = 'single';
     try {
@@ -396,6 +404,12 @@ export default function SeatSelection() {
             <span>Tổng tiền</span>
             <strong>{formatVND(total)}</strong>
           </div>
+
+          {seatError && (
+            <p className="seat-error-msg" role="alert">
+              <i className="fa-solid fa-circle-exclamation" /> {seatError}
+            </p>
+          )}
 
           <button type="button" className="btn btn-primary seat-continue-btn" onClick={continueBooking} disabled={!canContinue}>
             Tiếp tục
