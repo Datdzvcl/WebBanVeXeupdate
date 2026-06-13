@@ -167,10 +167,84 @@ namespace BaseCore.APIService.Controllers
             if (image == null) return NotFound();
             if (image.Bus?.OperatorID != operatorId.Value) return Forbid();
 
+            // Xóa file vật lý nếu là file upload nội bộ
+            if (!string.IsNullOrEmpty(image.ImageURL) && image.ImageURL.StartsWith("/uploads/"))
+            {
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", image.ImageURL.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+            }
+
             _context.BusImages.Remove(image);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Đã xóa ảnh" });
+        }
+
+        // POST api/busimages/upload - operator: upload ảnh từ máy tính
+        [HttpPost("upload")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> Upload([FromForm] int busId, [FromForm] IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "Không có file" });
+
+            var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowed.Contains(ext))
+                return BadRequest(new { message = "Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF" });
+
+            if (file.Length > 5 * 1024 * 1024)
+                return BadRequest(new { message = "Ảnh không được vượt quá 5MB" });
+
+            var operatorId = await GetCurrentOperatorId();
+            if (!operatorId.HasValue)
+                return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
+
+            var bus = await _context.Buses.AsNoTracking().FirstOrDefaultAsync(x => x.BusID == busId);
+            if (bus == null) return NotFound(new { message = "Xe không tồn tại" });
+            if (bus.OperatorID != operatorId.Value) return Forbid();
+
+            // Lưu file
+            var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "buses");
+            Directory.CreateDirectory(uploadDir);
+            var fileName = $"{busId}_{Guid.NewGuid():N}{ext}";
+            var filePath = Path.Combine(uploadDir, fileName);
+            await using (var stream = System.IO.File.Create(filePath))
+                await file.CopyToAsync(stream);
+
+            var imageUrl = $"/uploads/buses/{fileName}";
+
+            // Nếu chưa có ảnh nào → tự đặt làm avatar
+            var isFirst = !await _context.BusImages.AnyAsync(x => x.BusID == busId);
+            if (isFirst)
+            {
+                var oldAvatar = await _context.BusImages.FirstOrDefaultAsync(x => x.BusID == busId && x.IsAvatar);
+                if (oldAvatar != null) oldAvatar.IsAvatar = false;
+            }
+
+            var sortOrder = await _context.BusImages.CountAsync(x => x.BusID == busId);
+            var image = new BusImage
+            {
+                BusID = busId,
+                ImageURL = imageUrl,
+                IsAvatar = isFirst,
+                SortOrder = sortOrder,
+                UploadedAt = DateTime.Now,
+            };
+            _context.BusImages.Add(image);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                image.ImageID,
+                image.BusID,
+                image.ImageURL,
+                image.IsAvatar,
+                image.SortOrder,
+                image.UploadedAt,
+                fullUrl = $"{Request.Scheme}://{Request.Host}{imageUrl}",
+            });
         }
     }
 }

@@ -1426,6 +1426,69 @@ public async Task<IActionResult> GetLocations()
     return Ok(new { departures, arrivals, all });
 }
 
+        // ─────────────────────────────────────────────
+        // POST /api/trips/clone  — Nhân bản chuyến sang ngày khác
+        // ─────────────────────────────────────────────
+        [HttpPost("clone")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> CloneTrips([FromBody] CloneTripsRequest request)
+        {
+            if (!DateTime.TryParse(request.SourceDate, out var sourceDate))
+                return BadRequest(new { message = "Ngày nguồn không hợp lệ" });
+            if (!DateTime.TryParse(request.TargetDate, out var targetDate))
+                return BadRequest(new { message = "Ngày đích không hợp lệ" });
+            if (targetDate.Date == sourceDate.Date)
+                return BadRequest(new { message = "Ngày đích phải khác ngày nguồn" });
+
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (!currentOperatorId.HasValue) return Forbid();
+
+            var start = sourceDate.Date;
+            var end   = start.AddDays(1);
+            var dayDiff = targetDate.Date - sourceDate.Date;
+
+            var sourceTrips = await _context.Trips
+                .AsNoTracking()
+                .Include(x => x.Bus)
+                .Where(x => x.DepartureTime >= start && x.DepartureTime < end
+                         && x.Bus != null && x.Bus.OperatorID == currentOperatorId.Value)
+                .ToListAsync();
+
+            if (sourceTrips.Count == 0)
+                return Ok(new { cloned = 0, message = "Không có chuyến nào trong ngày nguồn" });
+
+            var newTrips = new List<Trip>();
+            foreach (var t in sourceTrips)
+            {
+                var newTrip = new Trip
+                {
+                    BusID             = t.BusID,
+                    DepartureLocation = t.DepartureLocation,
+                    ArrivalLocation   = t.ArrivalLocation,
+                    DepartureTime     = t.DepartureTime + dayDiff,
+                    ArrivalTime       = t.ArrivalTime   + dayDiff,
+                    Price             = t.Price,
+                    AvailableSeats    = t.Bus?.Capacity ?? t.AvailableSeats,
+                    Status            = TripStatusConstant.Scheduled
+                };
+                _context.Trips.Add(newTrip);
+                newTrips.Add(newTrip);
+            }
+            await _context.SaveChangesAsync();
+
+            foreach (var newTrip in newTrips)
+                AddDefaultStopPoints(newTrip);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                cloned  = newTrips.Count,
+                message = $"Đã nhân bản {newTrips.Count} chuyến sang ngày {targetDate:dd/MM/yyyy}"
+            });
+        }
+
+        public record CloneTripsRequest(string SourceDate, string TargetDate);
+
         // ═════════════════════════════════════════════
         // PRIVATE HELPERS
         // ═════════════════════════════════════════════

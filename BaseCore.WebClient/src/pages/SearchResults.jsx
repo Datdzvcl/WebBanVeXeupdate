@@ -735,39 +735,6 @@ useEffect(() => {
             </select>
           </label>
 
-          <label className="filter-control">
-            <span>Nhà xe</span>
-            <input
-              type="number"
-              min="1"
-              value={filters.operatorId}
-              onChange={(event) => updateFilter('operatorId', event.target.value)}
-              placeholder="Mã nhà xe"
-            />
-          </label>
-
-          <label className="filter-control">
-            <span>Điểm đón</span>
-            <input
-              type="number"
-              min="1"
-              value={filters.pickupStopId}
-              onChange={(event) => updateFilter('pickupStopId', event.target.value)}
-              placeholder="Mã điểm đón"
-            />
-          </label>
-
-          <label className="filter-control">
-            <span>Điểm trả</span>
-            <input
-              type="number"
-              min="1"
-              value={filters.dropoffStopId}
-              onChange={(event) => updateFilter('dropoffStopId', event.target.value)}
-              placeholder="Mã điểm trả"
-            />
-          </label>
-
           <div className="filter-control">
             <span>Khoảng giá</span>
             <div className="price-filter-row">

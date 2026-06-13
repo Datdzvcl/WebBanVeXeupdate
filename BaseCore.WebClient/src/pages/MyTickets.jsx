@@ -75,7 +75,7 @@ export default function MyTickets() {
               <h1>Vé của tôi</h1>
               <p>Theo dõi các vé đã đặt bằng tài khoản hiện tại.</p>
             </div>
-            <Link className="btn btn-primary" to="/search-results">Đặt vé mới</Link>
+            <Link className="btn btn-primary" to="/">Đặt vé mới</Link>
           </div>
 
           {loading && <p className="muted">Đang tải vé...</p>}

@@ -121,7 +121,7 @@ export default function Header({ simple = false }) {
         )}
 
         <div className="user-header-actions">
-          {token && user ? (
+          {!simple && (token && user ? (
             <>
               <div className="notification-menu">
                 <button
@@ -224,14 +224,10 @@ export default function Header({ simple = false }) {
             </>
           ) : (
             <div className="guest-actions">
-              <Link to="/login" className="btn btn-outline">
-                Đăng nhập
-              </Link>
-              <Link to="/register" className="btn btn-primary">
-                Đăng ký
-              </Link>
+              <Link to="/login" className="btn btn-outline">Đăng nhập</Link>
+              <Link to="/register" className="btn btn-primary">Đăng ký</Link>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </header>
