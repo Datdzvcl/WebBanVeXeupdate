@@ -901,12 +901,14 @@ useEffect(() => {
   };
 
   const editItem = (item) => {
+    const numericRole = pick(item, ["role", "Role"]);
+    const roleNames = { 0: "Customer", 1: "Operator", 2: "Admin" };
     setForm({
       userID: pick(item, ["userID", "UserID"]),
       fullName: pick(item, ["fullName", "FullName"], ""),
       email: pick(item, ["email", "Email"], ""),
       phone: pick(item, ["phone", "Phone"], ""),
-      role: pick(item, ["role", "Role"], "Customer"),
+      role: roleNames[Number(numericRole)] || "Customer",
       password: "",
     });
     setShowForm(true);
@@ -996,9 +998,9 @@ useEffect(() => {
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
-              <option value="0">Khách hàng</option>
-              <option value="2">Nhà xe</option>
-              <option value="1">Quản trị viên</option>
+              <option value="Customer">Khách hàng</option>
+              <option value="Operator">Nhà xe</option>
+              <option value="Admin">Quản trị viên</option>
             </select>
             <input
               type="password"
