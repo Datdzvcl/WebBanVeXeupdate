@@ -14,7 +14,7 @@ namespace BaseCore.APIService.Services
         private static readonly TimeSpan RunInterval  = TimeSpan.FromMinutes(2);
 
         // Booking Pending quá bao lâu thì bị xóa (khớp với HOLD_DURATION ở frontend)
-        private static readonly TimeSpan HoldDuration = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan HoldDuration = TimeSpan.FromMinutes(20);
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<ExpiredBookingCleanupService> _logger;

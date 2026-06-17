@@ -62,6 +62,39 @@ function qrValue(booking) {
   level="M"
   includeMargin={true}
 /> */}
+function CancelModal({ onConfirm, onClose, loading }) {
+  const [reason, setReason] = useState('Khách yêu cầu hủy vé');
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <i className="fa-solid fa-triangle-exclamation" style={{ color: '#ef4444' }} />
+          <h3>Yêu cầu hủy vé</h3>
+        </div>
+        <p className="modal-desc">Vui lòng nhập lý do hủy. Yêu cầu sẽ được gửi đến nhà xe để xem xét.</p>
+        <textarea
+          className="modal-textarea"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          maxLength={300}
+          placeholder="Nhập lý do..."
+        />
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose} disabled={loading}>Hủy bỏ</button>
+          <button
+            className="btn btn-danger"
+            onClick={() => onConfirm(reason)}
+            disabled={loading || !reason.trim()}
+          >
+            {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Đang gửi...</> : 'Xác nhận hủy vé'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MyTicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -69,6 +102,8 @@ export default function MyTicketDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelNotice, setCancelNotice] = useState(null);
   const [review, setReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [reviewMessage, setReviewMessage] = useState('');
@@ -114,17 +149,16 @@ const loadBooking = async () => {
       }, 300);
     }
   }, [loading]);
-  const requestCancel = async () => {
-    const reason = window.prompt('Nhập lý do yêu cầu hủy vé:', 'Khách yêu cầu hủy vé');
-    if (reason === null) return;
-
+  const requestCancel = async (reason) => {
     setActionLoading(true);
     try {
       await bookingApi.requestCancel(id, { cancelReason: reason });
+      setShowCancelModal(false);
+      setCancelNotice({ type: 'success', text: 'Đã gửi yêu cầu hủy vé. Vui lòng chờ nhà xe xác nhận.' });
       await loadBooking();
-      alert('Đã gửi yêu cầu hủy vé.');
     } catch (err) {
-      alert(err.message || 'Không thể gửi yêu cầu hủy vé.');
+      setShowCancelModal(false);
+      setCancelNotice({ type: 'error', text: err.message || 'Không thể gửi yêu cầu hủy vé.' });
     } finally {
       setActionLoading(false);
     }
@@ -365,22 +399,21 @@ const code = qrValue(booking);
             includeMargin={true}
             style={{ display: 'block', margin: '0 auto' }}
           />
-          <p>{code}</p>
-          <button className="btn btn-outline" onClick={() => navigate(-1)}>Quay lại danh sách</button>
-          {/* <button
-            type="button"
-            className="btn btn-danger"
-            disabled={!canRequestCancel || actionLoading}
-            onClick={requestCancel}
-          >
-            {bookingStatus === 'CancelRequested' ? 'Đã yêu cầu hủy' : 'Yêu cầu hủy vé'}
-          </button> */}
+          {cancelNotice && (
+            <p className={`profile-status profile-status--${cancelNotice.type}`} role="alert">
+              {cancelNotice.type === 'success'
+                ? <i className="fa-solid fa-circle-check" />
+                : <i className="fa-solid fa-circle-exclamation" />}
+              {' '}{cancelNotice.text}
+            </p>
+          )}
+          <Link className="btn btn-outline" to="/my-tickets">Quay lại danh sách</Link>
           {canRequestCancel && (
             <button
               type="button"
               className="btn btn-danger"
               disabled={actionLoading}
-              onClick={requestCancel}
+              onClick={() => { setCancelNotice(null); setShowCancelModal(true); }}
             >
               Yêu cầu hủy vé
             </button>
@@ -389,6 +422,14 @@ const code = qrValue(booking);
           {bs === 6 && <span className="ticket-status status-cancelled">Từ chối hủy</span>}
         </aside>
       </section>
+
+      {showCancelModal && (
+        <CancelModal
+          onConfirm={requestCancel}
+          onClose={() => setShowCancelModal(false)}
+          loading={actionLoading}
+        />
+      )}
     </UserLayout>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
-import { formatVND, labelBookingStatus, labelPaymentStatus, pick } from '../api';
+import { formatVND, labelBookingStatus, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
 
 function formatDateTime(value) {
@@ -19,22 +19,54 @@ function statusClass(status) {
   return `ticket-status status-${String(status || '').toLowerCase()}`;
 }
 
+function CancelModal({ onConfirm, onClose, loading }) {
+  const [reason, setReason] = useState('Khách yêu cầu hủy vé');
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <i className="fa-solid fa-triangle-exclamation" style={{ color: '#ef4444' }} />
+          <h3>Yêu cầu hủy vé</h3>
+        </div>
+        <p className="modal-desc">Vui lòng nhập lý do hủy. Yêu cầu sẽ được gửi đến nhà xe để xem xét.</p>
+        <textarea
+          className="modal-textarea"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          maxLength={300}
+          placeholder="Nhập lý do..."
+        />
+        <div className="modal-actions">
+          <button className="btn btn-outline" onClick={onClose} disabled={loading}>Hủy bỏ</button>
+          <button
+            className="btn btn-danger"
+            onClick={() => onConfirm(reason)}
+            disabled={loading || !reason.trim()}
+          >
+            {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Đang gửi...</> : 'Xác nhận hủy vé'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MyTickets() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [actionId, setActionId] = useState(null);
+  const [cancelModal, setCancelModal] = useState(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const loadBookings = async () => {
     setLoading(true);
     setError('');
     try {
-      // const data = await bookingApi.my();
-      // setBookings(Array.isArray(data) ? data : []);
       const data = await bookingApi.my();
       const all = Array.isArray(data) ? data : [];
-      // Chỉ giữ vé còn hiệu lực: PendingConfirm(0), Confirmed(1), CancelRequested(5), CancelRejected(6)
-      const activeOnly = all.filter(b => {
+      const activeOnly = all.filter((b) => {
         const bs = Number(b.bookingStatus ?? b.BookingStatus ?? 0);
         return bs === 0 || bs === 1 || bs === 5 || bs === 6;
       });
@@ -50,19 +82,19 @@ export default function MyTickets() {
     loadBookings();
   }, []);
 
-  const requestCancel = async (bookingId) => {
-    const reason = window.prompt('Nhập lý do yêu cầu hủy vé:', 'Khách yêu cầu hủy vé');
-    if (reason === null) return;
-
-    setActionId(bookingId);
+  const confirmCancel = async (reason) => {
+    if (!cancelModal) return;
+    setCancelLoading(true);
     try {
-      await bookingApi.requestCancel(bookingId, { cancelReason: reason });
+      await bookingApi.requestCancel(cancelModal, { cancelReason: reason });
+      setCancelModal(null);
+      setNotice({ type: 'success', text: 'Đã gửi yêu cầu hủy vé. Vui lòng chờ nhà xe xác nhận.' });
       await loadBookings();
-      alert('Đã gửi yêu cầu hủy vé.');
     } catch (err) {
-      alert(err.message || 'Không thể gửi yêu cầu hủy vé.');
+      setCancelModal(null);
+      setNotice({ type: 'error', text: err.message || 'Không thể gửi yêu cầu hủy vé.' });
     } finally {
-      setActionId(null);
+      setCancelLoading(false);
     }
   };
 
@@ -73,57 +105,49 @@ export default function MyTickets() {
           <div className="account-head">
             <div>
               <h1>Vé của tôi</h1>
-              <p>Theo dõi các vé đã đặt bằng tài khoản hiện tại.</p>
+              <p>Theo dõi các vé đang hoạt động bằng tài khoản hiện tại.</p>
             </div>
-            <Link className="btn btn-primary" to="/">Đặt vé mới</Link>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link className="btn btn-outline" to="/order-history">
+                <i className="fa-solid fa-clock-rotate-left" /> Lịch sử đơn hàng
+              </Link>
+              <Link className="btn btn-primary" to="/search-results">Đặt vé mới</Link>
+            </div>
           </div>
 
+          {notice && (
+            <p className={`profile-status profile-status--${notice.type}`} role="alert">
+              {notice.type === 'success'
+                ? <i className="fa-solid fa-circle-check" />
+                : <i className="fa-solid fa-circle-exclamation" />}
+              {' '}{notice.text}
+            </p>
+          )}
+
           {loading && <p className="muted">Đang tải vé...</p>}
-          {error && <p className="profile-status">{error}</p>}
+          {error && <p className="profile-status profile-status--error">{error}</p>}
 
           {!loading && !error && bookings.length === 0 && (
             <div className="empty-state">
               <i className="fa-solid fa-ticket" />
-              <h3>Chưa có vé nào</h3>
-              <p>Các vé đã đặt bằng tài khoản này sẽ hiển thị tại đây.</p>
+              <h3>Chưa có vé nào đang hoạt động</h3>
+              <p>Các vé chưa hoàn thành hoặc chưa hủy sẽ hiển thị ở đây.</p>
+              <Link className="btn btn-primary" to="/search-results">Đặt vé ngay</Link>
             </div>
           )}
 
           <div className="my-ticket-list">
             {bookings.map((item) => {
-              // const bookingId = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
-              // const paymentStatus = pick(item, ['paymentStatus', 'PaymentStatus'], '--');
-              // const bookingStatus = pick(item, ['bookingStatus', 'BookingStatus'], '--');
-              // const seatLabels = pick(item, ['seatLabels', 'SeatLabels'], []);
-              // const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
-              // const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
-              // const canRequestCancel = !['Cancelled', 'CancelRequested', 'CancelRejected'].includes(String(bookingStatus));
-              // const hasReview = Boolean(pick(item, ['hasReview', 'HasReview'], false));
-              // const arrivalTime = pick(item, ['arrivalTime', 'ArrivalTime']);
-              // const canReview = !hasReview &&
-              //   !['Cancelled', 'CancelRequested'].includes(String(bookingStatus)) &&
-              //   arrivalTime &&
-              //   new Date(arrivalTime) <= new Date();
-              const bookingId    = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
+              const bookingId     = pick(item, ['bookingID', 'BookingID', 'bookingId', 'id']);
               const bookingStatus = Number(pick(item, ['bookingStatus', 'BookingStatus'], 0));
-              const seatLabels   = pick(item, ['seatLabels', 'SeatLabels'], []);
-              const cancelReason = pick(item, ['cancelReason', 'CancelReason'], '');
-              const refundAmount = pick(item, ['refundAmount', 'RefundAmount'], null);
-              const hasReview    = Boolean(pick(item, ['hasReview', 'HasReview'], false));
-              const arrivalTime  = pick(item, ['arrivalTime', 'ArrivalTime']);
+              const seatLabels    = pick(item, ['seatLabels', 'SeatLabels'], []);
+              const cancelReason  = pick(item, ['cancelReason', 'CancelReason'], '');
+              const refundAmount  = pick(item, ['refundAmount', 'RefundAmount'], null);
 
-              // Dùng số theo enum: 2=Cancelled, 5=CancelRequested, 6=CancelRejected
               const canRequestCancel = bookingStatus !== 2
-                                    && bookingStatus !== 4 
+                                    && bookingStatus !== 4
                                     && bookingStatus !== 5
                                     && bookingStatus !== 6;
-
-              const canReview = !hasReview
-                // && bookingStatus !== 2   // Cancelled
-                // && bookingStatus !== 5   // CancelRequested
-                && bookingStatus === 3
-                && arrivalTime
-                && new Date(arrivalTime) <= new Date();
 
               return (
                 <article className="my-ticket-card" key={bookingId}>
@@ -131,7 +155,11 @@ export default function MyTickets() {
                     <div>
                       <span className="ticket-code">Mã vé #{bookingId}</span>
                       <h2>{pick(item, ['operatorName', 'OperatorName'], 'Nhà xe')}</h2>
-                      <p>{pick(item, ['route', 'Route'], `${pick(item, ['departureLocation', 'DepartureLocation'], '--')} → ${pick(item, ['arrivalLocation', 'ArrivalLocation'], '--')}`)}</p>
+                      <p>
+                        {pick(item, ['departureLocation', 'DepartureLocation'], '--')}
+                        {' → '}
+                        {pick(item, ['arrivalLocation', 'ArrivalLocation'], '--')}
+                      </p>
                     </div>
                     <div className="my-ticket-meta">
                       <span><i className="fa-solid fa-calendar-days" /> {formatDateTime(pick(item, ['departureTime', 'DepartureTime']))}</span>
@@ -141,40 +169,24 @@ export default function MyTickets() {
                   </div>
 
                   <div className="my-ticket-side">
-                    {/* <span className={statusClass(paymentStatus)}>{labelPaymentStatus(paymentStatus)}</span> */}
-                    {/* <span className={statusClass(bookingStatus)}>{labelPaymentStatus(bookingStatus)}</span> */}
                     <span className={statusClass(bookingStatus)}>{labelBookingStatus(bookingStatus)}</span>
                     {cancelReason && <small>Lý do hủy: {cancelReason}</small>}
-                    {refundAmount !== null && refundAmount !== undefined && <small>Hoàn tiền: {formatVND(refundAmount)}</small>}
-                    <Link className="btn btn-outline" to={`/my-tickets/${bookingId}`}>Xem chi tiết</Link>
-                    {hasReview ? (
-                      <span className="ticket-status status-confirmed">Đã đánh giá</span>
-                    ) : canReview ? (
-                      <Link className="btn btn-primary" to={`/my-tickets/${bookingId}`}>Đánh giá</Link>
-                    ) : null}
-                    {/* <button
-                      type="button"
-                      className="btn btn-danger"
-                      disabled={!canRequestCancel || actionId === bookingId}
-                      onClick={() => requestCancel(bookingId)}
-                    >
-                      {bookingStatus === 5 ? 'Đã yêu cầu hủy' : 'Yêu cầu hủy vé'}
-                    </button> */}
-                    {canRequestCancel && (
-                      <button
-                        type="button"
-                        className="btn btn-danger"
-                        disabled={actionId === bookingId}
-                        onClick={() => requestCancel(bookingId)}
-                      >
-                        Yêu cầu hủy vé
-                      </button>
-                    )}
+                    {refundAmount != null && <small>Hoàn tiền: {formatVND(refundAmount)}</small>}
                     {bookingStatus === 5 && (
                       <span className="ticket-status status-pending">Đang chờ duyệt hủy</span>
                     )}
                     {bookingStatus === 6 && (
                       <span className="ticket-status status-cancelled">Từ chối hủy</span>
+                    )}
+                    <Link className="btn btn-outline" to={`/my-tickets/${bookingId}`}>Xem chi tiết</Link>
+                    {canRequestCancel && (
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => { setNotice(null); setCancelModal(bookingId); }}
+                      >
+                        Yêu cầu hủy vé
+                      </button>
                     )}
                   </div>
                 </article>
@@ -183,6 +195,14 @@ export default function MyTickets() {
           </div>
         </section>
       </main>
+
+      {cancelModal && (
+        <CancelModal
+          onConfirm={confirmCancel}
+          onClose={() => setCancelModal(null)}
+          loading={cancelLoading}
+        />
+      )}
     </UserLayout>
   );
 }

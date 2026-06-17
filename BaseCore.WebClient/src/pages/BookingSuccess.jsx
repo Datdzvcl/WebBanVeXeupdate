@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelBookingStatus, labelPaymentMethod, pick } from '../api';
 import { bookingApi } from '../services/bookingApi';
 import { useAuth } from '../contexts/AuthContext';
+import { QRCodeSVG } from 'qrcode.react';
 
 const LAST_SEARCH_KEY = 'lastTripSearchQuery';
 const SUCCESS_BOOKINGS_KEY = 'lastSuccessfulBookingIds';
@@ -61,34 +62,6 @@ function readSuccessBookingIds(currentId) {
   return [String(currentId)];
 }
 
-function PseudoQrCode({ value }) {
-  const cells = useMemo(() => {
-    let seed = 0;
-    const source = String(value || 'booking');
-    for (let i = 0; i < source.length; i += 1) {
-      seed = (seed * 31 + source.charCodeAt(i)) >>> 0;
-    }
-
-    return Array.from({ length: 121 }, (_, index) => {
-      const row = Math.floor(index / 11);
-      const col = index % 11;
-      const finder =
-        (row < 3 && col < 3) ||
-        (row < 3 && col > 7) ||
-        (row > 7 && col < 3);
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return finder || seed % 3 === 0;
-    });
-  }, [value]);
-
-  return (
-    <div className="pseudo-qr" aria-label="Mã QR">
-      {cells.map((filled, index) => (
-        <span key={index} className={filled ? 'filled' : ''} />
-      ))}
-    </div>
-  );
-}
 
 function SuccessTicketBlock({ booking, title }) {
   const trip = booking.trip || booking.Trip || {};
@@ -235,7 +208,14 @@ export default function BookingSuccess() {
             return (
               <div className="success-qr-item" key={bookingId || index}>
                 {isRoundTrip && <strong>{index === 0 ? 'Lượt đi' : 'Lượt về'}</strong>}
-                <PseudoQrCode value={qrText} />
+                <div className="success-qr-wrap">
+                  <QRCodeSVG
+                    value={qrText}
+                    size={160}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                </div>
                 <p>{qrText}</p>
               </div>
             );

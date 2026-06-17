@@ -16,7 +16,7 @@ namespace BaseCore.APIService.Controllers
         private const string HoldingStatus = "Holding";
         private const string ReleasedStatus = "Released";
         private const string ExpiredStatus = "Expired";
-        private static readonly TimeSpan SeatHoldDuration = TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan SeatHoldDuration = TimeSpan.FromMinutes(20);
 
         private readonly MySqlDbContext _context;
 

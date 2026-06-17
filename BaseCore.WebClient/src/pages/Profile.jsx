@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import Header from '../components/Header';
-import { apiFetch, pick } from '../api';
+import UserLayout from '../layouts/UserLayout';
+import { Link } from 'react-router-dom';
+import { apiFetch, labelRole, pick } from '../api';
 
 const readStoredUser = () => JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -12,14 +13,14 @@ export default function Profile() {
     phone: storedUser.phone || storedUser.Phone || '',
   });
   const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState('');
   const [loading, setLoading] = useState(false);
 
   const userId = storedUser.userId || storedUser.UserID || storedUser.id || storedUser.Id;
-  const role = storedUser.role || storedUser.Role || 'User';
+  const role = storedUser.role ?? storedUser.Role;
 
   useEffect(() => {
     if (!userId) return;
-
     let ignore = false;
     apiFetch(`/api/profile/${userId}`)
       .then((data) => {
@@ -31,12 +32,12 @@ export default function Profile() {
         });
       })
       .catch(() => {
-        if (!ignore) setStatus('Không tải được dữ liệu mới nhất, đang hiển thị thông tin đã lưu khi đăng nhập.');
+        if (!ignore) {
+          setStatus('Không tải được dữ liệu mới nhất, đang hiển thị thông tin đã lưu.');
+          setStatusType('warn');
+        }
       });
-
-    return () => {
-      ignore = true;
-    };
+    return () => { ignore = true; };
   }, [userId]);
 
   const updateField = (key, value) => {
@@ -57,7 +58,6 @@ export default function Profile() {
     event.preventDefault();
     setLoading(true);
     setStatus('');
-
     try {
       if (userId) {
         await apiFetch(`/api/profile/${userId}`, {
@@ -70,23 +70,26 @@ export default function Profile() {
         });
       }
       saveLocalUser(form);
-      setStatus('Đã cập nhật thông tin cá nhân.');
+      setStatus('Đã cập nhật thông tin cá nhân thành công.');
+      setStatusType('success');
     } catch (error) {
       saveLocalUser(form);
-      setStatus(error.message || 'Backend chưa cho phép cập nhật, thông tin hiển thị đã được lưu tạm trên trình duyệt.');
+      setStatus(error.message || 'Không cập nhật được, thông tin đã được lưu tạm trên trình duyệt.');
+      setStatusType('error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <>
-      <Header />
-      <main className="profile-page">
+    <UserLayout>
+      <div className="profile-page">
         <section className="profile-card">
           <div className="profile-header">
             <div className="profile-avatar">
-              <i className="fa-solid fa-user" />
+              <span className="profile-avatar-initials">
+                {(form.fullName || 'U').charAt(0).toUpperCase()}
+              </span>
             </div>
             <div>
               <h1>Thông tin cá nhân</h1>
@@ -125,20 +128,30 @@ export default function Profile() {
             </div>
 
             <div className="profile-meta">
-              <span><i className="fa-solid fa-shield-halved" /> Vai trò: {role}</span>
+              <span><i className="fa-solid fa-shield-halved" /> Vai trò: {labelRole(role)}</span>
               {userId && <span><i className="fa-solid fa-id-card" /> Mã tài khoản: {userId}</span>}
             </div>
 
-            {status && <p className="profile-status">{status}</p>}
+            {status && (
+              <p className={`profile-status profile-status--${statusType}`} role="alert">
+                {statusType === 'success' && <i className="fa-solid fa-circle-check" />}
+                {statusType === 'error' && <i className="fa-solid fa-circle-exclamation" />}
+                {statusType === 'warn' && <i className="fa-solid fa-triangle-exclamation" />}
+                {' '}{status}
+              </p>
+            )}
 
             <div className="profile-actions">
               <button className="btn btn-primary" disabled={loading}>
-                {loading ? 'Đang lưu...' : 'Lưu thông tin'}
+                {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Đang lưu...</> : 'Lưu thông tin'}
               </button>
+              <Link to="/change-password" className="btn btn-outline">
+                <i className="fa-solid fa-key" /> Đổi mật khẩu
+              </Link>
             </div>
           </form>
         </section>
-      </main>
-    </>
+      </div>
+    </UserLayout>
   );
 }
