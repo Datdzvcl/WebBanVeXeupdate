@@ -1340,6 +1340,13 @@ namespace BaseCore.APIService.Controllers
             if (hasBookings)
                 return Conflict(new { message = "Không thể xóa chuyến đã có booking" });
 
+            // Xóa các dữ liệu liên quan tham chiếu TripID trước khi xóa Trip
+            var stopPoints = await _context.StopPoints.Where(x => x.TripID == id).ToListAsync();
+            if (stopPoints.Count > 0) _context.StopPoints.RemoveRange(stopPoints);
+
+            var seatHolds = await _context.SeatHolds.Where(x => x.TripID == id).ToListAsync();
+            if (seatHolds.Count > 0) _context.SeatHolds.RemoveRange(seatHolds);
+
             _context.Trips.Remove(trip);
             await _context.SaveChangesAsync();
             return Ok();
@@ -1450,6 +1457,7 @@ public async Task<IActionResult> GetLocations()
             var sourceTrips = await _context.Trips
                 .AsNoTracking()
                 .Include(x => x.Bus)
+                .Include(x => x.StopPoints.Where(s => s.IsActive))
                 .Where(x => x.DepartureTime >= start && x.DepartureTime < end
                          && x.Bus != null && x.Bus.OperatorID == currentOperatorId.Value)
                 .ToListAsync();
@@ -1457,37 +1465,204 @@ public async Task<IActionResult> GetLocations()
             if (sourceTrips.Count == 0)
                 return Ok(new { cloned = 0, message = "Không có chuyến nào trong ngày nguồn" });
 
+            // Lấy trước các chuyến đã tồn tại của những xe liên quan trong ngày đích, để check trùng giờ
+            var busIds = sourceTrips.Select(x => x.BusID).Distinct().ToList();
+            var targetStart = targetDate.Date;
+            var targetEnd   = targetStart.AddDays(1);
+            var existingTargetTrips = await _context.Trips
+                .AsNoTracking()
+                .Where(x => busIds.Contains(x.BusID)
+                         && x.Status != TripStatusConstant.Cancelled
+                         && x.DepartureTime >= targetStart.AddDays(-1) && x.DepartureTime < targetEnd.AddDays(1))
+                .Select(x => new { x.BusID, x.DepartureTime, x.ArrivalTime })
+                .ToListAsync();
+
             var newTrips = new List<Trip>();
+            var pairs = new List<(Trip Source, Trip New)>();
+            var skipped = 0;
             foreach (var t in sourceTrips)
             {
+                var newDeparture = t.DepartureTime + dayDiff;
+                var newArrival   = t.ArrivalTime   + dayDiff;
+
+                var conflict = existingTargetTrips.Any(x => x.BusID == t.BusID
+                                && x.DepartureTime < newArrival && x.ArrivalTime > newDeparture)
+                            || newTrips.Any(nt => nt.BusID == t.BusID
+                                && nt.DepartureTime < newArrival && nt.ArrivalTime > newDeparture);
+                if (conflict)
+                {
+                    skipped++;
+                    continue;
+                }
+
                 var newTrip = new Trip
                 {
                     BusID             = t.BusID,
                     DepartureLocation = t.DepartureLocation,
                     ArrivalLocation   = t.ArrivalLocation,
-                    DepartureTime     = t.DepartureTime + dayDiff,
-                    ArrivalTime       = t.ArrivalTime   + dayDiff,
+                    DepartureTime     = newDeparture,
+                    ArrivalTime       = newArrival,
                     Price             = t.Price,
                     AvailableSeats    = t.Bus?.Capacity ?? t.AvailableSeats,
                     Status            = TripStatusConstant.Scheduled
                 };
                 _context.Trips.Add(newTrip);
                 newTrips.Add(newTrip);
+                pairs.Add((t, newTrip));
+            }
+            await _context.SaveChangesAsync(); // sau bước này pairs[].New.TripID đã có giá trị
+
+            // Copy đúng các điểm dừng đã tùy chỉnh của chuyến nguồn (không tạo lại điểm mặc định)
+            foreach (var (source, newTrip) in pairs)
+            {
+                if (source.StopPoints != null && source.StopPoints.Count > 0)
+                {
+                    foreach (var sp in source.StopPoints)
+                    {
+                        _context.StopPoints.Add(new StopPoint
+                        {
+                            TripID        = newTrip.TripID,
+                            StopName      = sp.StopName,
+                            StopAddress   = sp.StopAddress,
+                            StopOrder     = sp.StopOrder,
+                            StopType      = sp.StopType,
+                            ArrivalOffset = sp.ArrivalOffset,
+                            IsActive      = true
+                        });
+                    }
+                }
+                else
+                {
+                    AddDefaultStopPoints(newTrip);
+                }
             }
             await _context.SaveChangesAsync();
 
-            foreach (var newTrip in newTrips)
-                AddDefaultStopPoints(newTrip);
-            await _context.SaveChangesAsync();
+            var message = $"Đã nhân bản {newTrips.Count} chuyến sang ngày {targetDate:dd/MM/yyyy}";
+            if (skipped > 0)
+                message += $" (bỏ qua {skipped} chuyến trùng giờ xe đã tồn tại)";
 
             return Ok(new
             {
                 cloned  = newTrips.Count,
-                message = $"Đã nhân bản {newTrips.Count} chuyến sang ngày {targetDate:dd/MM/yyyy}"
+                skipped,
+                message
             });
         }
 
         public record CloneTripsRequest(string SourceDate, string TargetDate);
+
+        // ─────────────────────────────────────────────
+        // POST /api/trips/{id}/stops  — Operator thêm điểm dừng/đón/trả cho chuyến của mình
+        // ─────────────────────────────────────────────
+        [HttpPost("{id}/stops")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> AddStop(int id, [FromBody] StopPoint stop)
+        {
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (!currentOperatorId.HasValue) return Forbid();
+
+            var trip = await _context.Trips.Include(x => x.Bus).FirstOrDefaultAsync(x => x.TripID == id);
+            if (trip == null) return NotFound(new { message = "Không tìm thấy chuyến xe" });
+            if (trip.Bus?.OperatorID != currentOperatorId.Value) return Forbid();
+
+            if (string.IsNullOrWhiteSpace(stop.StopName))
+                return BadRequest(new { message = "Tên điểm dừng không được để trống" });
+            if (stop.StopType < 1 || stop.StopType > 3)
+                return BadRequest(new { message = "Loại điểm dừng không hợp lệ (1=Đón, 2=Trả, 3=Cả hai)" });
+
+            var maxOrder = await _context.StopPoints
+                .Where(x => x.TripID == id && x.IsActive)
+                .Select(x => (int?)x.StopOrder)
+                .MaxAsync() ?? 0;
+
+            var newStop = new StopPoint
+            {
+                TripID        = id,
+                StopName      = stop.StopName.Trim(),
+                StopAddress   = stop.StopAddress?.Trim(),
+                StopOrder     = stop.StopOrder > 0 ? stop.StopOrder : maxOrder + 1,
+                StopType      = stop.StopType,
+                ArrivalOffset = stop.ArrivalOffset,
+                IsActive      = true
+            };
+            _context.StopPoints.Add(newStop);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                stopPointID   = newStop.StopPointID,
+                tripID        = newStop.TripID,
+                stopName      = newStop.StopName,
+                stopAddress   = newStop.StopAddress,
+                stopOrder     = newStop.StopOrder,
+                stopType      = newStop.StopType,
+                arrivalOffset = newStop.ArrivalOffset
+            });
+        }
+
+        // ─────────────────────────────────────────────
+        // PUT /api/trips/{tripId}/stops/{stopId}  — Operator sửa điểm dừng
+        // ─────────────────────────────────────────────
+        [HttpPut("{tripId}/stops/{stopId}")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> UpdateStop(int tripId, int stopId, [FromBody] StopPoint stop)
+        {
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (!currentOperatorId.HasValue) return Forbid();
+
+            var trip = await _context.Trips.Include(x => x.Bus).FirstOrDefaultAsync(x => x.TripID == tripId);
+            if (trip == null) return NotFound(new { message = "Không tìm thấy chuyến xe" });
+            if (trip.Bus?.OperatorID != currentOperatorId.Value) return Forbid();
+
+            var existing = await _context.StopPoints.FirstOrDefaultAsync(x => x.StopPointID == stopId && x.TripID == tripId);
+            if (existing == null) return NotFound(new { message = "Không tìm thấy điểm dừng" });
+
+            if (string.IsNullOrWhiteSpace(stop.StopName))
+                return BadRequest(new { message = "Tên điểm dừng không được để trống" });
+            if (stop.StopType < 1 || stop.StopType > 3)
+                return BadRequest(new { message = "Loại điểm dừng không hợp lệ (1=Đón, 2=Trả, 3=Cả hai)" });
+
+            existing.StopName      = stop.StopName.Trim();
+            existing.StopAddress   = stop.StopAddress?.Trim();
+            existing.StopOrder     = stop.StopOrder;
+            existing.StopType      = stop.StopType;
+            existing.ArrivalOffset = stop.ArrivalOffset;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Đã cập nhật điểm dừng" });
+        }
+
+        // ─────────────────────────────────────────────
+        // DELETE /api/trips/{tripId}/stops/{stopId}  — Operator xóa điểm dừng
+        // ─────────────────────────────────────────────
+        [HttpDelete("{tripId}/stops/{stopId}")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> DeleteStop(int tripId, int stopId)
+        {
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (!currentOperatorId.HasValue) return Forbid();
+
+            var trip = await _context.Trips.Include(x => x.Bus).FirstOrDefaultAsync(x => x.TripID == tripId);
+            if (trip == null) return NotFound(new { message = "Không tìm thấy chuyến xe" });
+            if (trip.Bus?.OperatorID != currentOperatorId.Value) return Forbid();
+
+            var existing = await _context.StopPoints.FirstOrDefaultAsync(x => x.StopPointID == stopId && x.TripID == tripId);
+            if (existing == null) return NotFound(new { message = "Không tìm thấy điểm dừng" });
+
+            // Nếu đã có booking dùng điểm này làm điểm đón/trả thì chỉ ẩn (IsActive=false), không xóa cứng
+            var inUse = await _context.Bookings.AnyAsync(x => x.PickupStopID == stopId || x.DropoffStopID == stopId);
+            if (inUse)
+            {
+                existing.IsActive = false;
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Điểm dừng đang có booking sử dụng nên đã được ẩn thay vì xóa" });
+            }
+
+            _context.StopPoints.Remove(existing);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã xóa điểm dừng" });
+        }
 
         // ═════════════════════════════════════════════
         // PRIVATE HELPERS
@@ -1512,6 +1687,17 @@ public async Task<IActionResult> GetLocations()
 
             if (trip.AvailableSeats > bus.Capacity)
                 return BadRequest(new { message = "AvailableSeats không được lớn hơn Capacity của xe" });
+
+            // Kiểm tra trùng giờ: xe này đã có chuyến khác chồng lấn thời gian chưa
+            var hasConflict = await _context.Trips
+                .AsNoTracking()
+                .AnyAsync(x => x.BusID == trip.BusID
+                            && x.TripID != trip.TripID
+                            && x.Status != TripStatusConstant.Cancelled
+                            && x.DepartureTime < trip.ArrivalTime
+                            && x.ArrivalTime > trip.DepartureTime);
+            if (hasConflict)
+                return BadRequest(new { message = "Xe này đã có chuyến khác trùng giờ trong khoảng thời gian này" });
 
             return null;
         }

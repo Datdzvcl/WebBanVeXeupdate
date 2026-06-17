@@ -1300,7 +1300,10 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
       const res = await tripApi.cloneTrips(cloneModal.sourceDate, cloneModal.targetDate);
       setCloneModal(null);
       setNotice({ type: "success", text: res.message || `Đã nhân bản ${res.cloned} chuyến.` });
-      await loadTrips();
+      // Chỉ bỏ filter trạng thái (nguyên nhân gây ẩn chuyến mới Scheduled),
+      // KHÔNG ép filter ngày để tránh kẹt bảng vào 1 ngày duy nhất về sau.
+      setFilters((f) => ({ ...f, status: "" }));
+      setPage(1);
     } catch (e) {
       setNotice({ type: "error", text: e.message || "Không nhân bản được chuyến." });
     } finally {
@@ -1503,6 +1506,23 @@ function TripsManager({ buses, operators, onRefresh, isOperator = false }) {
           <option value="Completed">Hoàn thành</option>
           <option value="Cancelled">Đã hủy</option>
         </select>
+        <button
+          className="btn btn-outline"
+          type="button"
+          style={{ justifySelf: "start", alignSelf: "center", width: "fit-content", whiteSpace: "nowrap" }}
+          onClick={() => {
+            setFilters({
+              departureLocation: "",
+              arrivalLocation: "",
+              departureDate: "",
+              operatorId: "",
+              status: "",
+            });
+            setPage(1);
+          }}
+        >
+          Xóa lọc
+        </button>
       </div>
       {loading && <div className="admin-loading">Đang tải dữ liệu...</div>}
       <TripsTable
@@ -1718,6 +1738,83 @@ export function AdminTripDetail({ tripId }) {
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Quản lý điểm dừng/đón/trả ─────────────────────────────────
+  const EMPTY_STOP = { stopName: "", stopAddress: "", stopType: 1, arrivalOffset: "" };
+  const [stops, setStops] = useState([]);
+  const [stopsLoading, setStopsLoading] = useState(false);
+  const [stopForm, setStopForm] = useState(null); // null = ẩn form, object = đang thêm/sửa
+  const [stopNotice, setStopNotice] = useState(null);
+
+  const loadStops = async () => {
+    setStopsLoading(true);
+    try {
+      const data = await tripApi.getStops(tripId);
+      setStops(data?.items || data?.Items || []);
+    } catch {
+      setStops([]);
+    } finally {
+      setStopsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStops();
+  }, [tripId]);
+
+  const openAddStop = () => { setStopForm({ ...EMPTY_STOP }); setStopNotice(null); };
+  const openEditStop = (s) => {
+    setStopForm({
+      stopPointID: pick(s, ["stopPointID", "StopPointID"]),
+      stopName: pick(s, ["stopName", "StopName"], ""),
+      stopAddress: pick(s, ["stopAddress", "StopAddress"], ""),
+      stopType: Number(pick(s, ["stopType", "StopType"], 1)),
+      arrivalOffset: pick(s, ["arrivalOffset", "ArrivalOffset"], "") ?? "",
+    });
+    setStopNotice(null);
+  };
+  const closeStopForm = () => setStopForm(null);
+
+  const saveStop = async (e) => {
+    e.preventDefault();
+    if (!stopForm.stopName.trim()) {
+      setStopNotice({ type: "error", text: "Vui lòng nhập tên điểm dừng." });
+      return;
+    }
+    const payload = {
+      stopName: stopForm.stopName.trim(),
+      stopAddress: stopForm.stopAddress?.trim() || null,
+      stopType: Number(stopForm.stopType),
+      stopOrder: stopForm.stopOrder || 0,
+      arrivalOffset: stopForm.arrivalOffset === "" ? null : Number(stopForm.arrivalOffset),
+    };
+    try {
+      if (stopForm.stopPointID) {
+        await tripApi.updateStop(tripId, stopForm.stopPointID, payload);
+        setStopNotice({ type: "success", text: "Đã cập nhật điểm dừng." });
+      } else {
+        await tripApi.addStop(tripId, payload);
+        setStopNotice({ type: "success", text: "Đã thêm điểm dừng." });
+      }
+      setStopForm(null);
+      await loadStops();
+    } catch (err) {
+      setStopNotice({ type: "error", text: err.response?.data?.message || err.message || "Không lưu được điểm dừng." });
+    }
+  };
+
+  const deleteStop = async (stopId) => {
+    if (!confirm("Xóa điểm dừng này?")) return;
+    try {
+      const res = await tripApi.removeStop(tripId, stopId);
+      setStopNotice({ type: "success", text: res?.message || "Đã xóa điểm dừng." });
+      await loadStops();
+    } catch (err) {
+      setStopNotice({ type: "error", text: err.response?.data?.message || err.message || "Không xóa được điểm dừng." });
+    }
+  };
+
+  const stopTypeLabel = (t) => ({ 1: "Đón", 2: "Trả", 3: "Đón & Trả" }[Number(t)] || "—");
+
   useEffect(() => {
     const loadTrip = async () => {
       setLoading(true);
@@ -1882,6 +1979,102 @@ export function AdminTripDetail({ tripId }) {
             </b>
           </div>
         </div>
+      </section>
+
+      <section className="admin-card table-card">
+        <div className="admin-section-head">
+          <h3>Điểm đón / trả / dừng</h3>
+          <button className="btn btn-primary" type="button" onClick={openAddStop}>
+            <i className="fa-solid fa-plus" /> Thêm điểm dừng
+          </button>
+        </div>
+
+        {stopNotice && <AdminNotice type={stopNotice.type}>{stopNotice.text}</AdminNotice>}
+
+        {stopForm && (
+          <AdminFormModal
+            title={stopForm.stopPointID ? "Sửa điểm dừng" : "Thêm điểm dừng"}
+            onClose={closeStopForm}
+          >
+            <form className="admin-form-grid" onSubmit={saveStop}>
+              <input
+                type="text"
+                value={stopForm.stopName}
+                onChange={(e) => setStopForm({ ...stopForm, stopName: e.target.value })}
+                placeholder="Tên điểm dừng (VD: Bến xe Hà Nội)"
+                required
+              />
+              <input
+                type="text"
+                value={stopForm.stopAddress || ""}
+                onChange={(e) => setStopForm({ ...stopForm, stopAddress: e.target.value })}
+                placeholder="Địa chỉ cụ thể"
+              />
+              <select
+                value={stopForm.stopType}
+                onChange={(e) => setStopForm({ ...stopForm, stopType: Number(e.target.value) })}
+              >
+                <option value={1}>Điểm đón</option>
+                <option value={2}>Điểm trả</option>
+                <option value={3}>Đón & Trả</option>
+              </select>
+              <input
+                type="number"
+                min="0"
+                value={stopForm.arrivalOffset}
+                onChange={(e) => setStopForm({ ...stopForm, arrivalOffset: e.target.value })}
+                placeholder="Số phút tính từ giờ khởi hành"
+              />
+              <div className="admin-form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {stopForm.stopPointID ? "Cập nhật" : "Lưu điểm dừng"}
+                </button>
+                <button className="btn btn-outline" type="button" onClick={closeStopForm}>
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </AdminFormModal>
+        )}
+
+        {stopsLoading && <div className="admin-loading">Đang tải điểm dừng...</div>}
+        {!stopsLoading && stops.length === 0 && (
+          <div className="empty-cell">Chưa có điểm dừng nào.</div>
+        )}
+        {stops.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Thứ tự</th>
+                  <th>Tên điểm</th>
+                  <th>Địa chỉ</th>
+                  <th>Loại</th>
+                  <th>Phút từ giờ đi</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stops.map((s) => {
+                  const sid = pick(s, ["stopPointID", "StopPointID"]);
+                  return (
+                    <tr key={sid}>
+                      <td>{pick(s, ["stopOrder", "StopOrder"], 0)}</td>
+                      <td><b>{pick(s, ["stopName", "StopName"])}</b></td>
+                      <td>{pick(s, ["stopAddress", "StopAddress"], "—")}</td>
+                      <td><span className="badge">{stopTypeLabel(pick(s, ["stopType", "StopType"]))}</span></td>
+                      <td>{pick(s, ["arrivalOffset", "ArrivalOffset"], "—")}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <button className="btn btn-outline btn-xs" onClick={() => openEditStop(s)}>Sửa</button>{" "}
+                        <button className="btn btn-danger btn-xs" onClick={() => deleteStop(sid)}>Xóa</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="admin-card table-card admin-trip-bookings">

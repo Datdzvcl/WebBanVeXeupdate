@@ -3611,6 +3611,88 @@ a:hover,
   font-size: 0.88rem;
 }
 
+.stop-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stop-estimated-time {
+  color: #16a34a;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.stop-list-outer {
+  display: grid;
+  gap: 8px;
+}
+
+.stop-list-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.81rem;
+  font-weight: 700;
+  color: #2563eb;
+  padding: 0 2px;
+}
+
+.stop-list-wrapper {
+  position: relative;
+}
+
+.stop-list-scroll {
+  max-height: 268px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #bfdbfe #f0f7ff;
+}
+
+.stop-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.stop-list-scroll::-webkit-scrollbar-track {
+  background: #f0f7ff;
+  border-radius: 6px;
+}
+
+.stop-list-scroll::-webkit-scrollbar-thumb {
+  background: #bfdbfe;
+  border-radius: 6px;
+}
+
+.stop-list-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 10px;
+  height: 68px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.94));
+  pointer-events: none;
+  border-radius: 0 0 10px 10px;
+}
+
+.stop-scroll-hint {
+  margin: 0;
+  font-size: 0.77rem;
+  color: #60718a;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  animation: stop-hint-bounce 1.8s ease-in-out infinite;
+}
+
+@keyframes stop-hint-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.65; }
+  50% { transform: translateY(3px); opacity: 1; }
+}
+
 .pickup-summary {
   position: sticky;
   top: 96px;
