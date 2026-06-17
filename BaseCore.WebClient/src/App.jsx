@@ -24,8 +24,6 @@ import AdminRoute from './routes/AdminRoute';
 import OperatorRoute from './routes/OperatorRoute';
 import OrderHistory from './pages/OrderHistory';
 
-const HOLD_STORAGE_KEY = 'currentSeatHold';
-
 // Component hiển thị thông báo giữ chỗ toàn cục
 function HoldSeatNotification() {
   const [holdInfo, setHoldInfo] = useState(null);
@@ -34,19 +32,17 @@ function HoldSeatNotification() {
 
   const loadHold = useCallback(() => {
     try {
-      const raw = localStorage.getItem(HOLD_STORAGE_KEY);
+      const raw = localStorage.getItem('holdSeat');
       if (!raw) { setHoldInfo(null); setVisible(false); return; }
       const data = JSON.parse(raw);
-      // currentSeatHold dùng field holdExpiresAt
-      const expiresAtMs = data.holdExpiresAt ? new Date(data.holdExpiresAt).getTime() : 0;
-      const remaining = Math.ceil((expiresAtMs - Date.now()) / 1000);
+      const remaining = Math.ceil((data.expireAt - Date.now()) / 1000);
       if (remaining <= 0) {
-        localStorage.removeItem(HOLD_STORAGE_KEY);
+        localStorage.removeItem('holdSeat');
         setHoldInfo(null);
         setVisible(false);
         return;
       }
-      setHoldInfo({ ...data, expiresAtMs });
+      setHoldInfo(data);
       setSecondsLeft(remaining);
       setVisible(true);
     } catch {
@@ -66,9 +62,9 @@ function HoldSeatNotification() {
   useEffect(() => {
     if (!holdInfo) return;
     const interval = setInterval(() => {
-      const remaining = Math.ceil((holdInfo.expiresAtMs - Date.now()) / 1000);
+      const remaining = Math.ceil((holdInfo.expireAt - Date.now()) / 1000);
       if (remaining <= 0) {
-        localStorage.removeItem(HOLD_STORAGE_KEY);
+        localStorage.removeItem('holdSeat');
         setHoldInfo(null);
         setVisible(false);
         clearInterval(interval);
@@ -82,7 +78,7 @@ function HoldSeatNotification() {
   const handleCancel = (e) => {
     e.stopPropagation();
     if (window.confirm('Bạn có chắc muốn hủy giữ chỗ này không?')) {
-      localStorage.removeItem(HOLD_STORAGE_KEY);
+      localStorage.removeItem('holdSeat');
       setHoldInfo(null);
       setVisible(false);
       window.dispatchEvent(new Event('holdSeatUpdated'));
@@ -90,8 +86,8 @@ function HoldSeatNotification() {
   };
 
   const handleClick = () => {
-    if (holdInfo?.tripId) {
-      window.location.href = `/trips/${holdInfo.tripId}/seats`;
+    if (holdInfo) {
+      window.location.href = `/payment?bookingId=${holdInfo.bookingId}`;
     }
   };
 
@@ -101,19 +97,18 @@ function HoldSeatNotification() {
   const secs = secondsLeft % 60;
   const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   const urgency = secondsLeft <= 60 ? 'urgent' : secondsLeft <= 180 ? 'warning' : '';
-  const seatCount = holdInfo.seatLabels?.length ?? 0;
 
   return (
-    <div className={`hold-seat-notification ${urgency}`} onClick={handleClick} title="Bấm để tiếp tục chọn ghế">
+    <div className={`hold-seat-notification ${urgency}`} onClick={handleClick} title="Bấm để thanh toán">
       <div className="hold-notif-icon">
         <i className="fa-solid fa-clock" />
       </div>
       <div className="hold-notif-body">
         <div className="hold-notif-title">
-          <i className="fa-solid fa-couch" /> Đang giữ {seatCount} ghế
+          <i className="fa-solid fa-couch" /> Đang giữ chỗ #{holdInfo.bookingId}
         </div>
         <div className="hold-notif-meta">
-          {holdInfo.seatLabels?.join(', ') || ''}
+          {holdInfo.seatCount} ghế · {holdInfo.amount ? formatVND(holdInfo.amount) : ''}
         </div>
         <div className={`hold-notif-countdown ${urgency}`}>
           Hết hạn sau <span className="hold-countdown-time">{timeStr}</span>
@@ -158,7 +153,7 @@ export default function App() {
         <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/operator/*" element={<OperatorRoute><AdminPage /></OperatorRoute>} />
-        <Route path="/order-history" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
+        <Route path="/order-history" element={<OrderHistory />} />
       </Routes>
     </BrowserRouter>
   );

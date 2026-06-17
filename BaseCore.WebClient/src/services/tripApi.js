@@ -50,4 +50,20 @@ export const tripApi = {
     const response = await apiClient.post('/api/trips/clone', { sourceDate, targetDate });
     return response.data;
   },
+
+  // ── Quản lý điểm dừng/đón/trả của 1 chuyến ──────────────
+  async addStop(tripId, payload) {
+    const response = await apiClient.post(`/api/trips/${tripId}/stops`, payload);
+    return response.data;
+  },
+
+  async updateStop(tripId, stopId, payload) {
+    const response = await apiClient.put(`/api/trips/${tripId}/stops/${stopId}`, payload);
+    return response.data;
+  },
+
+  async removeStop(tripId, stopId) {
+    const response = await apiClient.delete(`/api/trips/${tripId}/stops/${stopId}`);
+    return response.data;
+  },
 };
