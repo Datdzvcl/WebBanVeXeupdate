@@ -154,9 +154,11 @@ namespace BaseCore.APIService.Controllers
         [HttpGet]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetAll(
+            [FromQuery] string? keyword,
             [FromQuery] string? name,
             [FromQuery] string? phone,
             [FromQuery] string? email,
+            [FromQuery] bool? isActive,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -164,6 +166,18 @@ namespace BaseCore.APIService.Controllers
             pageSize = Math.Clamp(pageSize, 1, 100);
 
             var query = _context.Operators.AsNoTracking().AsQueryable();
+
+            if (isActive.HasValue)
+                query = query.Where(x => x.IsActive == isActive.Value);
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var kw = keyword.Trim();
+                query = query.Where(x =>
+                    EF.Functions.Like(x.Name, $"%{kw}%") ||
+                    EF.Functions.Like(x.ContactPhone, $"%{kw}%") ||
+                    (x.Email != null && EF.Functions.Like(x.Email, $"%{kw}%")));
+            }
 
             if (!string.IsNullOrWhiteSpace(name))
                 query = query.Where(x => EF.Functions.Like(x.Name, $"%{name.Trim()}%"));
@@ -191,6 +205,42 @@ namespace BaseCore.APIService.Controllers
         {
             var item = await _context.Operators.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.OperatorID == id);
+            return item == null ? NotFound() : Ok(item);
+        }
+
+        // Public: danh sách nhà xe cho filter tìm kiếm
+        [HttpGet("public")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPublicList()
+        {
+            var items = await _context.Operators
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new {
+                    x.OperatorID,
+                    x.Name,
+                    averageRating = _context.Reviews
+                        .Where(r => r.Booking != null && r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.OperatorID)
+                        .Select(r => (double?)r.Rating).Average() ?? 0,
+                    reviewCount = _context.Reviews
+                        .Count(r => r.Booking != null && r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.OperatorID)
+                })
+                .ToListAsync();
+            return Ok(items);
+        }
+
+        // Public: xem hồ sơ nhà xe (không cần đăng nhập)
+        [HttpGet("{id:int}/profile")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetProfile(int id)
+        {
+            var item = await _context.Operators.AsNoTracking()
+                .Where(x => x.OperatorID == id && x.IsActive)
+                .Select(x => new {
+                    x.OperatorID, x.Name, x.Description, x.ContactPhone, x.Email
+                })
+                .FirstOrDefaultAsync();
             return item == null ? NotFound() : Ok(item);
         }
 
@@ -225,6 +275,43 @@ namespace BaseCore.APIService.Controllers
             return Ok();
         }
 
+        // Duyệt nhà xe: IsActive = true, cấp role Operator cho user liên kết
+        [HttpPut("{id:int}/approve")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Approve(int id)
+        {
+            var op = await _context.Operators.FindAsync(id);
+            if (op == null) return NotFound();
+
+            op.IsActive = true;
+            op.RejectReason = null;
+
+            // Cấp role Operator cho tất cả user liên kết với nhà xe này
+            var linkedUsers = await _context.Users
+                .Where(u => u.OperatorID == id)
+                .ToListAsync();
+            foreach (var u in linkedUsers)
+                u.Role = RoleConstant.Operator;
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã duyệt nhà xe", operatorID = id });
+        }
+
+        // Từ chối nhà xe: lưu lý do, giữ IsActive = false
+        [HttpPut("{id:int}/reject")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Reject(int id, [FromBody] RejectOperatorRequest request)
+        {
+            var op = await _context.Operators.FindAsync(id);
+            if (op == null) return NotFound();
+
+            op.IsActive = false;
+            op.RejectReason = request.Reason?.Trim();
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã từ chối nhà xe", operatorID = id, reason = op.RejectReason });
+        }
+
         // ==================== OPERATOR APIs ====================
 
         // Nhà xe xem thông tin của mình
@@ -257,6 +344,7 @@ namespace BaseCore.APIService.Controllers
             item.Description = request.Description ?? item.Description;
             item.ContactPhone = request.ContactPhone ?? item.ContactPhone;
             item.Email = request.Email ?? item.Email;
+            if (request.LogoUrl != null) item.LogoUrl = request.LogoUrl;
 
             await _context.SaveChangesAsync();
             return Ok(item);
@@ -379,6 +467,156 @@ namespace BaseCore.APIService.Controllers
                 averageRating = totalCount == 0 ? 0 :
                     Math.Round(await query.AverageAsync(x => (double)x.Rating), 1) });
         }
+
+        // Lấy danh sách tài xế thuộc nhà xe
+        [HttpGet("me/drivers")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> GetMyDrivers()
+        {
+            var operatorId = await GetCurrentOperatorId();
+            if (operatorId == null)
+                return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
+
+            var drivers = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.OperatorID == operatorId && u.Role == BaseCore.Common.RoleConstant.Driver)
+                .Select(u => new
+                {
+                    u.UserID,
+                    u.FullName,
+                    u.Phone,
+                    u.Email
+                })
+                .ToListAsync();
+
+            return Ok(drivers);
+        }
+
+        // Danh sách sự cố chuyến xe thuộc nhà xe
+        [HttpGet("me/incidents")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> GetMyIncidents(
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var operatorId = await GetCurrentOperatorId();
+            if (operatorId == null)
+                return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
+
+            page     = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = _context.TripIncidents
+                .AsNoTracking()
+                .Include(i => i.Trip).ThenInclude(t => t!.Bus)
+                .Include(i => i.Driver)
+                .Where(i => i.Trip != null && i.Trip.Bus != null && i.Trip.Bus.OperatorID == operatorId);
+
+            if (status == "pending")
+                query = query.Where(i => !i.IsResolved);
+            else if (status == "resolved")
+                query = query.Where(i => i.IsResolved);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(i => i.ReportedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(i => new
+                {
+                    i.IncidentID,
+                    i.TripID,
+                    departureLocation = i.Trip != null ? i.Trip.DepartureLocation : null,
+                    arrivalLocation   = i.Trip != null ? i.Trip.ArrivalLocation   : null,
+                    departureTime     = i.Trip != null ? i.Trip.DepartureTime      : (DateTime?)null,
+                    driverName        = i.Driver != null ? i.Driver.FullName : null,
+                    i.IncidentType,
+                    i.Description,
+                    i.ReportedAt,
+                    i.IsResolved,
+                    i.ImageUrls,
+                    i.Severity
+                })
+                .ToListAsync();
+
+            return Ok(new { total, page, pageSize, items });
+        }
+
+        // Đánh dấu sự cố đã xử lý
+        [HttpPut("me/incidents/{incidentId:int}/resolve")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> ResolveIncident(int incidentId)
+        {
+            var operatorId = await GetCurrentOperatorId();
+            if (operatorId == null)
+                return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
+
+            var incident = await _context.TripIncidents
+                .Include(i => i.Trip).ThenInclude(t => t!.Bus)
+                .FirstOrDefaultAsync(i => i.IncidentID == incidentId
+                                       && i.Trip != null
+                                       && i.Trip.Bus != null
+                                       && i.Trip.Bus.OperatorID == operatorId);
+
+            if (incident == null)
+                return NotFound(new { message = "Không tìm thấy sự cố" });
+
+            incident.IsResolved = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Đã đánh dấu xử lý", incidentID = incident.IncidentID });
+        }
+
+        // Gán / bỏ tài xế cho chuyến xe
+        [HttpPut("me/trips/{tripId:int}/assign-driver")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> AssignDriver(int tripId, [FromBody] AssignDriverRequest request)
+        {
+            var operatorId = await GetCurrentOperatorId();
+            if (operatorId == null)
+                return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
+
+            var trip = await _context.Trips
+                .Include(t => t.Bus)
+                .FirstOrDefaultAsync(t => t.TripID == tripId && t.Bus!.OperatorID == operatorId);
+
+            if (trip == null)
+                return NotFound(new { message = "Không tìm thấy chuyến xe" });
+
+            if (request.DriverID.HasValue)
+            {
+                var driverExists = await _context.Users
+                    .AnyAsync(u => u.UserID == request.DriverID.Value &&
+                                   u.OperatorID == operatorId &&
+                                   u.Role == BaseCore.Common.RoleConstant.Driver);
+                if (!driverExists)
+                    return BadRequest(new { message = "Tài xế không thuộc nhà xe này" });
+
+                // Kiểm tra lịch tài xế có trùng không (buffer 4 giờ nghỉ ngơi)
+                var driverBuffer = TimeSpan.FromHours(12);
+                var driverWindowStart = trip.DepartureTime.Subtract(driverBuffer);
+                var driverWindowEnd   = trip.ArrivalTime.Add(driverBuffer);
+                var driverConflict = await _context.Trips
+                    .AsNoTracking()
+                    .AnyAsync(x => x.DriverID == request.DriverID.Value
+                                && x.TripID != tripId
+                                && x.Status != TripStatusConstant.Cancelled
+                                && x.DepartureTime < driverWindowEnd
+                                && driverWindowStart < x.ArrivalTime);
+                if (driverConflict)
+                    return BadRequest(new { message = "Tài xế này đã có lịch lái trong khoảng thời gian này hoặc chưa đủ thời gian nghỉ ngơi (tối thiểu 12 giờ giữa các chuyến)." });
+
+                trip.DriverID = request.DriverID.Value;
+            }
+            else
+            {
+                trip.DriverID = null;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Cập nhật tài xế thành công", tripID = tripId, driverID = trip.DriverID });
+        }
     }
 
     public class OperatorUpdateRequest
@@ -387,5 +625,16 @@ namespace BaseCore.APIService.Controllers
         public string? Description { get; set; }
         public string? ContactPhone { get; set; }
         public string? Email { get; set; }
+        public string? LogoUrl { get; set; }
+    }
+
+    public class AssignDriverRequest
+    {
+        public int? DriverID { get; set; }
+    }
+
+    public class RejectOperatorRequest
+    {
+        public string? Reason { get; set; }
     }
 }

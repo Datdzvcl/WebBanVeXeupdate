@@ -113,4 +113,9 @@ export const bookingApi = {
     });
     return response.data;
   },
+
+  async approveRefund(id, payload) {
+    const response = await apiClient.put(`/api/bookings/${id}/approve-refund`, payload);
+    return response.data;
+  },
 };

@@ -274,7 +274,7 @@ namespace BaseCore.APIService.Controllers
                 .AsNoTracking()
                 .Include(x => x.User)
                 .Include(x => x.Booking).ThenInclude(x => x.Trip).ThenInclude(x => x.Bus)
-                .Where(x => x.Booking.Trip.Bus.OperatorID == operatorId)
+                .Where(x => x.Booking.Trip.Bus.OperatorID == operatorId && !x.IsHidden)
                 .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new
                 {
@@ -285,7 +285,10 @@ namespace BaseCore.APIService.Controllers
                     x.Rating,
                     x.Comment,
                     x.CreatedAt,
-                    userName = x.User == null ? null : x.User.FullName
+                    x.ReplyContent,
+                    x.RepliedAt,
+                    userName = x.User == null ? null : x.User.FullName,
+                    route = x.Booking.Trip == null ? null : $"{x.Booking.Trip.DepartureLocation} → {x.Booking.Trip.ArrivalLocation}"
                 })
                 .ToListAsync();
             return Ok(new
@@ -378,6 +381,9 @@ namespace BaseCore.APIService.Controllers
                 var currentUserId = GetCurrentUserId();
                 if (!currentUserId.HasValue || review.UserID != currentUserId.Value)
                     return Forbid();
+
+                if (review.EditedAt != null)
+                    return BadRequest(new { message = "Đánh giá chỉ được chỉnh sửa 1 lần." });
             }
 
             if (request.Rating < 1 || request.Rating > 5)
@@ -385,6 +391,7 @@ namespace BaseCore.APIService.Controllers
 
             review.Rating = request.Rating;
             review.Comment = NormalizeComment(request.Comment);
+            review.EditedAt = DateTime.Now;
             await _context.SaveChangesAsync();
 
            var updated = await _context.Reviews
@@ -466,10 +473,13 @@ namespace BaseCore.APIService.Controllers
                 review.Rating,
                 review.Comment,
                 review.CreatedAt,
+                review.EditedAt,
+                review.ReplyContent,
+                review.RepliedAt,
                 userName = review.User == null ? null : review.User.FullName,
                 customerName = review.Booking == null ? null : review.Booking.CustomerName,
                 operatorName = review.Booking?.Trip?.Bus?.Operator?.Name,
-                route = review.Booking?.Trip == null ? null 
+                route = review.Booking?.Trip == null ? null
                     : $"{review.Booking.Trip.DepartureLocation} - {review.Booking.Trip.ArrivalLocation}"
             };
         }
@@ -587,6 +597,17 @@ public async Task<IActionResult> Reply(int id, [FromBody] ReplyRequest request)
 
     review.ReplyContent = request.ReplyContent?.Trim();
     review.RepliedAt    = DateTime.Now;
+
+    // Gửi thông báo cho khách hàng
+    var bookingId = review.Booking?.BookingID;
+    NotificationsController.AddNotification(
+        _context,
+        review.UserID,
+        "Nhà xe đã phản hồi đánh giá của bạn",
+        $"Đơn #{bookingId}: \"{review.ReplyContent?.Substring(0, Math.Min(review.ReplyContent?.Length ?? 0, 80))}\"",
+        1,
+        $"/my-tickets/{bookingId}");
+
     await _context.SaveChangesAsync();
 
     return Ok(new { message = "Đã gửi phản hồi.", review.ReplyContent, review.RepliedAt });

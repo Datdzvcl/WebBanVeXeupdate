@@ -73,6 +73,7 @@ export default function SeatSelection() {
   const [sessionId] = useState(() => ensureSessionId());
   const [trip, setTrip] = useState(null);
   const [seats, setSeats] = useState([]);
+  const [layout, setLayout] = useState(null); // parsed SeatCell[] from API
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [holdExpiresAt, setHoldExpiresAt] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -83,6 +84,10 @@ export default function SeatSelection() {
   const loadSeats = useCallback(async () => {
     const response = await seatApi.getByTrip(tripId, { sessionId });
     const nextSeats = response?.seats || response?.Seats || [];
+    const rawLayout = response?.layout || response?.Layout || null;
+    try {
+      setLayout(rawLayout ? JSON.parse(rawLayout) : null);
+    } catch { setLayout(null); }
     const myHeldSeats = nextSeats.filter((seat) => getSeatStatus(seat) === 'HoldingByMe');
     const myHoldExpiresAt = myHeldSeats
       .map(getSeatHoldExpiresAt)
@@ -162,11 +167,34 @@ export default function SeatSelection() {
   const canContinue = selectedSeats.length > 0 && holdExpiresAt && remainingMs > 0;
 
   const floors = useMemo(() => {
+    // Custom layout từ nhà xe
+    if (Array.isArray(layout) && layout.length > 0) {
+      const floorNums = [...new Set(layout.map(c => c.floor ?? 1))].sort((a, b) => a - b);
+      return floorNums.map(f => {
+        const floorCells = layout.filter(c => (c.floor ?? 1) === f);
+        const rows = Math.max(...floorCells.map(c => c.row ?? 0)) + 1;
+        const cols = Math.max(...floorCells.map(c => c.col ?? 0)) + 1;
+        const grid = Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
+            const cell = floorCells.find(fc => fc.row === r && fc.col === c);
+            if (!cell || cell.type !== 'seat' || !cell.label) return { type: cell?.type || 'empty', label: null, status: null };
+            const seat = seatByLabel.get(cell.label);
+            return {
+              type: 'seat', label: cell.label,
+              status: seat ? getSeatStatus(seat) : 'Available',
+              holdExpiresAt: seat ? getSeatHoldExpiresAt(seat) : null,
+            };
+          })
+        );
+        return { name: floorNums.length > 1 ? `Tầng ${f}` : 'Sơ đồ ghế', grid, cols };
+      });
+    }
+
+    // Fallback: lưới mặc định
     const allSeats = seats.map((seat) => ({
       label: getSeatLabel(seat),
       status: getSeatStatus(seat),
     }));
-
     if ((trip?.capacity || allSeats.length) > 40) {
       const half = Math.ceil(allSeats.length / 2);
       return [
@@ -174,9 +202,8 @@ export default function SeatSelection() {
         { name: 'Tầng 2', seats: allSeats.slice(half) },
       ];
     }
-
     return [{ name: 'Sơ đồ ghế', seats: allSeats }];
-  }, [seats, trip?.capacity]);
+  }, [layout, seats, seatByLabel, trip?.capacity]);
 
   const holdSeat = async (seatLabel) => {
     setBusySeat(seatLabel);
@@ -341,36 +368,72 @@ export default function SeatSelection() {
           </div>
 
           <div className={`bus-floor-wrapper ${floors.length > 1 ? 'two-floor' : ''}`}>
-            {floors.map((floor) => (
-              <div className="bus-floor" key={floor.name}>
-                <div className="bus-floor-head">
-                  <strong>{floor.name}</strong>
-                  <span>{floor.seats.length} ghế</span>
+            {floors.map((floor) => {
+              const seatCount = floor.grid
+                ? floor.grid.flat().filter(c => c.type === 'seat').length
+                : floor.seats?.length ?? 0;
+              return (
+                <div className="bus-floor" key={floor.name}>
+                  <div className="bus-floor-head">
+                    <strong>{floor.name}</strong>
+                    <span>{seatCount} ghế</span>
+                  </div>
+                  <div className="driver-row">
+                    <i className="fa-solid fa-steering-wheel" />
+                    <span>Tài xế</span>
+                  </div>
+                  {floor.grid ? (
+                    // Custom layout — render theo grid từ nhà xe
+                    <div style={{
+                      display: 'inline-grid',
+                      gridTemplateColumns: `repeat(${floor.cols}, 44px)`,
+                      gap: 8,
+                    }}>
+                      {floor.grid.flat().map((cell, idx) => {
+                        if (cell.type === 'aisle') return (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '1.1rem' }}>↕</div>
+                        );
+                        if (cell.type === 'empty' || !cell.label) return <div key={idx} />;
+                        const isSelected = selectedSeats.includes(cell.label) || cell.status === 'HoldingByMe';
+                        const disabled = cell.status === 'Booked' || cell.status === 'HoldingByOther' || busySeat === cell.label;
+                        return (
+                          <button
+                            type="button"
+                            key={idx}
+                            disabled={disabled}
+                            onClick={() => toggleSeat(cell.label)}
+                            className={`seat-v2 status-${(cell.status || 'available').toLowerCase()} ${isSelected ? 'selected' : ''}`}
+                            title={`${cell.label} - ${labelSeatStatus(cell.status || 'Available')}`}
+                          >
+                            {busySeat === cell.label ? <i className="fa-solid fa-spinner fa-spin" /> : cell.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    // Lưới mặc định
+                    <div className="seat-grid-v2">
+                      {floor.seats.map((seat) => {
+                        const isSelected = selectedSeats.includes(seat.label) || seat.status === 'HoldingByMe';
+                        const disabled = seat.status === 'Booked' || seat.status === 'HoldingByOther' || busySeat === seat.label;
+                        return (
+                          <button
+                            type="button"
+                            key={seat.label}
+                            disabled={disabled}
+                            onClick={() => toggleSeat(seat.label)}
+                            className={`seat-v2 status-${seat.status.toLowerCase()} ${isSelected ? 'selected' : ''}`}
+                            title={`${seat.label} - ${labelSeatStatus(seat.status)}`}
+                          >
+                            {busySeat === seat.label ? <i className="fa-solid fa-spinner fa-spin" /> : seat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="driver-row">
-                  <i className="fa-solid fa-steering-wheel" />
-                  <span>Tài xế</span>
-                </div>
-                <div className="seat-grid-v2">
-                  {floor.seats.map((seat) => {
-                    const isSelected = selectedSeats.includes(seat.label) || seat.status === 'HoldingByMe';
-                    const disabled = seat.status === 'Booked' || seat.status === 'HoldingByOther' || busySeat === seat.label;
-                    return (
-                      <button
-                        type="button"
-                        key={seat.label}
-                        disabled={disabled}
-                        onClick={() => toggleSeat(seat.label)}
-                        className={`seat-v2 status-${seat.status.toLowerCase()} ${isSelected ? 'selected' : ''}`}
-                        title={`${seat.label} - ${labelSeatStatus(seat.status)}`}
-                      >
-                        {busySeat === seat.label ? <i className="fa-solid fa-spinner fa-spin" /> : seat.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

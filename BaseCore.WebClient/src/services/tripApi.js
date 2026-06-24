@@ -46,8 +46,18 @@ export const tripApi = {
     return response.data;
   },
 
+  async cancelTrip(id) {
+    const response = await apiClient.post(`/api/trips/${id}/cancel`);
+    return response.data;
+  },
+
   async cloneTrips(sourceDate, targetDate) {
     const response = await apiClient.post('/api/trips/clone', { sourceDate, targetDate });
+    return response.data;
+  },
+
+  async cloneWeek(sourceWeekStart, targetWeekStart) {
+    const response = await apiClient.post('/api/trips/clone-week', { sourceWeekStart, targetWeekStart });
     return response.data;
   },
 

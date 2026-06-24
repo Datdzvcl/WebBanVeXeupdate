@@ -28,6 +28,8 @@ export default function Login() {
         navigate('/admin/dashboard', { replace: true });
       } else if (role === 1) {
         navigate('/operator/dashboard', { replace: true });
+      } else if (role === 3) {
+        navigate('/driver', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
@@ -98,6 +100,9 @@ export default function Login() {
                 : 'Đăng nhập'}
             </button>
           </form>
+          <p className="auth-bottom" style={{ marginBottom: 6 }}>
+            <Link to="/forgot-password">Quên mật khẩu?</Link>
+          </p>
           <p className="auth-bottom">Chưa có tài khoản? <Link to="/register">Đăng ký ngay</Link></p>
         </div>
       </div>

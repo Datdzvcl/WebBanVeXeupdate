@@ -5,6 +5,7 @@ using BaseCore.Repository;
 using BaseCore.Entities;
 using System.Data;
 using System.Security.Claims;
+using System.Text.Json;
 using BaseCore.Common;
 
 namespace BaseCore.APIService.Controllers
@@ -36,7 +37,8 @@ namespace BaseCore.APIService.Controllers
                 {
                     x.TripID,
                     x.AvailableSeats,
-                    Capacity = x.Bus != null ? x.Bus.Capacity : 0
+                    Capacity = x.Bus != null ? x.Bus.Capacity : 0,
+                    SeatLayout = x.Bus != null ? x.Bus.SeatLayout : null
                 })
                 .FirstOrDefaultAsync();
 
@@ -44,7 +46,12 @@ namespace BaseCore.APIService.Controllers
                 return NotFound(new { message = "Không tìm thấy chuyến xe" });
 
             var capacity = Math.Max(trip.Capacity, 0);
-            var seatLabels = GenerateSeatLabels(capacity);
+            var layoutCells = ParseSeatLayout(trip.SeatLayout);
+            var seatLabels = layoutCells != null
+                ? layoutCells.Where(c => c.Type == "seat" && !string.IsNullOrWhiteSpace(c.Label))
+                             .Select(c => c.Label!)
+                             .ToList()
+                : GenerateSeatLabels(capacity);
             var currentUserId = GetCurrentUserId();
             var now = DateTime.Now;
 
@@ -120,7 +127,8 @@ namespace BaseCore.APIService.Controllers
             {
                 tripID = trip.TripID,
                 capacity,
-                seats
+                seats,
+                layout = trip.SeatLayout
             });
         }
 
@@ -146,7 +154,12 @@ namespace BaseCore.APIService.Controllers
                 if (trip == null)
                     return NotFound(new { message = "Không tìm thấy chuyến xe" });
 
-                var validSeatLabels = GenerateSeatLabels(Math.Max(trip.Bus?.Capacity ?? 0, 0));
+                var busLayout = ParseSeatLayout(trip.Bus?.SeatLayout);
+                var validSeatLabels = busLayout != null
+                    ? busLayout.Where(c => c.Type == "seat" && !string.IsNullOrWhiteSpace(c.Label))
+                               .Select(c => c.Label!)
+                               .ToList()
+                    : GenerateSeatLabels(Math.Max(trip.Bus?.Capacity ?? 0, 0));
                 var validSeats = validSeatLabels.ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var invalidSeats = requestedSeats.Where(x => !validSeats.Contains(x)).ToList();
                 if (invalidSeats.Count > 0)
@@ -402,6 +415,26 @@ namespace BaseCore.APIService.Controllers
 
             return label;
         }
+
+        private static List<SeatCell>? ParseSeatLayout(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                return JsonSerializer.Deserialize<List<SeatCell>>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { return null; }
+        }
+    }
+
+    public class SeatCell
+    {
+        public int Floor { get; set; }
+        public int Row { get; set; }
+        public int Col { get; set; }
+        public string Type { get; set; } = "seat"; // "seat" | "aisle" | "empty"
+        public string? Label { get; set; }
     }
 
     public class SeatHoldRequest

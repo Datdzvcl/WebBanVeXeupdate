@@ -291,6 +291,7 @@ namespace BaseCore.APIService.Controllers
 
             booking.PaymentMethod = method;
             booking.BookingStatus = status;
+            booking.PaymentStatus = IsPendingMethod(method) ? PaymentStatusConstant.Pending : PaymentStatusConstant.Paid;
 
             _context.BookingStatusHistory.Add(new BookingStatusHistory
             {

@@ -8,6 +8,7 @@ namespace BaseCore.Entities
         public string Message { get; set; } = string.Empty;
         public byte Type { get; set; } = 1;
         public bool IsRead { get; set; }
+        public string? Link { get; set; }
         public DateTime? CreatedAt { get; set; }
 
         public User? User { get; set; }

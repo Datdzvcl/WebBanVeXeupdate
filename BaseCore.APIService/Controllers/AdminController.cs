@@ -147,11 +147,17 @@ namespace BaseCore.APIService.Controllers
                 ? _context.Buses.AsNoTracking().Where(x => x.OperatorID == operatorId)
                 : _context.Buses.AsNoTracking();
 
+            var scheduledTripsCount  = await tripQuery.CountAsync(x => x.Status == TripStatusConstant.Scheduled);
+            var ongoingTripsCount    = await tripQuery.CountAsync(x => x.Status == TripStatusConstant.Ongoing);
+            var completedTripsCount  = await tripQuery.CountAsync(x => x.Status == TripStatusConstant.Completed);
+            var cancelledTripsCount  = await tripQuery.CountAsync(x => x.Status == TripStatusConstant.Cancelled);
+
             return Ok(new
             {
                 totalRevenue, revenueInRange, todayRevenue, monthRevenue,
                 totalBookings, filteredBookings, totalTicketsSold, ticketsSoldInRange,
-                totalTrips = await tripQuery.CountAsync(),
+                totalTrips = scheduledTripsCount + ongoingTripsCount,
+                scheduledTripsCount, ongoingTripsCount, completedTripsCount, cancelledTripsCount,
                 totalUsers = User.IsInRole("Admin") ? await _context.Users.CountAsync() : 0,
                 totalOperators = User.IsInRole("Admin") ? await _context.Operators.CountAsync() : 0,
                 totalBuses = await busQuery.CountAsync(),
@@ -271,10 +277,13 @@ namespace BaseCore.APIService.Controllers
             var query = ApplyBookingDateRange(
                 FilterByOperator(_context.Bookings.AsNoTracking().Include(x => x.Trip).ThenInclude(x => x.Bus), operatorId),
                 from, to);
-            var statuses = await query.GroupBy(x => x.BookingStatus)
+            var bookingStatuses = await query.GroupBy(x => x.BookingStatus)
                 .Select(g => new { status = g.Key, count = g.Count() })
                 .OrderByDescending(x => x.count).ToListAsync();
-            return Ok(new { paymentStatuses = statuses, bookingStatuses = statuses });
+            var paymentStatuses = await query.GroupBy(x => x.PaymentStatus)
+                .Select(g => new { status = g.Key, count = g.Count() })
+                .OrderByDescending(x => x.count).ToListAsync();
+            return Ok(new { paymentStatuses, bookingStatuses });
         }
         // [HttpGet("trips")]
         // public async Task<IActionResult> Trips()
@@ -313,7 +322,7 @@ namespace BaseCore.APIService.Controllers
             var operatorId = await GetCurrentOperatorId();
             var now = DateTime.Now;
             var trips = await FilterTripByOperator(BuildTripQuery(), operatorId)
-                .Where(x => x.DepartureTime >= now)
+                .Where(x => x.DepartureTime >= now && x.Status != TripStatusConstant.Cancelled)
                 .OrderBy(x => x.DepartureTime).Take(10)
                 .Select(ProjectTrip()).ToListAsync();
             return Ok(trips);
@@ -638,6 +647,66 @@ namespace BaseCore.APIService.Controllers
                     ? booking.TicketSeats.Select(s => s.SeatLabel).ToList()
                     : new List<string>()
             });
+        }
+
+        // GET /api/admin/incidents — Admin xem tất cả sự cố
+        [HttpGet("incidents")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAllIncidents(
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            page     = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = _context.TripIncidents
+                .AsNoTracking()
+                .Include(i => i.Trip).ThenInclude(t => t!.Bus).ThenInclude(b => b!.Operator)
+                .Include(i => i.Driver)
+                .AsQueryable();
+
+            if (status == "pending")
+                query = query.Where(i => !i.IsResolved);
+            else if (status == "resolved")
+                query = query.Where(i => i.IsResolved);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(i => i.ReportedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(i => new
+                {
+                    i.IncidentID,
+                    i.TripID,
+                    departureLocation = i.Trip != null ? i.Trip.DepartureLocation : null,
+                    arrivalLocation   = i.Trip != null ? i.Trip.ArrivalLocation   : null,
+                    departureTime     = i.Trip != null ? i.Trip.DepartureTime      : (DateTime?)null,
+                    operatorName      = i.Trip != null && i.Trip.Bus != null && i.Trip.Bus.Operator != null ? i.Trip.Bus.Operator.Name : null,
+                    driverName        = i.Driver != null ? i.Driver.FullName : null,
+                    i.IncidentType,
+                    i.Description,
+                    i.ReportedAt,
+                    i.IsResolved,
+                    i.ImageUrls,
+                    i.Severity
+                })
+                .ToListAsync();
+
+            return Ok(new { total, page, pageSize, items });
+        }
+
+        // PUT /api/admin/incidents/{id}/resolve — Admin đánh dấu đã xử lý
+        [HttpPut("incidents/{id:int}/resolve")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ResolveIncident(int id)
+        {
+            var incident = await _context.TripIncidents.FindAsync(id);
+            if (incident == null) return NotFound();
+            incident.IsResolved = true;
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Đã đánh dấu sự cố là đã xử lý." });
         }
     }
 }

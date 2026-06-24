@@ -55,3 +55,7 @@ appsettings.Development.json
 # ignore all appsettings in projects
 **/appsettings.json
 **/appsettings.Development.json
+# Binary files
+*.dll
+*.exe
+*.pdb

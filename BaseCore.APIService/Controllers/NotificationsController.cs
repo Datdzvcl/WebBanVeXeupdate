@@ -130,7 +130,7 @@ namespace BaseCore.APIService.Controllers
             });
         }
 
-        internal static void AddNotification(MySqlDbContext context, int? userId, string title, string message, byte type = 1)
+        internal static void AddNotification(MySqlDbContext context, int? userId, string title, string message, byte type = 1, string? link = null)
         {
             if (!userId.HasValue || userId.Value <= 0)
                 return;
@@ -144,6 +144,7 @@ namespace BaseCore.APIService.Controllers
                     Message = NormalizeText(message, 500),
                     Type = NormalizeType(type),
                     IsRead = false,
+                    Link = link,
                     CreatedAt = DateTime.Now
                 });
             }

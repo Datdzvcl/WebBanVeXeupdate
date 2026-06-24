@@ -11,8 +11,8 @@ namespace BaseCore.Entities
         public string? CustomerEmail { get; set; }   // ← thêm ?
         public int TotalSeats { get; set; }
         public decimal TotalPrice { get; set; }
-        public string? PaymentMethod { get; set; }   // ← thêm ?
-        // public string? PaymentStatus { get; set; }   // ← thêm ?
+        public string? PaymentMethod { get; set; }
+        public byte PaymentStatus { get; set; }
         public byte BookingStatus { get; set; }
         public DateTime? BookingDate { get; set; }
         public int? PickupStopID { get; set; }

@@ -190,6 +190,7 @@ namespace BaseCore.Common
             {
                 RoleConstant.Admin    => "Admin",
                 RoleConstant.Operator => "Operator",
+                RoleConstant.Driver   => "Driver",
                 _                     => "Customer"
             };
 

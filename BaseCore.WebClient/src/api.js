@@ -417,25 +417,13 @@ export const formatVND = (value) =>
 //   return 'Chưa rõ';
 // };
 export const labelPaymentStatus = (status) => {
-  // Ưu tiên xử lý dạng số (BookingStatus enum từ BE)
   const num = Number(status);
   if (!isNaN(num) && status !== '' && status !== null && status !== undefined) {
     if (num === 0) return 'Chưa thanh toán';
     if (num === 1) return 'Đã thanh toán';
-    if (num === 2) return 'Đã hủy';
-    if (num === 3) return 'Hoàn thành';
-    if (num === 4) return 'Đã hoàn tiền';
-    if (num === 5) return 'Chờ duyệt hủy';
-    if (num === 6) return 'Từ chối hủy';
+    if (num === 2) return 'Chờ hoàn tiền';
+    if (num === 3) return 'Đã hoàn tiền';
   }
-
-  // Fallback: xử lý dạng string (paymentStatus cũ nếu có)
-  const str = String(status || '').toLowerCase();
-  if (str === 'paid')                            return 'Đã thanh toán';
-  if (str === 'pending')                         return 'Chưa thanh toán';
-  if (str === 'cancelled' || str === 'canceled') return 'Đã hủy';
-  if (str === 'refunded')                        return 'Đã hoàn tiền';
-
   return 'Chưa rõ';
 };
 export const labelPaymentMethod = (method) => {
@@ -449,16 +437,16 @@ export const labelPaymentMethod = (method) => {
   return method || 'Chưa rõ';
 };
 
-// BookingStatusConstant: Pending=0, Confirmed=1, Cancelled=2, Completed=3, Refunded=4, CancelRequested=5, CancelRejected=6
 export const labelBookingStatus = (status) => {
-  if (status === 0 || status === '0') return 'chờ thanh toán';
-  if (status === 1 || status === '1') return 'đã xác nhận';
+  if (status === 0 || status === '0') return 'Chờ xác nhận';
+  if (status === 1 || status === '1') return 'Đã xác nhận';
   if (status === 2 || status === '2') return 'Đã hủy';
   if (status === 3 || status === '3') return 'Hoàn thành';
-  if (status === 4 || status === '4') return 'Đã hoàn tiền';
+  if (status === 4 || status === '4') return 'Đã hoàn tiền';  // dữ liệu cũ
   if (status === 5 || status === '5') return 'Yêu cầu hủy';
   if (status === 6 || status === '6') return 'Từ chối hủy';
-  return status ?? 'Chua ro';
+  if (status === 7 || status === '7') return 'Chờ hoàn tiền';  // dữ liệu cũ
+  return 'Chưa rõ';
 };
 
 // TripStatusConstant: Scheduled=0, Ongoing=1, Completed=2, Cancelled=3
@@ -504,9 +492,13 @@ export function normalizeTrip(t) {
       ['operator', 'Operator', 'operatorName', 'OperatorName', 'busOperator', 'BusOperator', 'companyName', 'CompanyName'],
       pick(rawOperator, ['name', 'Name'])
     ),
+    licensePlate: pick(t, ['licensePlate', 'LicensePlate'], pick(rawBus, ['licensePlate', 'LicensePlate'], '')),
     busType: pick(t, ['busType', 'BusType', 'type', 'Type'], pick(rawBus, ['busType', 'BusType'])),
     price: Number(pick(t, ['price', 'Price'], 0)),
     availableSeats: Number(pick(t, ['availableSeats', 'AvailableSeats'], 0)),
+    capacity: Number(pick(t, ['capacity', 'Capacity'], pick(rawBus, ['capacity', 'Capacity'], 0))),
     status: pick(t, ['status', 'Status'], ''),
+    driverID: pick(t, ['driverID', 'DriverID']) ?? null,
+    driverName: pick(t, ['driverName', 'DriverName']) ?? null,
   };
 }

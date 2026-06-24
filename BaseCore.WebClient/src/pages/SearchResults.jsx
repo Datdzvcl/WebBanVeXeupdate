@@ -19,6 +19,16 @@ const timeRanges = [
 
 const busTypes = ['', 'Ghế ngồi', 'Giường nằm', 'Limousine'];
 
+const AMENITY_ICONS = {
+  wifi:    { icon: 'fa-wifi',         label: 'WiFi' },
+  water:   { icon: 'fa-bottle-water', label: 'Nước uống' },
+  charger: { icon: 'fa-plug',         label: 'Cổng sạc' },
+  ac:      { icon: 'fa-snowflake',    label: 'Điều hòa' },
+  usb:     { icon: 'fa-usb',          label: 'USB' },
+  blanket: { icon: 'fa-bed',          label: 'Chăn mền' },
+  tv:      { icon: 'fa-tv',           label: 'TV/Màn hình' },
+};
+
 const sortOptions = [
   { value: '', label: 'Mặc định' },
   { value: 'price_asc', label: 'Giá thấp đến cao' },
@@ -293,12 +303,16 @@ const [arrivalOptions, setArrivalOptions] = useState([]);
     departureTimeRange: searchParams.get('departureTimeRange') || '',
     arrivalTimeRange: searchParams.get('arrivalTimeRange') || '',
     operatorId: searchParams.get('operatorId') || '',
+    operatorIds: searchParams.get('operatorIds') || '',
     pickupStopId: searchParams.get('pickupStopId') || '',
     dropoffStopId: searchParams.get('dropoffStopId') || '',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
     sortBy: searchParams.get('sortBy') || '',
   });
+
+  const [operators, setOperators] = useState([]);
+  const [operatorSearch, setOperatorSearch] = useState('');
 
   const baseQuery = useMemo(() => ({
     from: searchParams.get('from') || '',
@@ -344,6 +358,13 @@ const [arrivalOptions, setArrivalOptions] = useState([]);
       setArrivalOptions([]);
     });
 }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/operators/public`)
+      .then((r) => r.json())
+      .then((data) => setOperators(Array.isArray(data) ? data : []))
+      .catch(() => setOperators([]));
+  }, []);
 
   useEffect(() => {
     setSearchForm({
@@ -447,6 +468,14 @@ useEffect(() => {
     next.set('page', '1');
     setSearchParams(next);
   };
+
+  const toggleOperator = (id) => {
+    const current = filters.operatorIds ? filters.operatorIds.split(',').map(Number).filter(Boolean) : [];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    updateFilter('operatorIds', next.join(','));
+  };
+
+  const selectedOpIds = filters.operatorIds ? filters.operatorIds.split(',').map(Number).filter(Boolean) : [];
 
   const goToPage = (nextPage) => {
     const next = new URLSearchParams(searchParams);
@@ -696,14 +725,16 @@ useEffect(() => {
                   departureTimeRange: '',
                   arrivalTimeRange: '',
                   operatorId: '',
+                  operatorIds: '',
                   pickupStopId: '',
                   dropoffStopId: '',
                   minPrice: '',
                   maxPrice: '',
                   sortBy: filters.sortBy,
                 });
+                setOperatorSearch('');
                 const next = new URLSearchParams(searchParams);
-                ['busType', 'departureTimeRange', 'arrivalTimeRange', 'operatorId', 'pickupStopId', 'dropoffStopId', 'minPrice', 'maxPrice'].forEach((key) => next.delete(key));
+                ['busType', 'departureTimeRange', 'arrivalTimeRange', 'operatorId', 'operatorIds', 'pickupStopId', 'dropoffStopId', 'minPrice', 'maxPrice'].forEach((key) => next.delete(key));
                 next.set('page', '1');
                 setSearchParams(next);
               }}
@@ -754,6 +785,53 @@ useEffect(() => {
               />
             </div>
           </div>
+
+          {operators.length > 0 && (
+            <div className="filter-control filter-operator-group">
+              <span>Nhà xe</span>
+              <div className="filter-operator-search">
+                <i className="fa-solid fa-magnifying-glass" />
+                <input
+                  type="text"
+                  placeholder="Tìm trong danh sách"
+                  value={operatorSearch}
+                  onChange={(e) => setOperatorSearch(e.target.value)}
+                />
+              </div>
+              <div className="filter-operator-list">
+                {operators
+                  .filter((op) => pick(op, ['name', 'Name'], '').toLowerCase().includes(operatorSearch.toLowerCase()))
+                  .map((op) => {
+                    const id = pick(op, ['operatorID', 'OperatorID', 'id']);
+                    const name = pick(op, ['name', 'Name'], 'Nhà xe');
+                    const rating = Number(pick(op, ['averageRating', 'AverageRating', 'rating']) || 0);
+                    const reviewCount = Number(pick(op, ['reviewCount', 'ReviewCount', 'totalReviews']) || 0);
+                    const checked = selectedOpIds.includes(Number(id));
+                    return (
+                      <label key={id} className={`filter-operator-item ${checked ? 'checked' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleOperator(Number(id))}
+                        />
+                        <span className="filter-op-info">
+                          <span className="filter-op-name">{name}</span>
+                          {rating > 0 ? (
+                            <span className="filter-op-rating">
+                              <span className="stars">{rating.toFixed(1)}</span>
+                              <i className="fa-solid fa-star" />
+                              {reviewCount > 0 && <span className="count">({reviewCount})</span>}
+                            </span>
+                          ) : (
+                            <span className="filter-op-no-rating">Chưa có đánh giá</span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </aside>
 
         <main className="search-results-main">
@@ -807,17 +885,42 @@ useEffect(() => {
                     <div className="trip-result-body">
                       <div className="trip-result-title">
                         <div>
-                          <h2>{operatorName}</h2>
+                          <h2
+                            style={{ cursor: operatorId ? 'pointer' : 'default', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                            onClick={() => operatorId && navigate(`/nha-xe/${operatorId}`)}
+                            title={operatorId ? `Xem thông tin ${operatorName}` : ''}
+                          >
+                            {operatorName}
+                            {operatorId && <i className="fa-solid fa-circle-info" style={{ fontSize: 13, color: '#93c5fd' }} />}
+                          </h2>
                           <p>{pick(trip, ['busType', 'BusType'], 'Xe khách')}</p>
+                          {(() => {
+                            const raw = pick(trip, ['amenities', 'Amenities'], '');
+                            const list = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+                            if (!list.length) return null;
+                            return (
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                                {list.map(key => {
+                                  const a = AMENITY_ICONS[key];
+                                  return a ? (
+                                    <span key={key} title={a.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: '#475569', background: '#f1f5f9', borderRadius: 12, padding: '2px 8px' }}>
+                                      <i className={`fa-solid ${a.icon}`} style={{ color: '#2563eb' }} />
+                                      {a.label}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
+                            );
+                          })()}
                           <button
                             type="button"
                             className="trip-rating-line"
                             disabled={!operatorId || reviewCount <= 0}
-                            onClick={() => openReviewModal({
-                              id: operatorId,
-                              title: `Đánh giá nhà xe ${operatorName}`,
-                              subtitle: `${averageRating.toFixed(1)} ★ | ${reviewCount} đánh giá`,
-                            })}
+                            // onClick={() => openReviewModal({
+                            //   id: operatorId,
+                            //   title: `Đánh giá nhà xe ${operatorName}`,
+                            //   subtitle: `${averageRating.toFixed(1)} ★ | ${reviewCount} đánh giá`,
+                            // })}
                           >
                             {reviewCount > 0 ? `Nhà xe ${averageRating.toFixed(1)} ★ | ${reviewCount} đánh giá` : 'Nhà xe chưa có đánh giá'}
                           </button>

@@ -104,8 +104,15 @@ export default function BookingSuccess() {
       setError('');
       try {
         const bookingIds = readSuccessBookingIds(id);
-        const loadedBookings = await Promise.all(bookingIds.map((bookingId) => bookingApi.getById(bookingId)));
-        setBookings(loadedBookings);
+        const results = await Promise.allSettled(bookingIds.map((bookingId) => bookingApi.getById(bookingId)));
+        const loadedBookings = results
+          .filter((r) => r.status === 'fulfilled' && r.value)
+          .map((r) => r.value);
+        if (loadedBookings.length === 0) {
+          setError('Không tìm thấy thông tin đơn đặt vé.');
+        } else {
+          setBookings(loadedBookings);
+        }
       } catch (err) {
         setError(err.message || 'Không thể tải chi tiết đơn.');
       } finally {

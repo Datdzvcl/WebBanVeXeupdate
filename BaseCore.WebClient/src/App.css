@@ -897,12 +897,10 @@ a {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.6);
   display: grid;
   place-items: center;
   z-index: 1000;
-  animation: fadeInDown 0.15s ease;
 }
 .modal-box {
   background: #fff;
@@ -1164,15 +1162,21 @@ a {
 }
 
 .profile-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   background: #e8f1ff;
   color: var(--primary-color);
   font-size: 1.7rem;
   flex: 0 0 auto;
+  overflow: hidden;
+  position: relative;
+}
+
+.profile-avatar:hover .avatar-overlay {
+  opacity: 1 !important;
 }
 
 .profile-header h1 {
@@ -3126,7 +3130,7 @@ a:hover,
   font-size: 0.92rem;
 }
 
-.filter-control input,
+.filter-control input:not([type="checkbox"]):not([type="radio"]),
 .filter-control select,
 .search-results-toolbar select {
   width: 100%;
@@ -3139,7 +3143,7 @@ a:hover,
   font: inherit;
 }
 
-.filter-control input:focus,
+.filter-control input:not([type="checkbox"]):not([type="radio"]):focus,
 .filter-control select:focus,
 .search-results-toolbar select:focus {
   outline: none;
@@ -3151,6 +3155,144 @@ a:hover,
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+/* ── Operator filter ── */
+.filter-operator-group {
+  border-top: 1px solid #edf2f7;
+  padding-top: 12px;
+}
+
+.filter-operator-search {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.filter-operator-search i {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.filter-operator-search input {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  background: #f8fafc;
+  outline: none;
+  box-sizing: border-box;
+  min-height: unset;
+}
+
+.filter-operator-search input:focus {
+  border-color: #2563eb;
+  background: #fff;
+}
+
+.filter-operator-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.filter-operator-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.filter-operator-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.filter-operator-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.filter-operator-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.13s;
+  user-select: none;
+}
+
+.filter-operator-item:hover {
+  background: #f1f5f9;
+}
+
+.filter-operator-item.checked {
+  background: #eff6ff;
+}
+
+.filter-operator-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-height: unset;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  accent-color: #2563eb;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.filter-op-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.filter-op-name {
+  color: #1e293b;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+}
+
+.filter-op-rating {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.76rem;
+}
+
+.filter-op-rating .stars {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.filter-op-rating .fa-star {
+  font-size: 0.68rem;
+  color: #f59e0b;
+}
+
+.filter-op-rating .count {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.filter-op-no-rating {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  font-style: italic;
 }
 
 .search-results-main {
@@ -4114,9 +4256,12 @@ a:hover,
 .payment-summary-card,
 .success-qr-card {
   position: sticky;
-  top: 96px;
+  top: 84px;
   align-self: start;
   padding: 22px;
+  height: fit-content;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
 }
 
 .payment-countdown-panel {
@@ -5126,6 +5271,16 @@ a:hover,
 .ticket-status.status-cancelled {
   background: #fff1f2;
   color: #be123c;
+}
+
+.ticket-status.status-pending-refund {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.ticket-status.status-refunded {
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .ticket-detail-hero {
@@ -6552,6 +6707,9 @@ a:hover,
   font-size: 1.15rem;
   font-weight: 900;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
@@ -7423,36 +7581,6 @@ h1, h2, h3, h4 { letter-spacing: -0.025em; }
   border-radius: 20px;
   box-shadow: 0 24px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.15);
   padding: 8px;
-}
-.home-search-widget {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: #f8fafc;
-  border-radius: 14px;
-  padding: 6px;
-}
-.home-location-picker { flex: 1; }
-.home-date-field {
-  flex: 0 0 auto;
-  min-width: 160px;
-  background: transparent;
-  border: none;
-  border-left: 1px solid #e2e8f0;
-  border-radius: 0;
-  padding: 10px 16px;
-}
-.home-search-button {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-  border: none; border-radius: 12px; color: #fff;
-  font-weight: 800; font-size: 1rem;
-  padding: 14px 28px; cursor: pointer; white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(37,99,235,0.35);
-  transition: var(--transition);
-}
-.home-search-button:hover {
-  box-shadow: 0 12px 28px rgba(37,99,235,0.45);
-  transform: translateY(-1px);
 }
 
 /* ── Home route cards upgrade ── */
@@ -8463,14 +8591,14 @@ p.eyebrow {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(15,23,42,0.65);
-  backdrop-filter: blur(6px);
+  background: rgba(15,23,42,0.82);
+  animation: none;
 }
 
 .modal-box {
   background: #fff;
   border-radius: 24px;
-  box-shadow: 0 32px 80px rgba(15,23,42,0.28);
+  box-shadow: 0 4px 20px rgba(15,23,42,0.18);
   border: 1.5px solid #e8eef7;
   width: 100%;
   overflow: hidden;

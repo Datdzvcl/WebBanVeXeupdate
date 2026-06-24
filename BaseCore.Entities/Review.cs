@@ -25,6 +25,7 @@ namespace BaseCore.Entities
         public byte Rating { get; set; }
         public string? Comment { get; set; }
         public DateTime? CreatedAt { get; set; }
+        public DateTime? EditedAt { get; set; }
         public string? ReplyContent { get; set; }
         public DateTime? RepliedAt { get; set; }
         public bool IsHidden { get; set; } = false;

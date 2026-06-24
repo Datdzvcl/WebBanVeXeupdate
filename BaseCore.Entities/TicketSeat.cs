@@ -7,6 +7,8 @@ namespace BaseCore.Entities
         public string SeatLabel { get; set; } = string.Empty;
         public string? QRCode { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool IsCheckedIn { get; set; } = false;
+        public DateTime? CheckedInAt { get; set; }
 
         public Booking? Booking { get; set; }
     }

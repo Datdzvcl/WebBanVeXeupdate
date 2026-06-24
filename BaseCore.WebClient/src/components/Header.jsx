@@ -71,6 +71,7 @@ export default function Header({ simple = false }) {
 
   const markNotificationRead = async (notification) => {
     const id = notification.notificationID || notification.NotificationID;
+    const link = notification.link || notification.Link;
     if (!id) return;
     try {
       await notificationApi.markRead(id);
@@ -78,6 +79,8 @@ export default function Header({ simple = false }) {
     } catch {
       // Keep the header usable even if notification sync fails.
     }
+    setNotificationOpen(false);
+    if (link) navigate(link);
   };
 
   const markAllNotificationsRead = async (event) => {
@@ -155,8 +158,12 @@ export default function Header({ simple = false }) {
                               className={`notification-item ${isRead ? "" : "unread"}`}
                               key={id}
                               onClick={() => markNotificationRead(item)}
+                              style={{ cursor: (item.link || item.Link) ? 'pointer' : 'default' }}
                             >
-                              <span>{item.title || item.Title}</span>
+                              <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                                {item.title || item.Title}
+                                {(item.link || item.Link) && <i className="fa-solid fa-chevron-right" style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0 }} />}
+                              </span>
                               <small>{item.message || item.Message}</small>
                             </button>
                           );

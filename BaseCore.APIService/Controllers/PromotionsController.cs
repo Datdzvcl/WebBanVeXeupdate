@@ -30,10 +30,10 @@ namespace BaseCore.APIService.Controllers
         [Authorize(Roles = "Operator")]
         public async Task<IActionResult> GetAll()
         {
-            var currentUserId = GetCurrentUserId();
+            var currentOperatorId = await GetCurrentOperatorId();
             var items = await _context.Promotions
                 .AsNoTracking()
-                .Where(x => x.UserID == currentUserId)
+                .Where(x => x.OperatorID == currentOperatorId)
                 .OrderByDescending(x => x.PromotionID)
                 .Select(x => new
                 {
@@ -110,7 +110,7 @@ namespace BaseCore.APIService.Controllers
                 return Conflict(new { message = "Ma giam gia da ton tai" });
 
             var promotion = new Promotion();
-            promotion.UserID = GetCurrentUserId();
+            promotion.OperatorID = await GetCurrentOperatorId();
             ApplyRequest(promotion, request, code);
 
             _context.Promotions.Add(promotion);
@@ -123,12 +123,12 @@ namespace BaseCore.APIService.Controllers
         [Authorize(Roles = "Operator")]
         public async Task<IActionResult> Update(int id, [FromBody] PromotionRequest request)
         {
-            var currentUserId = GetCurrentUserId();
             var promotion = await _context.Promotions.FindAsync(id);
-             if (promotion.UserID != currentUserId)
-                return Forbid();
             if (promotion == null)
                 return NotFound();
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (promotion.OperatorID != currentOperatorId)
+                return Forbid();
 
             var code = NormalizeCode(request.Code);
             if (string.IsNullOrWhiteSpace(code))
@@ -149,11 +149,11 @@ namespace BaseCore.APIService.Controllers
         public async Task<IActionResult> Disable(int id)
         {
             var promotion = await _context.Promotions.FindAsync(id);
-            var currentUserId = GetCurrentUserId();
-            if (promotion.UserID != currentUserId)
-                return Forbid();
             if (promotion == null)
                 return NotFound();
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (promotion.OperatorID != currentOperatorId)
+                return Forbid();
 
             promotion.IsActive = false;
             await _context.SaveChangesAsync();
@@ -265,7 +265,7 @@ namespace BaseCore.APIService.Controllers
             promotion.EndDate = request.EndDate;
             promotion.IsActive = request.IsActive;
             promotion.IsPublic = request.IsPublic;
-            promotion.UserID = request.IsPublic ? null : request.UserID;
+            promotion.UserID = request.IsPublic ? null : request.UserID; // khách hàng cụ thể (private promo)
         }
 
         private int? GetCurrentUserId()

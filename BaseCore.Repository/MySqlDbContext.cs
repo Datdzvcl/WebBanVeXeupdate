@@ -22,6 +22,8 @@ namespace BaseCore.Repository
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<BookingStatusHistory> BookingStatusHistory { get; set; }
         public DbSet<BusImage> BusImages { get; set; }
+        public DbSet<TripIncident> TripIncidents { get; set; }
+        public DbSet<BusStation> BusStations { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -35,6 +37,8 @@ namespace BaseCore.Repository
                 entity.Property(e => e.Description).HasMaxLength(500);
                 entity.Property(e => e.ContactPhone).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.Email).HasMaxLength(100);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.RejectReason).HasMaxLength(500);
             });
 
             modelBuilder.Entity<Bus>(entity =>
@@ -44,6 +48,8 @@ namespace BaseCore.Repository
 
                 entity.Property(e => e.LicensePlate).HasMaxLength(20).IsRequired();
                 entity.Property(e => e.BusType).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.BrandModel).HasMaxLength(100);
+                entity.Property(e => e.Description).HasMaxLength(500);
 
                 entity.HasOne(e => e.Operator)
                       .WithMany(e => e.Buses)
@@ -80,10 +86,16 @@ namespace BaseCore.Repository
                 entity.Property(e => e.ArrivalLocation).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Price).HasPrecision(18, 2);
                 entity.Property(e => e.Status).HasMaxLength(20);
+                entity.Property(e => e.DelayedDepartureTime).IsRequired(false);
 
                 entity.HasOne(e => e.Bus)
                       .WithMany(e => e.Trips)
                       .HasForeignKey(e => e.BusID)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Driver)
+                      .WithMany()
+                      .HasForeignKey(e => e.DriverID)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -114,8 +126,8 @@ namespace BaseCore.Repository
                 entity.Property(e => e.CustomerEmail).HasMaxLength(100);
                 entity.Property(e => e.TotalPrice).HasPrecision(18, 2);
                 entity.Property(e => e.PaymentMethod).HasMaxLength(20);
-            //     entity.Property(e => e.PaymentStatus).HasMaxLength(20);
-                entity.Property(e => e.BookingStatus).HasMaxLength(30);
+                entity.Property(e => e.PaymentStatus).HasDefaultValue((byte)0);
+                entity.Property(e => e.BookingStatus).HasDefaultValue((byte)0);
                 entity.Property(e => e.PickupStopID);
                 entity.Property(e => e.DropoffStopID);
                 entity.Property(e => e.CancelReason).HasMaxLength(300);
@@ -149,6 +161,7 @@ namespace BaseCore.Repository
                 entity.Property(e => e.UsedCount).HasDefaultValue(0);
                 entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsPublic).HasDefaultValue(true);
+                entity.Property(e => e.IsNewUserOnly).HasDefaultValue(false);
 
                 entity.HasIndex(e => e.Code).IsUnique();
                 entity.HasOne(e => e.User)
@@ -219,6 +232,7 @@ namespace BaseCore.Repository
                 entity.Property(e => e.Message).HasMaxLength(500).IsRequired();
                 entity.Property(e => e.Type).HasDefaultValue((byte)1);
                 entity.Property(e => e.IsRead).HasDefaultValue(false);
+                entity.Property(e => e.Link).HasMaxLength(200);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("getdate()");
 
                 entity.HasIndex(e => e.UserID);
@@ -270,6 +284,36 @@ namespace BaseCore.Repository
                       .WithMany(e => e.TicketSeats)
                       .HasForeignKey(e => e.BookingID)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TripIncident>(entity =>
+            {
+                entity.ToTable("TripIncidents");
+                entity.HasKey(e => e.IncidentID);
+
+                entity.Property(e => e.IncidentType).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(1000).IsRequired();
+                entity.Property(e => e.ReportedAt).HasDefaultValueSql("getdate()");
+
+                entity.HasOne(e => e.Trip)
+                      .WithMany(e => e.Incidents)
+                      .HasForeignKey(e => e.TripID)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Driver)
+                      .WithMany()
+                      .HasForeignKey(e => e.DriverID)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<BusStation>(entity =>
+            {
+                entity.ToTable("BusStations");
+                entity.HasKey(e => e.StationID);
+                entity.Property(e => e.Province).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.StationName).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Address).HasMaxLength(300);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
             });
 
             modelBuilder.Entity<User>(entity =>

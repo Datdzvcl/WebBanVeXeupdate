@@ -27,6 +27,32 @@ namespace BaseCore.APIService.Controllers
             return user?.OperatorID;
         }
 
+        // GET api/busimages/operator/3 - public: lấy ảnh tất cả xe của nhà xe (dùng cho trang hồ sơ nhà xe)
+        [HttpGet("operator/{operatorId:int}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetByOperator(int operatorId)
+        {
+            var images = await _context.BusImages
+                .AsNoTracking()
+                .Include(x => x.Bus)
+                .Where(x => x.Bus.OperatorID == operatorId)
+                .OrderByDescending(x => x.IsAvatar)
+                .ThenBy(x => x.BusID)
+                .ThenBy(x => x.SortOrder)
+                .Select(x => new
+                {
+                    x.ImageID,
+                    x.BusID,
+                    x.ImageURL,
+                    x.IsAvatar,
+                    x.SortOrder,
+                    x.UploadedAt
+                })
+                .ToListAsync();
+
+            return Ok(images);
+        }
+
         // GET api/busimages/bus/5  - public: lấy ảnh của xe (dùng cho trang tìm kiếm/chi tiết chuyến)
         [HttpGet("bus/{busId:int}")]
         [AllowAnonymous]

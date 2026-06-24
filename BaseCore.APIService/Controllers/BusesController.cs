@@ -146,6 +146,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BaseCore.Entities;
 using BaseCore.Repository;
+using BaseCore.Common;
 using System.Security.Claims;
 
 namespace BaseCore.APIService.Controllers
@@ -175,6 +176,9 @@ namespace BaseCore.APIService.Controllers
         public async Task<IActionResult> GetAll(
             [FromQuery] string? licensePlate,
             [FromQuery] string? busType,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
+            [FromQuery] string? tripFilter,   // "has_trip" | "no_trip"
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -188,7 +192,7 @@ namespace BaseCore.APIService.Controllers
             var query = _context.Buses
                 .AsNoTracking()
                 .Include(x => x.Operator)
-                .Where(x => x.OperatorID == operatorId.Value) // chỉ xe của mình
+                .Where(x => x.OperatorID == operatorId.Value)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(licensePlate))
@@ -197,35 +201,81 @@ namespace BaseCore.APIService.Controllers
             if (!string.IsNullOrWhiteSpace(busType))
                 query = query.Where(x => EF.Functions.Like(x.BusType, $"%{busType.Trim()}%"));
 
+            bool hasDateRange = fromDate.HasValue && toDate.HasValue;
+            if (hasDateRange)
+            {
+                var from = fromDate!.Value.Date;
+                var to   = toDate!.Value.Date.AddDays(1); // toDate inclusive
+
+                if (tripFilter == "has_trip")
+                    query = query.Where(x => x.Trips.Any(t =>
+                        t.Status != 3 &&
+                        t.DepartureTime >= from && t.DepartureTime < to));
+
+                else if (tripFilter == "no_trip")
+                    query = query.Where(x => !x.Trips.Any(t =>
+                        t.Status != 3 &&
+                        t.DepartureTime >= from && t.DepartureTime < to));
+            }
+
             var totalCount = await query.CountAsync();
             var now = DateTime.Now;
-            var items = await query
-                .OrderBy(x => x.BusID)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(x => new
-                {
-                    x.BusID,
-                    x.OperatorID,
-                    x.LicensePlate,
-                    x.Capacity,
-                    x.BusType,
-                    OperatorName = x.Operator != null ? x.Operator.Name : null,
-                    // Tính trạng thái xe từ chuyến: Ongoing=1 > Scheduled=0 > Idle
-                    BusStatus = x.Trips.Any(t => t.Status == 1) ? "ongoing"
-                              : x.Trips.Any(t => t.Status == 0 && t.DepartureTime > now) ? "scheduled"
-                              : "idle"
-                })
-                .ToListAsync();
 
-            return Ok(new
+            if (hasDateRange)
             {
-                items,
-                totalCount,
-                page,
-                pageSize,
-                totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
-            });
+                var from = fromDate!.Value.Date;
+                var to   = toDate!.Value.Date.AddDays(1);
+
+                var items = await query
+                    .OrderBy(x => x.BusID)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(x => new
+                    {
+                        x.BusID, x.OperatorID, x.LicensePlate, x.Capacity,
+                        x.BusType, x.Amenities, x.SeatLayout, x.BrandModel, x.Description,
+                        OperatorName = x.Operator != null ? x.Operator.Name : null,
+                        BusStatus = x.Trips.Any(t => t.Status == 1 ||
+                                                     (t.Status == 0 && t.DepartureTime <= now && t.ArrivalTime >= now))
+                                            ? "ongoing"
+                                  : x.Trips.Any(t => t.Status == 0 && t.DepartureTime > now) ? "scheduled"
+                                  : "idle",
+                        HasTripInRange = x.Trips.Any(t =>
+                            t.Status != 3 &&
+                            t.DepartureTime >= from && t.DepartureTime < to),
+                        TripCountInRange = x.Trips.Count(t =>
+                            t.Status != 3 &&
+                            t.DepartureTime >= from && t.DepartureTime < to)
+                    })
+                    .ToListAsync();
+
+                return Ok(new { items, totalCount, page, pageSize,
+                    totalPages = (int)Math.Ceiling((double)totalCount / pageSize) });
+            }
+            else
+            {
+                var items = await query
+                    .OrderBy(x => x.BusID)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(x => new
+                    {
+                        x.BusID, x.OperatorID, x.LicensePlate, x.Capacity,
+                        x.BusType, x.Amenities, x.SeatLayout, x.BrandModel, x.Description,
+                        OperatorName = x.Operator != null ? x.Operator.Name : null,
+                        BusStatus = x.Trips.Any(t => t.Status == 1 ||
+                                                     (t.Status == 0 && t.DepartureTime <= now && t.ArrivalTime >= now))
+                                            ? "ongoing"
+                                  : x.Trips.Any(t => t.Status == 0 && t.DepartureTime > now) ? "scheduled"
+                                  : "idle",
+                        HasTripInRange = (bool?)null,
+                        TripCountInRange = (int?)null
+                    })
+                    .ToListAsync();
+
+                return Ok(new { items, totalCount, page, pageSize,
+                    totalPages = (int)Math.Ceiling((double)totalCount / pageSize) });
+            }
         }
 
         [HttpGet("{id:int}")]
@@ -241,11 +291,8 @@ namespace BaseCore.APIService.Controllers
                 .Where(x => x.BusID == id && x.OperatorID == operatorId.Value)
                 .Select(x => new
                 {
-                    x.BusID,
-                    x.OperatorID,
-                    x.LicensePlate,
-                    x.Capacity,
-                    x.BusType,
+                    x.BusID, x.OperatorID, x.LicensePlate, x.Capacity,
+                    x.BusType, x.Amenities, x.SeatLayout, x.BrandModel, x.Description,
                     OperatorName = x.Operator != null ? x.Operator.Name : null
                 })
                 .FirstOrDefaultAsync();
@@ -279,16 +326,30 @@ namespace BaseCore.APIService.Controllers
             if (!operatorId.HasValue)
                 return BadRequest(new { message = "Tài khoản chưa liên kết với nhà xe" });
 
-            // Kiểm tra xe có thuộc nhà xe này không
             var existing = await _context.Buses.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.BusID == id);
             if (existing == null) return NotFound();
             if (existing.OperatorID != operatorId.Value) return Forbid();
 
-            // Ép OperatorID không bị thay đổi
             bus.OperatorID = operatorId.Value;
-
             _context.Entry(bus).State = EntityState.Modified;
+
+            // Nếu capacity thay đổi → đồng bộ AvailableSeats của các chuyến chưa khởi hành
+            if (bus.Capacity != existing.Capacity)
+            {
+                var futureTrips = await _context.Trips
+                    .Where(t => t.BusID == id
+                             && t.DepartureTime > DateTime.Now
+                             && t.Status != TripStatusConstant.Cancelled)
+                    .ToListAsync();
+
+                foreach (var trip in futureTrips)
+                {
+                    var bookedSeats = existing.Capacity - trip.AvailableSeats;
+                    trip.AvailableSeats = Math.Max(0, bus.Capacity - bookedSeats);
+                }
+            }
+
             await _context.SaveChangesAsync();
             return Ok(bus);
         }

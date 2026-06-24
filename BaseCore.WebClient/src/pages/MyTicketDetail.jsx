@@ -24,8 +24,13 @@ function stopText(stop) {
   return address ? `${name} - ${address}` : name || '--';
 }
 
+const BOOKING_STATUS_CLASS = {
+  0: 'pending', 1: 'confirmed', 2: 'cancelled', 3: 'confirmed',
+  4: 'refunded', 5: 'pending', 6: 'cancelled', 7: 'pending-refund',
+};
 function statusClass(status) {
-  return `ticket-status status-${String(status || '').toLowerCase()}`;
+  const name = BOOKING_STATUS_CLASS[Number(status)] || String(status || '').toLowerCase();
+  return `ticket-status status-${name}`;
 }
 
 function qrValue(booking) {
@@ -107,6 +112,8 @@ export default function MyTicketDetail() {
   const [review, setReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [reviewMessage, setReviewMessage] = useState('');
+  const [isEditingReview, setIsEditingReview] = useState(false);
+  const [editReviewForm, setEditReviewForm] = useState({ rating: 5, comment: '' });
 
   // const loadBooking = async () => {
   //   setLoading(true);
@@ -179,6 +186,28 @@ const loadBooking = async () => {
       await loadBooking();
     } catch (err) {
       setReviewMessage(err.message || 'Không gửi được đánh giá.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const updateReview = async (event) => {
+    event.preventDefault();
+    setActionLoading(true);
+    setReviewMessage('');
+    try {
+      const reviewId = pick(review, ['reviewID', 'ReviewID']);
+      const result = await reviewApi.update(reviewId, {
+        bookingID: Number(id),
+        rating: Number(editReviewForm.rating),
+        comment: editReviewForm.comment,
+      });
+      setReview(result);
+      setIsEditingReview(false);
+      setReviewMessage('Đã cập nhật đánh giá.');
+      await loadBooking();
+    } catch (err) {
+      setReviewMessage(err.message || 'Không cập nhật được đánh giá.');
     } finally {
       setActionLoading(false);
     }
@@ -264,6 +293,7 @@ const code = qrValue(booking);
           <div className="ticket-detail-grid">
             <div><span>Nhà xe</span><strong>{pick(booking, ['operatorName', 'OperatorName'], pick(operator, ['name', 'Name'], '--'))}</strong></div>
             <div><span>Loại xe</span><strong>{pick(bus, ['busType', 'BusType'], pick(booking, ['busType', 'BusType'], '--'))}</strong></div>
+            <div><span>Biển số xe</span><strong>{pick(bus, ['licensePlate', 'LicensePlate'], '--')}</strong></div>
             <div><span>Điểm xuất phát</span><strong>{pick(trip, ['departureLocation', 'DepartureLocation'], pick(booking, ['departureLocation', 'DepartureLocation'], '--'))}</strong></div>
             <div><span>Điểm đến</span><strong>{pick(trip, ['arrivalLocation', 'ArrivalLocation'], pick(booking, ['arrivalLocation', 'ArrivalLocation'], '--'))}</strong></div>
             <div><span>Giờ đi</span><strong>{formatDateTime(pick(trip, ['departureTime', 'DepartureTime'], pick(booking, ['departureTime', 'DepartureTime'])))}</strong></div>
@@ -330,13 +360,69 @@ const code = qrValue(booking);
           <h2 className="ticket-section-title">Đánh giá nhà xe</h2>
     {review ? (
       <div className="ticket-review-box">
-        <div style={{ fontSize: '1.4rem', letterSpacing: 2 }}>
-          {[1,2,3,4,5].map(s => (
-            <span key={s} style={{ color: s <= Number(pick(review, ['rating','Rating'], 0)) ? '#f59e0b' : '#d1d5db' }}>★</span>
-          ))}
-        </div>
-        <p>{pick(review, ['comment','Comment'], '') || 'Bạn chưa nhập bình luận.'}</p>
-        <small>Đã đánh giá lúc {formatDateTime(pick(review, ['createdAt','CreatedAt']))}</small>
+        {isEditingReview ? (
+          <form onSubmit={updateReview}>
+            <label>
+              <span>Số sao</span>
+              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                {[1,2,3,4,5].map(s => (
+                  <span
+                    key={s}
+                    onClick={() => setEditReviewForm(cur => ({ ...cur, rating: s }))}
+                    style={{
+                      fontSize: '2rem',
+                      cursor: 'pointer',
+                      color: s <= Number(editReviewForm.rating) ? '#f59e0b' : '#d1d5db',
+                      transition: 'color 0.15s',
+                    }}
+                  >★</span>
+                ))}
+              </div>
+            </label>
+            <label>
+              <span>Bình luận</span>
+              <textarea
+                value={editReviewForm.comment}
+                onChange={e => setEditReviewForm(cur => ({ ...cur, comment: e.target.value }))}
+                rows="4"
+                maxLength="500"
+                placeholder="Chia sẻ trải nghiệm về nhà xe, xe và phục vụ"
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button className="btn btn-primary" type="submit" disabled={actionLoading}>Lưu đánh giá</button>
+              <button className="btn btn-secondary" type="button" onClick={() => setIsEditingReview(false)}>Hủy</button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div style={{ fontSize: '1.4rem', letterSpacing: 2 }}>
+              {[1,2,3,4,5].map(s => (
+                <span key={s} style={{ color: s <= Number(pick(review, ['rating','Rating'], 0)) ? '#f59e0b' : '#d1d5db' }}>★</span>
+              ))}
+            </div>
+            <p>{pick(review, ['comment','Comment'], '') || 'Bạn chưa nhập bình luận.'}</p>
+            <small>Đã đánh giá lúc {formatDateTime(pick(review, ['createdAt','CreatedAt']))}</small>
+            {pick(review, ['editedAt','EditedAt'], null) && (
+              <small style={{ display: 'block', color: '#9ca3af', marginTop: 2 }}>
+                Đã chỉnh sửa lúc {formatDateTime(pick(review, ['editedAt','EditedAt']))}
+              </small>
+            )}
+            {!pick(review, ['editedAt','EditedAt'], null) && (
+              <button
+                className="btn btn-secondary"
+                style={{ marginTop: 8, fontSize: '0.85rem', padding: '4px 12px' }}
+                onClick={() => {
+                  setEditReviewForm({
+                    rating: Number(pick(review, ['rating','Rating'], 5)),
+                    comment: pick(review, ['comment','Comment'], ''),
+                  });
+                  setIsEditingReview(true);
+                }}
+              >Sửa đánh giá</button>
+            )}
+          </>
+        )}
 
         {/* Reply của nhà xe */}
         {pick(review, ['replyContent','ReplyContent'], '') && (

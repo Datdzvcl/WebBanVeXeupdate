@@ -35,4 +35,9 @@ export const dashboardApi = {
     const response = await apiClient.get('/api/admin/booking-status-statistics', { params });
     return response.data;
   },
+
+  async recentBookings() {
+    const response = await apiClient.get('/api/admin/bookings');
+    return Array.isArray(response.data) ? response.data : [];
+  },
 };

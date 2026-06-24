@@ -83,6 +83,7 @@ builder.Services.AddScoped<BaseCore.Services.BookingService>();
 builder.Services.AddHostedService<ExpiredBookingCleanupService>();
 builder.Services.AddHostedService<ExpiredSeatHoldCleanupService>();
 builder.Services.AddHostedService<TripCompletionService>();
+builder.Services.AddHostedService<TripMonitorService>();
 // JWT Authentication
 var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:SecretKey"] ?? "YourSecretKeyForAuthenticationShouldBeLongEnough");
 builder.Services.AddAuthentication(x =>

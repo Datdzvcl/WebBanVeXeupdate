@@ -803,6 +803,7 @@ namespace BaseCore.APIService.Controllers
                     x.AvailableSeats,
                     x.Status,
                     BusType      = x.Bus != null ? x.Bus.BusType : null,
+                    Amenities    = x.Bus != null ? x.Bus.Amenities : null,
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     AverageRating = x.Bus == null ? 0
                         : (_context.Reviews.Any(r => r.Booking.Trip != null && r.Booking.Trip.Bus != null && r.Booking.Trip.Bus.OperatorID == x.Bus.OperatorID)
@@ -838,6 +839,8 @@ namespace BaseCore.APIService.Controllers
             [FromQuery] DateTime? departureDate,
             [FromQuery] int?      operatorId,           // Admin mới dùng được param này
             [FromQuery] string?   status,
+            [FromQuery] decimal?  minPrice,
+            [FromQuery] decimal?  maxPrice,
             [FromQuery] int       page     = 1,
             [FromQuery] int       pageSize = 10)
         {
@@ -847,6 +850,7 @@ namespace BaseCore.APIService.Controllers
             var query = _context.Trips
                 .AsNoTracking()
                 .Include(x => x.Bus).ThenInclude(x => x.Operator)
+                .Include(x => x.Driver)
                 .AsQueryable();
 
             // ✅ Operator bắt buộc chỉ thấy chuyến của mình
@@ -883,19 +887,35 @@ namespace BaseCore.APIService.Controllers
 
             if (!string.IsNullOrWhiteSpace(status))
             {
-                var statusByte = status.Trim().ToLowerInvariant() switch
+                var key = status.Trim().ToLowerInvariant();
+                if (key == "on-going" || key == "ongoing")
                 {
-                    "active"    => TripStatusConstant.Scheduled,
-                    "scheduled" => TripStatusConstant.Scheduled,
-                    "on-going"  => TripStatusConstant.Ongoing,
-                    "ongoing"   => TripStatusConstant.Ongoing,
-                    "completed" => TripStatusConstant.Completed,
-                    "cancelled" => TripStatusConstant.Cancelled,
-                    "canceled"  => TripStatusConstant.Cancelled,
-                    _           => TripStatusConstant.Scheduled
-                };
-                query = query.Where(x => x.Status == statusByte);
+                    var now = DateTime.Now;
+                    query = query.Where(x =>
+                        x.Status == TripStatusConstant.Ongoing ||
+                        (x.Status == TripStatusConstant.Scheduled &&
+                         x.DepartureTime <= now && x.ArrivalTime >= now));
+                }
+                else
+                {
+                    var statusByte = key switch
+                    {
+                        "active"    => TripStatusConstant.Scheduled,
+                        "scheduled" => TripStatusConstant.Scheduled,
+                        "completed" => TripStatusConstant.Completed,
+                        "cancelled" => TripStatusConstant.Cancelled,
+                        "canceled"  => TripStatusConstant.Cancelled,
+                        _           => TripStatusConstant.Scheduled
+                    };
+                    query = query.Where(x => x.Status == statusByte);
+                }
             }
+
+            if (minPrice.HasValue)
+                query = query.Where(x => x.Price >= minPrice.Value);
+
+            if (maxPrice.HasValue)
+                query = query.Where(x => x.Price <= maxPrice.Value);
 
             var totalCount = await query.CountAsync();
             var items = await query
@@ -913,7 +933,10 @@ namespace BaseCore.APIService.Controllers
                     x.Price,
                     x.AvailableSeats,
                     x.Status,
+                    x.DriverID,
+                    DriverName = x.Driver != null ? x.Driver.FullName : null,
                     BusType      = x.Bus != null ? x.Bus.BusType      : null,
+                    Amenities    = x.Bus != null ? x.Bus.Amenities    : null,
                     LicensePlate = x.Bus != null ? x.Bus.LicensePlate : null,
                     OperatorID   = x.Bus != null ? x.Bus.OperatorID   : (int?)null,
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
@@ -962,6 +985,7 @@ namespace BaseCore.APIService.Controllers
                     x.Status,
                     Capacity         = x.Bus != null ? x.Bus.Capacity      : 0,
                     BusType          = x.Bus != null ? x.Bus.BusType        : null,
+                    Amenities        = x.Bus != null ? x.Bus.Amenities      : null,
                     LicensePlate     = x.Bus != null ? x.Bus.LicensePlate   : null,
                     OperatorName     = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
                     OperatorImageUrl = (string?)null,
@@ -1091,6 +1115,7 @@ namespace BaseCore.APIService.Controllers
             [FromQuery] DateTime? returnDate,
             [FromQuery] string?   busType,
             [FromQuery] int?      operatorId,
+            [FromQuery] string?   operatorIds,
             [FromQuery] decimal?  minPrice,
             [FromQuery] decimal?  maxPrice,
             [FromQuery] string?   departureTimeRange,
@@ -1140,8 +1165,15 @@ namespace BaseCore.APIService.Controllers
                 query = query.Where(x => x.Bus != null && EF.Functions.Like(x.Bus.BusType, $"%{busTypeKeyword}%"));
             }
 
-            if (operatorId.HasValue)
-                query = query.Where(x => x.Bus != null && x.Bus.OperatorID == operatorId.Value);
+            // Lọc theo nhiều nhà xe (operatorIds=1,2,3) hoặc đơn (operatorId=1)
+            var opIds = new List<int>();
+            if (!string.IsNullOrWhiteSpace(operatorIds))
+                opIds.AddRange(operatorIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => int.TryParse(s.Trim(), out var n) ? n : 0).Where(n => n > 0));
+            if (operatorId.HasValue && !opIds.Contains(operatorId.Value))
+                opIds.Add(operatorId.Value);
+            if (opIds.Count > 0)
+                query = query.Where(x => x.Bus != null && opIds.Contains(x.Bus.OperatorID));
 
             if (minPrice.HasValue)
                 query = query.Where(x => x.Price >= minPrice.Value);
@@ -1173,7 +1205,7 @@ namespace BaseCore.APIService.Controllers
                     busID             = x.BusID,
                     operatorID        = x.Bus != null ? x.Bus.OperatorID : (int?)null,
                     operatorName      = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
-                    operatorImageUrl  = (string?)null,
+                    operatorImageUrl  = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.LogoUrl : null,
                     busType           = x.Bus != null ? x.Bus.BusType      : null,
                     licensePlate      = x.Bus != null ? x.Bus.LicensePlate : null,
                     departureLocation = x.DepartureLocation,
@@ -1269,7 +1301,12 @@ namespace BaseCore.APIService.Controllers
             if (currentTrip.Bus?.OperatorID != currentOperatorId.Value)
                 return Forbid(); // chuyến không thuộc nhà xe này
 
-            var validationResult = await ValidateTripRequest(trip);
+            // Chỉ chạy conflict check khi lịch/xe/tài xế thực sự thay đổi
+            bool scheduleChanged = currentTrip.BusID         != trip.BusID
+                                || currentTrip.DepartureTime != trip.DepartureTime
+                                || currentTrip.ArrivalTime   != trip.ArrivalTime
+                                || currentTrip.DriverID      != trip.DriverID;
+            var validationResult = await ValidateTripRequest(trip, skipScheduleCheck: !scheduleChanged);
             if (validationResult != null) return validationResult;
 
             _context.Entry(trip).State = EntityState.Modified;
@@ -1295,9 +1332,9 @@ namespace BaseCore.APIService.Controllers
                         userId,
                         cancelled ? "Chuyến xe đã bị hủy" : "Chuyến xe thay đổi thời gian",
                         cancelled
-                            ? $"Chuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã bị hủy. Vui lòng kiểm tra vé của bạn."
-                            : $"Chuyến {trip.DepartureLocation} - {trip.ArrivalLocation} đã thay đổi thời gian khởi hành.",
-                        2);
+                            ? $"Chuyến {trip.DepartureLocation} → {trip.ArrivalLocation} đã bị hủy. Vui lòng kiểm tra vé của bạn."
+                            : $"Chuyến {trip.DepartureLocation} → {trip.ArrivalLocation} đã thay đổi thời gian khởi hành. Vui lòng kiểm tra lịch trình.",
+                        2, "/my-tickets");
                 }
             }
 
@@ -1312,6 +1349,104 @@ namespace BaseCore.APIService.Controllers
             }
 
             return Ok(await BuildTripResponse(id));
+        }
+
+        // ─────────────────────────────────────────────
+        // POST /api/trips/{id}/cancel
+        // Hủy chuyến chưa chạy, tự động hoàn tiền booking
+        // ─────────────────────────────────────────────
+        [HttpPost("{id}/cancel")]
+        [Authorize(Roles = "Admin,Operator")]
+        public async Task<IActionResult> CancelTrip(int id)
+        {
+            var currentOperatorId = await GetCurrentOperatorId();
+
+            var trip = await _context.Trips
+                .Include(x => x.Bus)
+                .FirstOrDefaultAsync(x => x.TripID == id);
+
+            if (trip == null) return NotFound();
+
+            if (currentOperatorId.HasValue && trip.Bus?.OperatorID != currentOperatorId.Value)
+                return Forbid();
+
+            if (trip.Status == TripStatusConstant.Cancelled)
+                return BadRequest(new { message = "Chuyến đã bị hủy trước đó." });
+
+            if (trip.Status == TripStatusConstant.Completed)
+                return BadRequest(new { message = "Không thể hủy chuyến đã hoàn thành." });
+
+            if (trip.Status == TripStatusConstant.Ongoing)
+                return BadRequest(new { message = "Không thể hủy chuyến đang chạy." });
+
+            trip.Status = TripStatusConstant.Cancelled;
+
+            // Tất cả booking còn active
+            var bookings = await _context.Bookings
+                .Where(x => x.TripID == id &&
+                            x.BookingStatus != BookingStatusConstant.Cancelled &&
+                            x.BookingStatus != BookingStatusConstant.Completed &&
+                            x.PaymentStatus  != PaymentStatusConstant.Refunded)
+                .ToListAsync();
+
+            var cancelReason = $"Chuyến {trip.DepartureLocation} → {trip.ArrivalLocation} ({trip.DepartureTime:HH:mm dd/MM/yyyy}) bị hủy bởi nhà xe.";
+            int pendingRefundCount = 0;
+            foreach (var booking in bookings)
+            {
+                booking.CancelReason = cancelReason;
+                if (booking.PaymentStatus == PaymentStatusConstant.Paid)
+                {
+                    booking.BookingStatus = BookingStatusConstant.PendingRefund;
+                    booking.PaymentStatus = PaymentStatusConstant.PendingRefund;
+                    pendingRefundCount++;
+                    NotificationsController.AddNotification(
+                        _context, booking.UserID,
+                        "Chuyến xe bị hủy — chờ hoàn tiền",
+                        $"{cancelReason} Yêu cầu hoàn tiền đang chờ Admin xử lý.",
+                        4, $"/my-tickets/{booking.BookingID}");
+                }
+                else
+                {
+                    booking.BookingStatus = BookingStatusConstant.Cancelled;
+                    NotificationsController.AddNotification(
+                        _context, booking.UserID,
+                        "Chuyến xe bị hủy",
+                        cancelReason,
+                        4, $"/my-tickets/{booking.BookingID}");
+                }
+            }
+
+            // Thông báo tài xế
+            if (trip.DriverID.HasValue)
+                NotificationsController.AddNotification(
+                    _context, trip.DriverID.Value,
+                    "Chuyến xe bị hủy",
+                    $"Chuyến {trip.DepartureLocation} → {trip.ArrivalLocation} ({trip.DepartureTime:HH:mm dd/MM/yyyy}) đã bị hủy bởi nhà xe.",
+                    4, "/driver");
+
+            // Thông báo admin nếu có vé cần hoàn tiền
+            if (pendingRefundCount > 0)
+            {
+                var adminUsers = await _context.Users
+                    .Where(u => u.Role == RoleConstant.Admin)
+                    .Select(u => new { u.UserID })
+                    .ToListAsync();
+                foreach (var admin in adminUsers)
+                    NotificationsController.AddNotification(
+                        _context, admin.UserID,
+                        "Cần duyệt hoàn tiền",
+                        $"Chuyến {trip.DepartureLocation} → {trip.ArrivalLocation} ({trip.DepartureTime:HH:mm dd/MM/yyyy}) bị hủy. {pendingRefundCount} vé cần Admin duyệt hoàn tiền.",
+                        3, "/admin/bookings");
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = $"Đã hủy chuyến xe. {pendingRefundCount} vé chờ Admin duyệt hoàn tiền, {bookings.Count - pendingRefundCount} vé hủy không cần hoàn tiền.",
+                cancelledBookings = bookings.Count,
+                pendingRefundCount
+            });
         }
 
         // ─────────────────────────────────────────────
@@ -1406,32 +1541,27 @@ namespace BaseCore.APIService.Controllers
         //     });
         // }
         [HttpGet("locations")]
-[AllowAnonymous]
-public async Task<IActionResult> GetLocations()
-{
-    var departures = await _context.Trips
-        .AsNoTracking()
-        .Select(x => x.DepartureLocation)
-        .Where(x => !string.IsNullOrWhiteSpace(x))
-        .Distinct()
-        .OrderBy(x => x)
-        .ToListAsync();
+        [AllowAnonymous]
+        public async Task<IActionResult> GetLocations()
+        {
+            var departures = await _context.Trips
+                .AsNoTracking()
+                .Select(x => x.DepartureLocation)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToListAsync();
 
-    var arrivals = await _context.Trips
-        .AsNoTracking()
-        .Select(x => x.ArrivalLocation)
-        .Where(x => !string.IsNullOrWhiteSpace(x))
-        .Distinct()
-        .OrderBy(x => x)
-        .ToListAsync();
+            var arrivals = await _context.Trips
+                .AsNoTracking()
+                .Select(x => x.ArrivalLocation)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct()
+                .ToListAsync();
 
-    var all = departures
-        .Union(arrivals)
-        .OrderBy(x => x)
-        .ToList();
+            var all = departures.Union(arrivals).Distinct().OrderBy(x => x).ToList();
 
-    return Ok(new { departures, arrivals, all });
-}
+            return Ok(new { departures = all, arrivals = all, all });
+        }
 
         // ─────────────────────────────────────────────
         // POST /api/trips/clone  — Nhân bản chuyến sang ngày khác
@@ -1480,10 +1610,17 @@ public async Task<IActionResult> GetLocations()
             var newTrips = new List<Trip>();
             var pairs = new List<(Trip Source, Trip New)>();
             var skipped = 0;
+            var now = DateTime.Now;
             foreach (var t in sourceTrips)
             {
                 var newDeparture = t.DepartureTime + dayDiff;
                 var newArrival   = t.ArrivalTime   + dayDiff;
+
+                if (newDeparture <= now)
+                {
+                    skipped++;
+                    continue;
+                }
 
                 var conflict = existingTargetTrips.Any(x => x.BusID == t.BusID
                                 && x.DepartureTime < newArrival && x.ArrivalTime > newDeparture)
@@ -1551,6 +1688,112 @@ public async Task<IActionResult> GetLocations()
         }
 
         public record CloneTripsRequest(string SourceDate, string TargetDate);
+
+        // ─────────────────────────────────────────────
+        // POST /api/trips/clone-week  — Nhân bản cả tuần
+        // ─────────────────────────────────────────────
+        [HttpPost("clone-week")]
+        [Authorize(Roles = "Operator")]
+        public async Task<IActionResult> CloneWeek([FromBody] CloneWeekRequest request)
+        {
+            if (!DateTime.TryParse(request.SourceWeekStart, out var srcMonday))
+                return BadRequest(new { message = "Tuần nguồn không hợp lệ" });
+            if (!DateTime.TryParse(request.TargetWeekStart, out var tgtMonday))
+                return BadRequest(new { message = "Tuần đích không hợp lệ" });
+
+            srcMonday = srcMonday.Date;
+            tgtMonday = tgtMonday.Date;
+
+            if (srcMonday == tgtMonday)
+                return BadRequest(new { message = "Tuần đích phải khác tuần nguồn" });
+
+            var currentOperatorId = await GetCurrentOperatorId();
+            if (!currentOperatorId.HasValue) return Forbid();
+
+            var dayDiff = tgtMonday - srcMonday;
+
+            // Lấy toàn bộ chuyến trong tuần nguồn
+            var srcEnd = srcMonday.AddDays(7);
+            var sourceTrips = await _context.Trips
+                .AsNoTracking()
+                .Include(x => x.Bus)
+                .Include(x => x.StopPoints.Where(s => s.IsActive))
+                .Where(x => x.DepartureTime >= srcMonday && x.DepartureTime < srcEnd
+                         && x.Bus != null && x.Bus.OperatorID == currentOperatorId.Value
+                         && x.Status != TripStatusConstant.Cancelled)
+                .ToListAsync();
+
+            if (sourceTrips.Count == 0)
+                return Ok(new { cloned = 0, skipped = 0, message = "Không có chuyến nào trong tuần nguồn" });
+
+            // Lấy trước chuyến đã tồn tại trong tuần đích để check conflict
+            var busIds = sourceTrips.Select(x => x.BusID).Distinct().ToList();
+            var tgtEnd  = tgtMonday.AddDays(7);
+            var existing = await _context.Trips
+                .AsNoTracking()
+                .Where(x => busIds.Contains(x.BusID)
+                         && x.Status != TripStatusConstant.Cancelled
+                         && x.DepartureTime >= tgtMonday && x.DepartureTime < tgtEnd)
+                .Select(x => new { x.BusID, x.DepartureTime, x.ArrivalTime })
+                .ToListAsync();
+
+            var newTrips = new List<Trip>();
+            var pairs    = new List<(Trip Source, Trip New)>();
+            var skipped  = 0;
+            var now      = DateTime.Now;
+
+            foreach (var t in sourceTrips)
+            {
+                var newDep = t.DepartureTime + dayDiff;
+                var newArr = t.ArrivalTime   + dayDiff;
+
+                if (newDep <= now) { skipped++; continue; }
+
+                var conflict = existing.Any(x => x.BusID == t.BusID
+                                    && x.DepartureTime < newArr && x.ArrivalTime > newDep)
+                            || newTrips.Any(nt => nt.BusID == t.BusID
+                                    && nt.DepartureTime < newArr && nt.ArrivalTime > newDep);
+                if (conflict) { skipped++; continue; }
+
+                var newTrip = new Trip
+                {
+                    BusID             = t.BusID,
+                    DepartureLocation = t.DepartureLocation,
+                    ArrivalLocation   = t.ArrivalLocation,
+                    DepartureTime     = newDep,
+                    ArrivalTime       = newArr,
+                    Price             = t.Price,
+                    AvailableSeats    = t.Bus?.Capacity ?? t.AvailableSeats,
+                    Status            = TripStatusConstant.Scheduled
+                };
+                _context.Trips.Add(newTrip);
+                newTrips.Add(newTrip);
+                pairs.Add((t, newTrip));
+            }
+            await _context.SaveChangesAsync();
+
+            foreach (var (source, newTrip) in pairs)
+            {
+                if (source.StopPoints != null && source.StopPoints.Count > 0)
+                    foreach (var sp in source.StopPoints)
+                        _context.StopPoints.Add(new StopPoint
+                        {
+                            TripID = newTrip.TripID, StopName = sp.StopName,
+                            StopAddress = sp.StopAddress, StopOrder = sp.StopOrder,
+                            StopType = sp.StopType, ArrivalOffset = sp.ArrivalOffset, IsActive = true
+                        });
+                else
+                    AddDefaultStopPoints(newTrip);
+            }
+            await _context.SaveChangesAsync();
+
+            var msg = $"Đã nhân bản {newTrips.Count} chuyến từ tuần {srcMonday:dd/MM} – {srcMonday.AddDays(6):dd/MM} sang tuần {tgtMonday:dd/MM} – {tgtMonday.AddDays(6):dd/MM/yyyy}";
+            if (skipped > 0) msg += $" (bỏ qua {skipped} chuyến trùng hoặc đã qua)";
+
+            return Ok(new { cloned = newTrips.Count, skipped, message = msg });
+        }
+
+        public record CloneWeekRequest(string SourceWeekStart, string TargetWeekStart);
 
         // ─────────────────────────────────────────────
         // POST /api/trips/{id}/stops  — Operator thêm điểm dừng/đón/trả cho chuyến của mình
@@ -1667,7 +1910,10 @@ public async Task<IActionResult> GetLocations()
         // ═════════════════════════════════════════════
         // PRIVATE HELPERS
         // ═════════════════════════════════════════════
-        private async Task<IActionResult?> ValidateTripRequest(Trip trip)
+        private static readonly TimeSpan BusRestBuffer    = TimeSpan.FromHours(12);
+        private static readonly TimeSpan DriverRestBuffer = TimeSpan.FromHours(12);
+
+        private async Task<IActionResult?> ValidateTripRequest(Trip trip, bool skipScheduleCheck = false)
         {
             var bus = await _context.Buses
                 .AsNoTracking()
@@ -1688,16 +1934,41 @@ public async Task<IActionResult> GetLocations()
             if (trip.AvailableSeats > bus.Capacity)
                 return BadRequest(new { message = "AvailableSeats không được lớn hơn Capacity của xe" });
 
-            // Kiểm tra trùng giờ: xe này đã có chuyến khác chồng lấn thời gian chưa
-            var hasConflict = await _context.Trips
+            // Không cho tạo chuyến với giờ khởi hành đã qua
+            if (trip.TripID == 0 && trip.DepartureTime < DateTime.Now)
+                return BadRequest(new { message = "Không thể thêm chuyến với giờ khởi hành đã qua" });
+
+            if (skipScheduleCheck)
+                return null;
+
+            // Kiểm tra trùng giờ xe (kèm 12 giờ nghỉ giữa các chuyến)
+            var busWindowStart = trip.DepartureTime.Subtract(BusRestBuffer);
+            var busWindowEnd   = trip.ArrivalTime.Add(BusRestBuffer);
+            var busConflict = await _context.Trips
                 .AsNoTracking()
                 .AnyAsync(x => x.BusID == trip.BusID
                             && x.TripID != trip.TripID
                             && x.Status != TripStatusConstant.Cancelled
-                            && x.DepartureTime < trip.ArrivalTime
-                            && x.ArrivalTime > trip.DepartureTime);
-            if (hasConflict)
-                return BadRequest(new { message = "Xe này đã có chuyến khác trùng giờ trong khoảng thời gian này" });
+                            && x.DepartureTime < busWindowEnd
+                            && busWindowStart < x.ArrivalTime);
+            if (busConflict)
+                return BadRequest(new { message = "Xe này đã có chuyến khác trùng hoặc quá gần — cần ít nhất 12 giờ nghỉ giữa các chuyến." });
+
+            // Kiểm tra trùng lịch tài xế (kèm 12 giờ nghỉ ngơi)
+            if (trip.DriverID.HasValue)
+            {
+                var driverWindowStart = trip.DepartureTime.Subtract(DriverRestBuffer);
+                var driverWindowEnd   = trip.ArrivalTime.Add(DriverRestBuffer);
+                var driverConflict = await _context.Trips
+                    .AsNoTracking()
+                    .AnyAsync(x => x.DriverID == trip.DriverID
+                                && x.TripID != trip.TripID
+                                && x.Status != TripStatusConstant.Cancelled
+                                && x.DepartureTime < driverWindowEnd
+                                && driverWindowStart < x.ArrivalTime);
+                if (driverConflict)
+                    return BadRequest(new { message = "Tài xế này đã có lịch lái trong khoảng thời gian này hoặc chưa đủ thời gian nghỉ ngơi (tối thiểu 12 giờ giữa các chuyến)." });
+            }
 
             return null;
         }
@@ -1720,6 +1991,7 @@ public async Task<IActionResult> GetLocations()
                     x.AvailableSeats,
                     x.Status,
                     BusType      = x.Bus != null ? x.Bus.BusType      : null,
+                    Amenities    = x.Bus != null ? x.Bus.Amenities    : null,
                     LicensePlate = x.Bus != null ? x.Bus.LicensePlate : null,
                     OperatorID   = x.Bus != null ? x.Bus.OperatorID   : (int?)null,
                     OperatorName = x.Bus != null && x.Bus.Operator != null ? x.Bus.Operator.Name : null,
@@ -1738,7 +2010,6 @@ public async Task<IActionResult> GetLocations()
         private void AddDefaultStopPoints(Trip trip)
         {
             var totalMinutes = Math.Max(0, (int)Math.Round((trip.ArrivalTime - trip.DepartureTime).TotalMinutes));
-            var middleOffset = totalMinutes > 0 ? Math.Max(1, totalMinutes / 2) : 0;
 
             _context.StopPoints.AddRange(
                 new StopPoint
@@ -1754,19 +2025,9 @@ public async Task<IActionResult> GetLocations()
                 new StopPoint
                 {
                     TripID        = trip.TripID,
-                    StopName      = $"Trạm dừng giữa tuyến {trip.DepartureLocation} - {trip.ArrivalLocation}",
-                    StopAddress   = $"Quốc lộ chính tuyến {trip.DepartureLocation} - {trip.ArrivalLocation}",
-                    StopOrder     = 2,
-                    StopType      = 3,
-                    ArrivalOffset = middleOffset,
-                    IsActive      = true
-                },
-                new StopPoint
-                {
-                    TripID        = trip.TripID,
                     StopName      = $"Bến xe {trip.ArrivalLocation}",
                     StopAddress   = $"Trung tâm {trip.ArrivalLocation}",
-                    StopOrder     = 3,
+                    StopOrder     = 2,
                     StopType      = 2,
                     ArrivalOffset = totalMinutes,
                     IsActive      = true

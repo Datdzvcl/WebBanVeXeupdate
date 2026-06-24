@@ -153,7 +153,8 @@ namespace BaseCore.APIService.Services
             var expired = await context.Bookings
                 .Include(b => b.TicketSeats)
                 .Where(b =>
-                    b.BookingStatus == BookingStatusConstant.Pending && 
+                    b.BookingStatus == BookingStatusConstant.Pending &&
+                    b.PaymentMethod != "Cash" &&   // Cash booking giữ đến khi thu tiền trực tiếp
                     b.BookingDate.HasValue &&
                     b.BookingDate.Value < cutoff)
                 .ToListAsync(ct);

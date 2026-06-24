@@ -58,9 +58,18 @@ function addMinutes(dateStr, minutes) {
   return d;
 }
 
-function formatTime(date) {
+function formatTime(date, departureDate) {
   if (!date) return null;
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  if (departureDate) {
+    const startOfDep = new Date(departureDate);
+    startOfDep.setHours(0, 0, 0, 0);
+    const startOfEst = new Date(date);
+    startOfEst.setHours(0, 0, 0, 0);
+    const dayDiff = Math.round((startOfEst - startOfDep) / 86400000);
+    if (dayDiff > 0) return `${timeStr} (+${dayDiff} ngày)`;
+  }
+  return timeStr;
 }
 
 function StopOption({ stop, checked, name, onChange, departureTime }) {
@@ -71,7 +80,7 @@ function StopOption({ stop, checked, name, onChange, departureTime }) {
   const arrivalOffset = pick(stop, ['arrivalOffset', 'ArrivalOffset']);
 
   const estimatedTime = departureTime != null && arrivalOffset != null
-    ? formatTime(addMinutes(departureTime, arrivalOffset))
+    ? formatTime(addMinutes(departureTime, arrivalOffset), departureTime)
     : null;
 
   return (
