@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import { formatVND, labelSeatStatus, pick } from '../api';
 import { tripApi } from '../services/tripApi';
@@ -80,6 +80,43 @@ export default function SeatSelection() {
   const [loading, setLoading] = useState(true);
   const [busySeat, setBusySeat] = useState('');
   const [error, setError] = useState('');
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      selectedSeats.length > 0 && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === 'blocked') setShowExitModal(true);
+  }, [blocker.state]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (selectedSeats.length > 0) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [selectedSeats.length]);
+
+  const handleConfirmExit = async () => {
+    setReleasing(true);
+    try {
+      if (selectedSeats.length > 0)
+        await seatApi.release({ tripId, seatLabels: selectedSeats, sessionId });
+      localStorage.removeItem(HOLD_STORAGE_KEY);
+    } catch { /* bỏ qua lỗi release */ } finally {
+      setReleasing(false);
+      setShowExitModal(false);
+      blocker.proceed?.();
+    }
+  };
+
+  const handleCancelExit = () => {
+    setShowExitModal(false);
+    blocker.reset?.();
+  };
 
   const loadSeats = useCallback(async () => {
     const response = await seatApi.getByTrip(tripId, { sessionId });
@@ -468,6 +505,38 @@ export default function SeatSelection() {
           </button>
         </aside>
       </section>
+
+      {showExitModal && (
+        <div className="modal-overlay" onClick={handleCancelExit}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 8 }}>⚠️</div>
+            <h3 style={{ textAlign: 'center', marginBottom: 8 }}>Bạn muốn thoát?</h3>
+            <p style={{ textAlign: 'center', color: '#64748b', marginBottom: 20 }}>
+              Nếu thoát, các ghế bạn đang giữ ({selectedSeats.join(', ')}) sẽ được giải phóng cho người khác.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="btn btn-outline"
+                style={{ flex: 1 }}
+                onClick={handleCancelExit}
+                disabled={releasing}
+              >
+                Ở lại
+              </button>
+              <button
+                className="btn btn-danger"
+                style={{ flex: 1 }}
+                onClick={handleConfirmExit}
+                disabled={releasing}
+              >
+                {releasing
+                  ? <><i className="fa-solid fa-spinner fa-spin" /> Đang giải phóng...</>
+                  : 'Thoát & giải phóng ghế'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </UserLayout>
   );
 }
